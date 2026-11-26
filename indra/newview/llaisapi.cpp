@@ -858,7 +858,7 @@ LL::Task<void> AISAPI::onUpdateReceived(LLSD update, COMMAND_TYPE type, LLSD req
 
     AISUpdate ais_update(type, request_body);
     // The parse waits (checkTimeout) when it runs long, which a constructor cannot do.
-    co_await ais_update.parseUpdate(update);
+    co_await ais_update.parseUpdate(std::move(update));
     co_await ais_update.doUpdate(); // execute the updates in the appropriate order.
     LL_DEBUGS("Inventory", "AIS3") << "Elapsed processing: " << timer.getElapsedTimeF32() << LL_ENDL;
 }
@@ -1130,7 +1130,7 @@ LL::Task<void> AISUpdate::checkTimeout()
     }
 }
 
-LL::Task<void> AISUpdate::parseUpdate(LLSD update)
+LL::Task<void> AISUpdate::parseUpdate(const LLSD update)
 {
     clearParseResults();
     parseMeta(update);
@@ -1215,7 +1215,7 @@ void AISUpdate::parseMeta(const LLSD& update)
     }
 }
 
-LL::Task<void> AISUpdate::parseContent(LLSD update)
+LL::Task<void> AISUpdate::parseContent(const LLSD update)
 {
     // Errors from a fetch request might contain id without
     // full item or folder.
@@ -1297,7 +1297,7 @@ void AISUpdate::parseItem(const LLSD& item_map)
     }
 }
 
-LL::Task<void> AISUpdate::parseLink(LLSD link_map, S32 depth)
+LL::Task<void> AISUpdate::parseLink(const LLSD link_map, S32 depth)
 {
     LLUUID item_id = link_map["item_id"].asUUID();
     LLPointer<LLViewerInventoryItem> new_link(new LLViewerInventoryItem);
@@ -1363,7 +1363,7 @@ LL::Task<void> AISUpdate::parseLink(LLSD link_map, S32 depth)
 }
 
 
-LL::Task<void> AISUpdate::parseCategory(LLSD category_map, S32 depth)
+LL::Task<void> AISUpdate::parseCategory(const LLSD category_map, S32 depth)
 {
     LLUUID category_id = category_map["category_id"].asUUID();
     S32 version = LLViewerInventoryCategory::VERSION_UNKNOWN;
@@ -1529,9 +1529,9 @@ void AISUpdate::parseDescendentCount(const LLUUID& category_id, LLFolderType::ET
     }
 }
 
-LL::Task<void> AISUpdate::parseEmbedded(LLSD embedded, S32 depth)
+LL::Task<void> AISUpdate::parseEmbedded(const LLSD embedded, S32 depth)
 {
-    co_await checkTimeout();
+    if (timeoutPending()) co_await checkTimeout();
 
     if (embedded.has("links")) // _embedded in a category
     {
@@ -1568,7 +1568,7 @@ void AISUpdate::parseUUIDArray(const LLSD& content, const std::string& name, uui
     }
 }
 
-LL::Task<void> AISUpdate::parseEmbeddedLinks(LLSD links, S32 depth)
+LL::Task<void> AISUpdate::parseEmbeddedLinks(const LLSD links, S32 depth)
 {
     for(LLSD::map_const_iterator linkit = links.beginMap(),
             linkend = links.endMap();
@@ -1619,7 +1619,7 @@ void AISUpdate::parseEmbeddedItems(const LLSD& items)
     }
 }
 
-LL::Task<void> AISUpdate::parseEmbeddedCategory(LLSD category, S32 depth)
+LL::Task<void> AISUpdate::parseEmbeddedCategory(const LLSD category, S32 depth)
 {
     // a single category (_embedded in a link)
     if (category.has("category_id"))
@@ -1631,7 +1631,7 @@ LL::Task<void> AISUpdate::parseEmbeddedCategory(LLSD category, S32 depth)
     }
 }
 
-LL::Task<void> AISUpdate::parseEmbeddedCategories(LLSD categories, S32 depth)
+LL::Task<void> AISUpdate::parseEmbeddedCategories(const LLSD categories, S32 depth)
 {
     // a map of categories (_embedded in a category)
     for(LLSD::map_const_iterator categoryit = categories.beginMap(),
@@ -1653,7 +1653,7 @@ LL::Task<void> AISUpdate::parseEmbeddedCategories(LLSD categories, S32 depth)
 
 LL::Task<void> AISUpdate::doUpdate()
 {
-    co_await checkTimeout();
+    if (timeoutPending()) co_await checkTimeout();
 
     // Do version/descendant accounting.
     for (std::map<LLUUID,size_t>::const_iterator catit = mCatDescendentDeltas.begin();
@@ -1715,7 +1715,7 @@ LL::Task<void> AISUpdate::doUpdate()
         if (gInventory.getChangedIDs().size() > MAX_UPDATE_BACKLOG)
         {
             gInventory.notifyObservers();
-            co_await checkTimeout();
+            if (timeoutPending()) co_await checkTimeout();
         }
     }
 
@@ -1776,7 +1776,7 @@ LL::Task<void> AISUpdate::doUpdate()
         if (gInventory.getChangedIDs().size() > MAX_UPDATE_BACKLOG)
         {
             gInventory.notifyObservers();
-            co_await checkTimeout();
+            if (timeoutPending()) co_await checkTimeout();
         }
     }
 
@@ -1868,7 +1868,7 @@ LL::Task<void> AISUpdate::doUpdate()
         }
     }
 
-    co_await checkTimeout();
+    if (timeoutPending()) co_await checkTimeout();
 
     gInventory.notifyObservers();
 }

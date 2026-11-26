@@ -108,7 +108,7 @@ static void handleDiscordDisconnected(int errorCode, const char* message)
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void FSDiscordConnect::discordConnectCoro()
+void FSDiscordConnect::discordConnect_()
 {
     DiscordEventHandlers handlers;
     memset(&handlers, 0, sizeof(handlers));
@@ -125,7 +125,7 @@ void FSDiscordConnect::discordConnectCoro()
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void FSDiscordConnect::discordDisconnectCoro()
+void FSDiscordConnect::discordDisconnect_()
 {
     Discord_Shutdown();
     setConnectionState(FSDiscordConnect::DISCORD_NOT_CONNECTED);
@@ -133,7 +133,7 @@ void FSDiscordConnect::discordDisconnectCoro()
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void FSDiscordConnect::discordConnectedCoro(bool autoConnect)
+void FSDiscordConnect::discordConnected_(bool autoConnect)
 {
     if (autoConnect)
     {
@@ -265,19 +265,19 @@ FSDiscordConnect::~FSDiscordConnect()
 void FSDiscordConnect::connectToDiscord()
 {
     // These three never wait: plain calls (they were launched as coroutines that ran to their end at once).
-    discordConnectCoro();
+    discordConnect_();
 }
 
 void FSDiscordConnect::disconnectFromDiscord()
 {
     setConnectionState(FSDiscordConnect::DISCORD_DISCONNECTING);
 
-    discordDisconnectCoro();
+    discordDisconnect_();
 }
 
 void FSDiscordConnect::checkConnectionToDiscord(bool auto_connect)
 {
-    discordConnectedCoro(auto_connect);
+    discordConnected_(auto_connect);
 }
 
 bool FSDiscordConnect::Tick(const LLSD&)

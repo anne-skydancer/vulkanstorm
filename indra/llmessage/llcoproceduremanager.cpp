@@ -146,7 +146,7 @@ private:
     CoroAdapterMap_t mCoroMapping;
 
     LL::Task<void> coprocedureInvokerCoro(CoprocQueuePtr pendingCoprocs,
-                                LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter);
+                                          LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter);
 };
 
 //=========================================================================

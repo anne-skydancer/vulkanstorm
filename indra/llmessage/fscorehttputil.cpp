@@ -30,12 +30,12 @@
 namespace FSCoreHttpUtil
 {
 LL::Task<void> trivialPostCoroRaw(std::string                   url,
-                        LLCore::HttpRequest::policy_t policyId,
-                        LLCore::BufferArray::ptr_t    postData,
-                        LLCore::HttpHeaders::ptr_t    aHeader,
-                        LLCore::HttpOptions::ptr_t    options,
-                        completionCallback_t          success,
-                        completionCallback_t          failure)
+                                  LLCore::HttpRequest::policy_t policyId,
+                                  LLCore::BufferArray::ptr_t    postData,
+                                  LLCore::HttpHeaders::ptr_t    aHeader,
+                                  LLCore::HttpOptions::ptr_t    options,
+                                  completionCallback_t          success,
+                                  completionCallback_t          failure)
 {
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter =
         std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("genericPostCoroRaw", policyId);
@@ -88,11 +88,11 @@ void callbackHttpPostRaw(const std::string&         url,
 }
 
 LL::Task<void> trivialGetCoroRaw(std::string                   url,
-                       LLCore::HttpRequest::policy_t policyId,
-                       LLCore::HttpHeaders::ptr_t    aHeader,
-                       LLCore::HttpOptions::ptr_t    options,
-                       completionCallback_t          success,
-                       completionCallback_t          failure)
+                                 LLCore::HttpRequest::policy_t policyId,
+                                 LLCore::HttpHeaders::ptr_t    aHeader,
+                                 LLCore::HttpOptions::ptr_t    options,
+                                 completionCallback_t          success,
+                                 completionCallback_t          failure)
 {
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter =
         std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("genericGetCoro", policyId);
@@ -139,7 +139,7 @@ void callbackHttpGetRaw(const std::string&         url,
 }
 
 LL::Task<void> trivialGetCoro(std::string url, time_t last_modified, completionCallback_t success, completionCallback_t failure,
-                    LLCore::HttpOptions::ptr_t httpOpts)
+                              LLCore::HttpOptions::ptr_t httpOpts)
 {
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter =
         std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("trivialGetCoro", LLCore::HttpRequest::DEFAULT_POLICY_ID);

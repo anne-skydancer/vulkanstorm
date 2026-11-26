@@ -50,7 +50,9 @@ public:
     /// Places the coprocedure on the queue for processing.
     ///
     /// @param name Is used for debugging and should identify this coroutine.
-    /// @param proc Is a bound function to be executed
+    /// @param proc Is a bound function to be executed. It returns an LL::Task<void> that the pool awaits;
+    ///        a capturing lambda must not itself be the coroutine (bind or capture into the call, then
+    ///        call a coroutine function).
     ///
     /// @return This method returns a UUID that can be used later to cancel execution.
     LLUUID enqueueCoprocedure(const std::string &pool, const std::string &name, CoProcedure_t proc);

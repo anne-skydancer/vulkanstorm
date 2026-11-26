@@ -6,14 +6,14 @@
  *
  * doc/clean/plan.md ("Coroutines", stage 4): the AIS parse (AISUpdate::parseUpdate and the nine functions below it,
  * llaisapi.cpp) is a recursion over an LLSD tree that became a chain of Task coroutines. Every call of the chain
- * allocates a coroutine frame, takes its LLSD parameter by value and, at each parseEmbedded, awaits a checkTimeout
- * task. This test measures what that costs per node, in the fibre bridge (nothing in the tree suspends, so every
+ * allocates a coroutine frame, takes its LLSD parameter by value (const) and, at each parseEmbedded, tests the timers inline and awaits checkTimeout
+ * only when a timer expired. This test measures what that costs per node, in the fibre bridge (nothing in the tree suspends, so every
  * task runs to its end at once, as the AIS parse does unless its time budget runs out).
  *
  * Three variants walk the same tree, interleaved round by round (so that a loaded machine hits all three alike):
  * - plain: ordinary recursion over const LLSD&;
  * - task: the same recursion as Task coroutines taking the LLSD by value;
- * - task+check: like task, and each node awaits a Task<void> that does nothing (checkTimeout's usual path).
+ * - task+check: like task, and each node tests an unexpired timer flag inline, as the AIS parse does (no frame on the usual path).
  *
  * The test fails only when the three disagree on the answer. The medians are written to stderr and, when the
  * environment names a file in GITHUB_STEP_SUMMARY (CI), appended there as a table. A sanitizer build checks the
@@ -78,12 +78,12 @@ long long walkPlain(const LLSD& node)
     return sum;
 }
 
-LL::Task<long long> walkTask(LLSD node)
+LL::Task<long long> walkTask(const LLSD node)
 {
     long long sum = visit(node);
     if (node.has("_embedded"))
     {
-        LLSD kids = node["_embedded"]["categories"];
+        const LLSD kids = node["_embedded"]["categories"];
         for (LLSD::array_const_iterator it = kids.beginArray(); it != kids.endArray(); ++it)
         {
             sum += co_await walkTask(*it);
@@ -92,19 +92,22 @@ LL::Task<long long> walkTask(LLSD node)
     co_return sum;
 }
 
-// checkTimeout() on its usual path: neither timer has expired, so nothing waits.
+// checkTimeout() on its slow path only: the caller tests the timers inline first, so the usual
+// path allocates no frame.
+static volatile bool sTimerExpired = false;
+
 LL::Task<void> checkNothing()
 {
     co_return;
 }
 
-LL::Task<long long> walkTaskChecked(LLSD node)
+LL::Task<long long> walkTaskChecked(const LLSD node)
 {
-    co_await checkNothing();
+    if (sTimerExpired) co_await checkNothing();
     long long sum = visit(node);
     if (node.has("_embedded"))
     {
-        LLSD kids = node["_embedded"]["categories"];
+        const LLSD kids = node["_embedded"]["categories"];
         for (LLSD::array_const_iterator it = kids.beginArray(); it != kids.endArray(); ++it)
         {
             sum += co_await walkTaskChecked(*it);
@@ -171,6 +174,13 @@ void object::test<1>()
     ensure_equals("sums agree", sink, expected * 3 * ROUNDS);
 
 #if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define LL_BENCH_SANITIZED 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer)
+#define LL_BENCH_SANITIZED 1
+#endif
+#endif
+#if defined(LL_BENCH_SANITIZED)
     // A sanitizer build instruments every call: the numbers would say nothing about the code.
     return;
 #endif

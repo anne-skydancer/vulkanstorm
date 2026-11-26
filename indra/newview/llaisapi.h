@@ -108,6 +108,7 @@ private:
     static std::list<ais_query_item_t> sPostponedQuery;
 };
 
+// Empty until parseUpdate() has run; doUpdate() applies what the parse collected.
 class AISUpdate
 {
 public:
@@ -129,6 +130,7 @@ public:
     LL::Task<void> doUpdate();
 private:
     void clearParseResults();
+    bool timeoutPending() { return mTaskTimer.hasExpired() || sBatchTimer.hasExpired(); }
     LL::Task<void> checkTimeout();
 
     // Fetches can return large packets of data,

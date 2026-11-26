@@ -34,6 +34,11 @@
 #include <boost/json.hpp>
 #include <vector>
 
+#if LL_WINDOWS
+// the throwing coroutine handlers keep a co_return after the throw (a coroutine needs one)
+#pragma warning(disable: 4702)
+#endif
+
 namespace
 {
     // Exposes the protected test-only members LLJSONRPCConnection provides
@@ -52,6 +57,7 @@ namespace
         using LLJSONRPCConnection::testPendingRequestCount;
         using LLJSONRPCConnection::testSweepTimeouts;
         using LLJSONRPCConnection::setAuthenticated;
+        using LLJSONRPCConnection::runAsyncMethod;
     };
 
     // Minimal concrete server, used only to register the built-in
@@ -83,6 +89,15 @@ namespace
             mSent.push_back(message);
             return true;
         }
+    };
+
+    // A capturing connection that says whether its transport is open, which a connection with no server cannot.
+    class OpenCapturingJSONRPCConnection : public CapturingJSONRPCConnection
+    {
+    public:
+        bool mOpen = true;
+
+        bool isConnected() const override { return mOpen; }
     };
 }
 
@@ -549,5 +564,110 @@ namespace tut
         ensure_equals("first callback fires exactly once", callback_count_a, 1);
         ensure_equals("second callback fires exactly once", callback_count_b, 1);
         ensure_equals("nothing left pending", conn.testPendingRequestCount(), (size_t)0);
+    }
+
+    template<> template<>
+    void jsonrpcws_object::test<18>()
+    {
+        set_test_name("an async method that returns a value sends it as the response");
+
+        auto conn = std::make_shared<OpenCapturingJSONRPCConnection>();
+        LLJSONRPCConnection::AsyncMethodHandler handler =
+            [](std::string, LLSD, LLSD params) -> LL::Task<LLSD>
+            {
+                LLSD result;
+                result["echo"] = params["value"];
+                co_return result;
+            };
+        LLSD params;
+        params["value"] = 42;
+
+        auto task = TestJSONRPCConnection::runAsyncMethod(handler, "async.echo", LLSD("req_1"), params, conn);
+        ensure("the handler never waits, so the task is done", task.done());
+        task.get();
+
+        ensure_equals("one message sent", conn->mSent.size(), (size_t)1);
+        boost::system::error_code ec;
+        const LLSD sent = LlsdFromJson(boost::json::parse(conn->mSent[0], ec));
+        ensure("parsed without error", !ec);
+        ensure_equals("the response carries the request id", sent["id"].asString(), std::string("req_1"));
+        ensure_equals("the response carries the result", sent["result"]["echo"].asInteger(), 42);
+        ensure("no error member", !sent.has("error"));
+    }
+
+    template<> template<>
+    void jsonrpcws_object::test<19>()
+    {
+        set_test_name("an async method that throws RPCError sends that error");
+
+        auto conn = std::make_shared<OpenCapturingJSONRPCConnection>();
+        LLJSONRPCConnection::AsyncMethodHandler handler =
+            [](std::string, LLSD, LLSD) -> LL::Task<LLSD>
+            {
+                throw LLJSONRPCConnection::RPCError(-32001, "custom failure");
+                co_return LLSD();
+            };
+
+        auto task = TestJSONRPCConnection::runAsyncMethod(handler, "async.fail", LLSD("req_2"), LLSD(), conn);
+        ensure("the task is done", task.done());
+        task.get();
+
+        ensure_equals("one message sent", conn->mSent.size(), (size_t)1);
+        boost::system::error_code ec;
+        const LLSD sent = LlsdFromJson(boost::json::parse(conn->mSent[0], ec));
+        ensure("parsed without error", !ec);
+        ensure_equals("the error carries the request id", sent["id"].asString(), std::string("req_2"));
+        ensure_equals("the error code is the handler's", sent["error"]["code"].asInteger(), -32001);
+        ensure_equals("the error message is the handler's", sent["error"]["message"].asString(),
+                      std::string("custom failure"));
+    }
+
+    template<> template<>
+    void jsonrpcws_object::test<20>()
+    {
+        set_test_name("an async method that throws anything else sends a generic internal error");
+
+        auto conn = std::make_shared<OpenCapturingJSONRPCConnection>();
+        LLJSONRPCConnection::AsyncMethodHandler handler =
+            [](std::string, LLSD, LLSD) -> LL::Task<LLSD>
+            {
+                throw std::runtime_error("boom detail");
+                co_return LLSD();
+            };
+
+        TestJSONRPCConnection::runAsyncMethod(handler, "async.boom", LLSD("req_3"), LLSD(), conn).get();
+
+        ensure_equals("one message sent", conn->mSent.size(), (size_t)1);
+        boost::system::error_code ec;
+        const LLSD sent = LlsdFromJson(boost::json::parse(conn->mSent[0], ec));
+        ensure("parsed without error", !ec);
+        ensure_equals("internal error code", sent["error"]["code"].asInteger(), LLJSONRPCConnection::RPCError::INTERNAL_ERROR);
+        ensure("the exception's own message is not forwarded",
+               sent["error"]["message"].asString().find("boom detail") == std::string::npos);
+    }
+
+    template<> template<>
+    void jsonrpcws_object::test<21>()
+    {
+        set_test_name("an async method that ends after the connection closed sends nothing");
+
+        auto conn = std::make_shared<OpenCapturingJSONRPCConnection>();
+        conn->mOpen = false;
+        LLJSONRPCConnection::AsyncMethodHandler value_handler =
+            [](std::string, LLSD, LLSD) -> LL::Task<LLSD>
+            {
+                co_return LLSD("late");
+            };
+        LLJSONRPCConnection::AsyncMethodHandler error_handler =
+            [](std::string, LLSD, LLSD) -> LL::Task<LLSD>
+            {
+                throw LLJSONRPCConnection::RPCError(-32001, "late failure");
+                co_return LLSD();
+            };
+
+        TestJSONRPCConnection::runAsyncMethod(value_handler, "async.late", LLSD("req_4"), LLSD(), conn).get();
+        TestJSONRPCConnection::runAsyncMethod(error_handler, "async.late", LLSD("req_5"), LLSD(), conn).get();
+
+        ensure_equals("nothing sent on a closed connection", conn->mSent.size(), (size_t)0);
     }
 }

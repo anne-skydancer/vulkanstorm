@@ -299,6 +299,9 @@ private:
 /// An adapter to handle some of the boilerplate code surrounding HTTP and coroutine
 /// interaction.
 ///
+/// The ...AndSuspend methods return an LL::Task<LLSD> that the caller awaits
+/// (co_await) from a coroutine; nothing is sent until it is awaited.
+///
 /// Construct an HttpCoroutineAdapter giving it a name and policy Id. After
 /// any application specific setup call the post, put or get method.  The request
 /// will be automatically pumped and the method will return with an LLSD describing
@@ -357,7 +360,7 @@ public:
         std::string url, LLSD body,
         LLCore::HttpHeaders::ptr_t &headers)
     {
-        return postAndSuspend(request, url, body,
+        return postAndSuspend(request, std::move(url), std::move(body),
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
@@ -365,7 +368,7 @@ public:
         std::string url, LLCore::BufferArray::ptr_t &rawbody,
         LLCore::HttpHeaders::ptr_t &headers)
     {
-        return postAndSuspend(request, url, rawbody,
+        return postAndSuspend(request, std::move(url), rawbody,
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
@@ -378,7 +381,7 @@ public:
         std::string url, LLCore::BufferArray::ptr_t &rawbody,
         LLCore::HttpHeaders::ptr_t &headers)
     {
-        return postRawAndSuspend(request, url, rawbody,
+        return postRawAndSuspend(request, std::move(url), rawbody,
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
@@ -391,7 +394,7 @@ public:
         std::string url, std::string fileName,
         LLCore::HttpHeaders::ptr_t &headers)
     {
-        return postFileAndSuspend(request, url, fileName,
+        return postFileAndSuspend(request, std::move(url), std::move(fileName),
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
@@ -405,7 +408,7 @@ public:
         std::string url, LLUUID assetId, LLAssetType::EType assetType,
         LLCore::HttpHeaders::ptr_t &headers)
     {
-        return postFileAndSuspend(request, url, assetId, assetType,
+        return postFileAndSuspend(request, std::move(url), assetId, assetType,
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
@@ -417,7 +420,7 @@ public:
         std::string url, LLSD body,
         LLCore::HttpHeaders::ptr_t &headers)
     {
-        return postJsonAndSuspend(request, url, body,
+        return postJsonAndSuspend(request, std::move(url), std::move(body),
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
@@ -437,7 +440,7 @@ public:
         std::string url, LLSD body,
         LLCore::HttpHeaders::ptr_t headers)
     {
-        return putAndSuspend(request, url, body,
+        return putAndSuspend(request, std::move(url), std::move(body),
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
@@ -449,7 +452,7 @@ public:
         std::string url, LLSD body,
         LLCore::HttpHeaders::ptr_t &headers)
     {
-        return putJsonAndSuspend(request, url, body,
+        return putJsonAndSuspend(request, std::move(url), std::move(body),
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
@@ -466,7 +469,7 @@ public:
     LL::Task<LLSD> getAndSuspend(LLCore::HttpRequest::ptr_t &request,
         std::string url, LLCore::HttpHeaders::ptr_t &headers)
     {
-        return getAndSuspend(request, url,
+        return getAndSuspend(request, std::move(url),
             std::make_shared<LLCore::HttpOptions>(),
             headers);
     }
@@ -478,7 +481,7 @@ public:
     LL::Task<LLSD> getRawAndSuspend(LLCore::HttpRequest::ptr_t &request,
         std::string url, LLCore::HttpHeaders::ptr_t &headers)
     {
-        return getRawAndSuspend(request, url,
+        return getRawAndSuspend(request, std::move(url),
             std::make_shared<LLCore::HttpOptions>(),
             headers);
     }
@@ -494,7 +497,7 @@ public:
     LL::Task<LLSD> getJsonAndSuspend(LLCore::HttpRequest::ptr_t &request,
         std::string url, LLCore::HttpHeaders::ptr_t &headers)
     {
-        return getJsonAndSuspend(request, url,
+        return getJsonAndSuspend(request, std::move(url),
             std::make_shared<LLCore::HttpOptions>(),
             headers);
     }
@@ -512,7 +515,7 @@ public:
     LL::Task<LLSD> deleteAndSuspend(LLCore::HttpRequest::ptr_t request,
         std::string url, LLCore::HttpHeaders::ptr_t headers)
     {
-        return deleteAndSuspend(request, url,
+        return deleteAndSuspend(request, std::move(url),
             std::make_shared<LLCore::HttpOptions>(),
             headers);
     }
@@ -528,7 +531,7 @@ public:
     LL::Task<LLSD> deleteJsonAndSuspend(LLCore::HttpRequest::ptr_t request,
         std::string url, LLCore::HttpHeaders::ptr_t headers)
     {
-        return deleteJsonAndSuspend(request, url,
+        return deleteJsonAndSuspend(request, std::move(url),
             std::make_shared<LLCore::HttpOptions>(),
             headers);
     }
@@ -547,7 +550,7 @@ public:
         std::string url, LLSD body,
         LLCore::HttpHeaders::ptr_t &headers)
     {
-        return patchAndSuspend(request, url, body,
+        return patchAndSuspend(request, std::move(url), std::move(body),
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
@@ -567,7 +570,7 @@ public:
         std::string url, std::string dest,
         LLCore::HttpHeaders::ptr_t &headers)
     {
-        return copyAndSuspend(request, url, dest,
+        return copyAndSuspend(request, std::move(url), std::move(dest),
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
@@ -587,7 +590,7 @@ public:
         std::string url, std::string dest,
         LLCore::HttpHeaders::ptr_t &headers)
     {
-        return moveAndSuspend(request, url, dest,
+        return moveAndSuspend(request, std::move(url), std::move(dest),
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 

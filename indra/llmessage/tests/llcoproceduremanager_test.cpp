@@ -32,6 +32,7 @@
 #include "llsdserialize.h"
 
 #include "../llcoproceduremanager.h"
+#include "lleventcoro.h"
 
 #include <functional>
 
@@ -75,6 +76,16 @@ namespace
 LL::Task<void> finished()
 {
     co_return;
+}
+
+// A coprocedure that waits (a fibre switch under the bridge) before it finishes: the pool must await it, so what
+// comes after the wait still runs, and still counts as the coprocedure.
+LL::Task<void> waitsThenFinishes(int& state, Sync& sync)
+{
+    state = 1;
+    co_await llcoro::co::suspend();
+    state = 2;
+    sync.bump();
 }
 } // namespace
 
@@ -186,5 +197,22 @@ namespace tut
 
         LL_INFOS("CoMain") << "checking count" << LL_ENDL;
         ensure_equals("coprocedure failed to update counter", counter, 5);
+    }
+
+    template<> template<>
+    void coproceduremanager_object_t::test<5>()
+    {
+        Sync sync;
+        int state = 0;
+        LLCoprocedureManager::instance().initializePool("PoolWait");
+        LLCoprocedureManager::instance().enqueueCoprocedure("PoolWait", "WaitProc",
+            [&state, &sync] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID) {
+                return waitsThenFinishes(state, sync);
+            });
+
+        sync.yield();
+        ensure_equals("the coprocedure did not run to its end after waiting", state, 2);
+
+        LLCoprocedureManager::instance().close("PoolWait");
     }
 }  // namespace tut

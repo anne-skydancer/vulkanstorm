@@ -63,6 +63,13 @@ except ImportError:
 # </FS:Beq>
 
 
+# The Velopack channel of each platform's package; the feed is releases.<channel>.json. Keep in step with
+# VELOPACK_CHANNEL in llvelopack.cpp (the viewer asks for that feed). These are Velopack's per-OS defaults, so
+# existing feeds keep their names.
+VELOPACK_CHANNEL_WINDOWS = 'win'
+VELOPACK_CHANNEL_MACOS = 'osx'
+
+
 def _velopack_pack_version(version):
     pack_version = '.'.join(version[:3])
     if len(version) > 3 and version[3]:
@@ -1308,6 +1315,7 @@ class Windows_x86_64_Manifest(ViewerManifest):
             '--packDir', pack_dir,
             '--mainExe', main_exe,
             '--packTitle', pack_title,
+            '--channel', VELOPACK_CHANNEL_WINDOWS,
             '--exclude', exclude_pattern,
             '-xy', # <FS:TJ/> Overwrite any existing velopack package of the same Id instead of erroring
             # Suppress Velopack's built-in shortcut creation; we create our own
@@ -1336,6 +1344,9 @@ class Windows_x86_64_Manifest(ViewerManifest):
 
         # Velopack outputs to a Releases directory
         releases_dir = os.path.join(os.path.dirname(pack_dir), 'Releases')
+        feed_name = 'releases.%s.json' % VELOPACK_CHANNEL_WINDOWS
+        if not os.path.exists(os.path.join(releases_dir, feed_name)):
+            raise ManifestError("Velopack packaging did not produce %s in %s" % (feed_name, releases_dir))
 
         # Move the setup exe INTO pack_dir so it's included in the Windows-app artifact
         # IMPORTANT: Use hyphen format (-Setup.exe) to avoid the *_Setup.exe exclusion pattern
@@ -2302,6 +2313,7 @@ class Darwin_x86_64_Manifest(ViewerManifest):
             '--packTitle', pack_title,
             '--mainExe', main_exe,  # Executable name inside Contents/MacOS/
             '--bundleId', bundle_id,
+            '--channel', VELOPACK_CHANNEL_MACOS,
             '--outputDir', releases_dir,
             '--noInst',  # Don't generate .pkg installer - we use DMG for distribution
             '--verbose',  # Show detailed output
@@ -2333,6 +2345,10 @@ class Darwin_x86_64_Manifest(ViewerManifest):
         # Verify the Releases directory was created and contains expected files
         if not os.path.exists(releases_dir):
             raise ManifestError("Velopack releases directory not found: %s" % releases_dir)
+
+        feed_name = 'releases.%s.json' % VELOPACK_CHANNEL_MACOS
+        if not os.path.exists(os.path.join(releases_dir, feed_name)):
+            raise ManifestError("Velopack packaging did not produce %s in %s" % (feed_name, releases_dir))
 
         # List what was created
         releases_contents = os.listdir(releases_dir)

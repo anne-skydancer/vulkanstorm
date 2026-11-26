@@ -189,23 +189,24 @@ static LL::Task<bool> download_url_to_file(std::string url, std::string local_pa
 //
 
 // The release feed is fetched by the check coroutine before it calls vpkc_check_for_updates (single pass): the
-// callback below runs inside the Rust FFI, where a coroutine cannot suspend, and only serves these bytes.
+// callback below is C++ that Velopack's Rust library calls, where a coroutine cannot suspend, and only serves these bytes.
 static std::string sPreFetchedFeedName;
 static std::string sPreFetchedFeed;
 
-// The feed Velopack asks for is releases.<channel>.json. With no explicit channel (ensure_update_manager sets none)
-// the channel is the one the installed package was packed with, which falls back to Velopack's per-OS default when
-// "vpk pack" is given no --channel (velopack lib-rust constants.rs DEFAULT_CHANNEL_NAME: "win", "linux", "osx");
-// viewer_manifest.py packs without one.
+// The feed Velopack asks for is releases.<channel>.json. The channel is explicit: packages are packed with
+// "vpk pack --channel" and ensure_update_manager sets ExplicitChannel from the same constant (viewer_manifest.py
+// VELOPACK_CHANNEL_WINDOWS / VELOPACK_CHANNEL_MACOS keep these names; they are Velopack's per-OS defaults).
+#if LL_WINDOWS
+static constexpr const char* VELOPACK_CHANNEL = "win";
+#elif LL_DARWIN
+static constexpr const char* VELOPACK_CHANNEL = "osx";
+#else
+static constexpr const char* VELOPACK_CHANNEL = "linux";
+#endif
+
 static std::string default_release_feed_name()
 {
-#if LL_WINDOWS
-    return "releases.win.json";
-#elif LL_DARWIN
-    return "releases.osx.json";
-#else
-    return "releases.linux.json";
-#endif
+    return std::string("releases.") + VELOPACK_CHANNEL + ".json";
 }
 
 static LL::Task<bool> prefetch_release_feed(std::string releases_name)
@@ -1052,7 +1053,7 @@ static void ensure_update_manager(bool allow_downgrade)
 
     vpkc_update_options_t options = {};
     options.AllowVersionDowngrade = allow_downgrade;
-    options.ExplicitChannel = nullptr;
+    options.ExplicitChannel = VELOPACK_CHANNEL;
 
     if (!sUpdateSource)
     {
@@ -1352,6 +1353,8 @@ LL::Task<void> velopack_check_for_updates(std::string required_version, std::str
     // Ask Velopack to check its feed — this is the source of truth
     vpkc_update_info_t* update_info = nullptr;
     vpkc_update_check_t result = vpkc_check_for_updates(sUpdateManager, &update_info);
+    sPreFetchedFeed.clear(); // served; do not keep the feed text
+    sPreFetchedFeedName.clear();
 
     if (result != UPDATE_AVAILABLE || !update_info)
     {

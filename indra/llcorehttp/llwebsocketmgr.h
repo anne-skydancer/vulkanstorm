@@ -149,7 +149,8 @@ public:
          */
         void closeConnection(U16 code = 1000, const std::string& reason = std::string());
 
-        bool isConnected() const;
+        // virtual so that a test connection with no transport can report itself connected
+        virtual bool isConnected() const;
 
     protected:
         /// Returns a shared_ptr to this connection, retrieved from the owning server.

@@ -55,7 +55,7 @@ void FSPrimfeedConnect::uploadPhoto(const LLSD& params, LLImageFormatted* image,
     );
 }
 
-LL::Task<void> FSPrimfeedConnect::uploadPhotoCoro(LLSD params, LLImageFormatted* image)
+LL::Task<void> FSPrimfeedConnect::uploadPhotoCoro(const LLSD params, LLImageFormatted* image)
 {
     LL_DEBUGS("primfeed") << "Entered uploadPhotoCoro" << LL_ENDL;
     setConnectionState(PRIMFEED_POSTING);
