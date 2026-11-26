@@ -538,6 +538,13 @@ bool LLFile::copy(const std::string& from, const std::string& to)
                     write_ok = false;
                 }
             }
+            // fread returns 0 on a read error as well as at the end of the file: a read error
+            // must not report a truncated copy as done.
+            if (write_ok && ferror(in))
+            {
+                LL_WARNS("LLFile") << "Read error copying " << from << LL_ENDL;
+                write_ok = false;
+            }
             if ( write_ok )
             {
                 copied = true;
