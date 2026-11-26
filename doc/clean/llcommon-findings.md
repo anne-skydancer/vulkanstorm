@@ -83,7 +83,7 @@ translation units) before they were kept.
 - `LLStringTable` rounds its size in unsigned arithmetic: the result for a requested size of 2^30 entries or more differs
   from the old undefined shift (the table is far smaller in practice).
 - `LLFile::copy` returns false on a read error (`ferror`), where a truncated copy used to count as done.
-- `LLPointer`'s copy assignment is copy-and-swap with no self-assignment guard (it handles self-assignment), and
+- `LLPointer`'s copy assignment is copy-and-swap with no self-assignment guard (it handles self-assignment; clang-tidy does not see that, so a `NOLINT` with the reason), and
   `LLSD::operator=` has none either (`Impl::reset` takes the new reference first).
 - `LLInstanceTracker::setKey` and `LLMetricPerformanceTesterBasic::compareTestResults` take `const&`
   (no override of any of them exists anywhere in `indra/`).

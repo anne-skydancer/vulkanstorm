@@ -158,6 +158,7 @@ public:
     //@{
         LLSD(const LLSD&);
         void assign(const LLSD& other);
+        // NOLINTNEXTLINE(bugprone-unhandled-self-assignment): Impl::reset() takes the new reference before it drops the old one, so self-assignment is safe
         LLSD& operator=(const LLSD& other)  { assign(other); return *this; }
 
     //@}
