@@ -138,6 +138,7 @@ set(llcommon_HEADER_FILES
     llbitpack.h
     llboost.h
     llcallbacklist.h
+    llchannel.h
     llcleanup.h
     llcommon.h
     llcommonutils.h
