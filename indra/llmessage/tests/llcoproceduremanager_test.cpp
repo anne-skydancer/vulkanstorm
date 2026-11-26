@@ -33,6 +33,7 @@
 
 #include "../llcoproceduremanager.h"
 #include "lleventcoro.h"
+#include "llevents.h"
 
 #include <functional>
 
@@ -83,8 +84,9 @@ LL::Task<void> finished()
 LL::Task<void> waitsThenFinishes(int& state, Sync& sync)
 {
     state = 1;
-    co_await llcoro::co::suspend();
-    state = 2;
+    // the request pump's listener answers on the reply pump, which wakes this coprocedure
+    LLSD reply = co_await llcoro::co::postAndSuspend(LLSD::emptyMap(), "PoolWaitRequest", "PoolWaitReply", "reply");
+    state = reply.asString() == "answered" ? 2 : -1;
     sync.bump();
 }
 } // namespace
@@ -204,6 +206,13 @@ namespace tut
     {
         Sync sync;
         int state = 0;
+        LLEventStream request("PoolWaitRequest", true);
+        LLEventStream reply("PoolWaitReply", true);
+        LLTempBoundListener answer = request.listen("answer", [](const LLSD& event)
+        {
+            LLEventPumps::instance().obtain(event["reply"].asString()).post("answered");
+            return false;
+        });
         LLCoprocedureManager::instance().initializePool("PoolWait");
         LLCoprocedureManager::instance().enqueueCoprocedure("PoolWait", "WaitProc",
             [&state, &sync] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID) {
