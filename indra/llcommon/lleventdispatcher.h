@@ -95,15 +95,12 @@ public:
         addLLSD(name, desc, callable, required);
     }
 
-    template <typename CALLABLE,
-              typename=std::enable_if_t<
-                  std::is_invocable_v<CALLABLE, LLSD>
-             >>
+    template <typename CALLABLE>
     void add(const std::string& name,
              const std::string& desc,
              CALLABLE&& callable,
              const LLSD& required=LLSD())
-    {
+    requires (std::is_invocable_v<CALLABLE, LLSD>) {
         addLLSD(
             name,
             desc,
@@ -196,51 +193,39 @@ public:
 
     // non-const unary method (but method accepting LLSD should use the other add())
     // enable_if usage per https://stackoverflow.com/a/39913395/5533635
-    template <typename R, class CLASS, typename ARG,
-              typename = std::enable_if_t<
-                  ! std::is_same_v<std::decay_t<ARG>, LLSD>
-             >>
+    template <typename R, class CLASS, typename ARG>
     void add(const std::string& name,
              const std::string& desc,
              R (CLASS::*method)(ARG))
-    {
+    requires (! std::is_same_v<std::decay_t<ARG>, LLSD>) {
         addVMethod<CLASS>(name, desc, method);
     }
 
     // const unary method (but method accepting LLSD should use the other add())
-    template <typename R, class CLASS, typename ARG,
-              typename = std::enable_if_t<
-                  ! std::is_same_v<std::decay_t<ARG>, LLSD>
-             >>
+    template <typename R, class CLASS, typename ARG>
     void add(const std::string& name,
              const std::string& desc,
              R (CLASS::*method)(ARG) const)
-    {
+    requires (! std::is_same_v<std::decay_t<ARG>, LLSD>) {
         addVMethod<CLASS>(name, desc, method);
     }
 
     // non-const unary method returning void
     // enable_if usage per https://stackoverflow.com/a/39913395/5533635
-    template <class CLASS, typename ARG,
-              typename = std::enable_if_t<
-                  ! std::is_same_v<std::decay_t<ARG>, LLSD>
-             >>
+    template <class CLASS, typename ARG>
     void add(const std::string& name,
              const std::string& desc,
              void (CLASS::*method)(ARG))
-    {
+    requires (! std::is_same_v<std::decay_t<ARG>, LLSD>) {
         addVMethod<CLASS>(name, desc, method);
     }
 
     // const unary method returning void
-    template <class CLASS, typename ARG,
-              typename = std::enable_if_t<
-                  ! std::is_same_v<std::decay_t<ARG>, LLSD>
-             >>
+    template <class CLASS, typename ARG>
     void add(const std::string& name,
              const std::string& desc,
              void (CLASS::*method)(ARG) const)
-    {
+    requires (! std::is_same_v<std::decay_t<ARG>, LLSD>) {
         addVMethod<CLASS>(name, desc, method);
     }
 
@@ -292,14 +277,12 @@ public:
      * When calling this name, pass an LLSD::Array. Each entry in turn will be
      * converted to the corresponding parameter type using LLSDParam.
      */
-    template <typename CALLABLE,
-              typename=typename std::enable_if_t<
-                  ! std::is_invocable<CALLABLE, LLSD>()>>
+    template <typename CALLABLE>
     void add(const std::string& name,
              const std::string& desc,
              CALLABLE&& f)
-    {
-        addV(name, desc, f);
+    requires (! std::is_invocable<CALLABLE, LLSD>()) {
+        addV(name, desc, std::forward<CALLABLE>(f));
     }
 
     /**
@@ -512,14 +495,10 @@ private:
                  const Callable& callable,
                  const LLSD& required);
 
-    template <class CLASS, typename METHOD,
-              std::enable_if_t<
-                  std::is_base_of_v<LLEventDispatcher, CLASS>,
-                  bool
-              > =true>
+    template <class CLASS, typename METHOD>
     void addMethod(const std::string& name, const std::string& desc,
                    const METHOD& method, const LLSD& required)
-    {
+    requires (std::is_base_of_v<LLEventDispatcher, CLASS>) {
         // Why two overloaded addMethod() methods, discriminated with
         // std::is_base_of? It might seem simpler to use dynamic_cast and test
         // for nullptr. The trouble is that it doesn't work for LazyEventAPI
@@ -543,14 +522,10 @@ private:
         // </Vulkanstorm>
     }
 
-    template <class CLASS, typename METHOD,
-              std::enable_if_t<
-                  ! std::is_base_of_v<LLEventDispatcher, CLASS>,
-                  bool
-              > =true>
+    template <class CLASS, typename METHOD>
     void addMethod(const std::string& name, const std::string& desc,
                    const METHOD&, const LLSD&)
-    {
+    requires (! std::is_base_of_v<LLEventDispatcher, CLASS>) {
         addFail(name, typeid(CLASS).name());
     }
 
@@ -633,7 +608,7 @@ private:
 
     static NameDesc makeNameDesc(const DispatchMap::value_type& item)
     {
-        return NameDesc(item.first, item.second->mDesc);
+        return {item.first, item.second->mDesc};
     }
 
     class LLSDArgsMapper;

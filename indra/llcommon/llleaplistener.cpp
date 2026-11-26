@@ -165,6 +165,9 @@ void LLLeapListener::listen(const LLSD& request)
                 LLEventPump & dest = LLEventPumps::instance().obtain(dest_name);
                 saveListener(source_name, listener_name,
                              source.listen(listener_name,
+                                           // The bound pump is a signals2::trackable, so the connection drops when
+                                           // it is destroyed; a lambda would lose that automatic disconnect.
+                                           // NOLINTNEXTLINE(modernize-avoid-bind)
                                            boost::bind(&LLEventPump::post, &dest, _1)));
             }
             else
@@ -263,7 +266,7 @@ void LLLeapListener::getAPI(const LLSD& request) const
         // Here the requested LLEventAPI doesn't yet exist, but do we have a
         // registered LazyEventAPI for it?
         LL::LazyEventAPIBase::instance_snapshot snap;
-        auto foundlea = std::find_if(snap.begin(), snap.end(),
+        auto foundlea = std::ranges::find_if(snap,
                                      [api = request["api"].asString()]
                                      (const auto& lea)
                                      { return (lea.getName() == api); });

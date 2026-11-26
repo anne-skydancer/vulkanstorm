@@ -39,7 +39,7 @@ class Tea
 {
 public:
     Tea();
-    ~Tea();
+    ~Tea() = default;
 
     static void setCurrency(const std::string& currency);
     static void setRegionCurrency(const std::string& currency);

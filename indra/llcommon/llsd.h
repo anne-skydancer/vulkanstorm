@@ -158,7 +158,8 @@ public:
     //@{
         LLSD(const LLSD&);
         void assign(const LLSD& other);
-        LLSD& operator=(const LLSD& other)  { if (this != &other) { assign(other); } return *this; }
+        // NOLINTNEXTLINE(bugprone-unhandled-self-assignment): Impl::reset() takes the new reference before it drops the old one, so self-assignment is safe
+        LLSD& operator=(const LLSD& other)  { assign(other); return *this; }
 
     //@}
 
@@ -206,16 +207,12 @@ public:
     /** @name Convenience Constructors */
     //@{
         // support construction from size_t et al.
-        template <typename VALUE,
-                  std::enable_if_t<std::is_integral_v<VALUE> &&
-                                          ! std::is_same_v<VALUE, Boolean>,
-                                          bool> = true>
-        LLSD(VALUE v): LLSD(Integer(narrow<VALUE>(v))) {}
+        template <typename VALUE>
+        LLSD(VALUE v) requires (std::is_integral_v<VALUE> && ! std::is_same_v<VALUE, Boolean>):
+            LLSD(Integer(narrow<VALUE>(v))) {}
         // support construction from F32 et al.
-        template <typename VALUE,
-                  std::enable_if_t<std::is_floating_point_v<VALUE>,
-                                          bool> = true>
-        LLSD(VALUE v): LLSD(Real(narrow<VALUE>(v))) {}
+        template <typename VALUE>
+        LLSD(VALUE v) requires (std::is_floating_point_v<VALUE>): LLSD(Real(narrow<VALUE>(v))) {}
     //@}
 
     /** @name Scalar Assignment */
@@ -242,11 +239,13 @@ public:
         LLSD& operator=(const Date& v)      { assign(v); return *this; }
         LLSD& operator=(const URI& v)       { assign(v); return *this; }
         LLSD& operator=(const Binary& v)    { assign(v); return *this; }
+        // NOLINTBEGIN(performance-move-const-arg): the rvalue overloads exist for every LLSD scalar type so that callers and templates need no per-type cases; moving a trivially copyable UUID or Date is a copy, by design
         LLSD& operator=(String&& v)         { assign(std::move(v)); return *this; }
         LLSD& operator=(UUID&& v)               { assign(std::move(v)); return *this; }
         LLSD& operator=(Date&& v)               { assign(std::move(v)); return *this; }
         LLSD& operator=(URI&& v)                { assign(std::move(v)); return *this; }
         LLSD& operator=(Binary&& v)         { assign(std::move(v)); return *this; }
+        // NOLINTEND(performance-move-const-arg)
     //@}
 
     /**
@@ -384,14 +383,10 @@ public:
         const LLSD& operator[](size_t) const;
         LLSD& operator[](size_t);
         // template overloads to support int literals, U32 et al.
-        template <typename IDX,
-                  std::enable_if_t<std::is_convertible_v<IDX, size_t>,
-                                          bool> = true>
-        const LLSD& operator[](IDX i) const { return (*this)[size_t(i)]; }
-        template <typename IDX,
-                  std::enable_if_t<std::is_convertible_v<IDX, size_t>,
-                                          bool> = true>
-        LLSD& operator[](IDX i) { return (*this)[size_t(i)]; }
+        template <typename IDX>
+        const LLSD& operator[](IDX i) const requires (std::is_convertible_v<IDX, size_t>) { return (*this)[size_t(i)]; }
+        template <typename IDX>
+        LLSD& operator[](IDX i) requires (std::is_convertible_v<IDX, size_t>) { return (*this)[size_t(i)]; }
     //@}
 
     /** @name Iterators */

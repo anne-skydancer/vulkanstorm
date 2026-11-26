@@ -28,6 +28,7 @@
 #include "linden_common.h"
 
 #include "llinitparam.h"
+#include <algorithm>
 #include "llformat.h"
 
 
@@ -114,9 +115,9 @@ namespace LLInitParam
     void BlockDescriptor::aggregateBlockData(BlockDescriptor& src_block_data)
     {
         mNamedParams.insert(src_block_data.mNamedParams.begin(), src_block_data.mNamedParams.end());
-        std::copy(src_block_data.mUnnamedParams.begin(), src_block_data.mUnnamedParams.end(), std::back_inserter(mUnnamedParams));
-        std::copy(src_block_data.mValidationList.begin(), src_block_data.mValidationList.end(), std::back_inserter(mValidationList));
-        std::copy(src_block_data.mAllParams.begin(), src_block_data.mAllParams.end(), std::back_inserter(mAllParams));
+        std::ranges::copy(src_block_data.mUnnamedParams, std::back_inserter(mUnnamedParams));
+        std::ranges::copy(src_block_data.mValidationList, std::back_inserter(mValidationList));
+        std::ranges::copy(src_block_data.mAllParams, std::back_inserter(mAllParams));
     }
 
     void BlockDescriptor::addParam(const ParamDescriptorPtr& in_param, const char* char_name)
@@ -418,11 +419,11 @@ namespace LLInitParam
     const std::string& BaseBlock::getParamName(const BlockDescriptor& block_data, const Param* paramp) const
     {
         param_handle_t handle = getHandleFromParam(paramp);
-        for (auto it = block_data.mNamedParams.begin(); it != block_data.mNamedParams.end(); ++it)
+        for (const auto& named_param : block_data.mNamedParams)
         {
-            if (it->second->mParamHandle == handle)
+            if (named_param.second->mParamHandle == handle)
             {
-                return it->first;
+                return named_param.first;
             }
         }
 

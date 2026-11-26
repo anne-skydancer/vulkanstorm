@@ -38,7 +38,7 @@ struct LL_COMMON_API LLParamSDParserUtilities
 
     using read_sd_cb_t = std::function<void (const LLSD&, LLInitParam::Parser::name_stack_t&)>;
     static void readSDValues(const read_sd_cb_t& cb, const LLSD& sd, LLInitParam::Parser::name_stack_t& stack);
-    static void readSDValues(read_sd_cb_t cb, const LLSD& sd);
+    static void readSDValues(const read_sd_cb_t& cb, const LLSD& sd);
 };
 
 class LL_COMMON_API LLParamSDParser

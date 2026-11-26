@@ -355,11 +355,11 @@ public:
     LLEventThrottle(LLEventPump& source, F32 interval);
 
 private:
-    void alarmActionAfter(F32 interval, const LLEventTimeoutBase::Action& action) override /*override*/;
-    bool alarmRunning() const override /*override*/;
-    void alarmCancel() override /*override*/;
-    void timerSet(F32 interval) override /*override*/;
-    F32  timerGetRemaining() const override /*override*/;
+    void alarmActionAfter(F32 interval, const LLEventTimeoutBase::Action& action) override;
+    bool alarmRunning() const override;
+    void alarmCancel() override;
+    void timerSet(F32 interval) override;
+    F32  timerGetRemaining() const override;
 
     // use this to arrange a deferred flush() call
     LLEventTimeout mAlarm;

@@ -26,6 +26,7 @@
 #include "linden_common.h"
 
 #include "lltracethreadrecorder.h"
+#include <algorithm>
 #include "llfasttimer.h"
 #include "lltrace.h"
 #include "llstl.h"
@@ -110,7 +111,7 @@ ThreadRecorder::~ThreadRecorder()
 
     if (!mActiveRecordings.empty())
     {
-        std::for_each(mActiveRecordings.begin(), mActiveRecordings.end(), DeletePointer());
+        std::ranges::for_each(mActiveRecordings, DeletePointer());
         mActiveRecordings.clear();
     }
 

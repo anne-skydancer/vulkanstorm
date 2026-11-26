@@ -394,8 +394,8 @@ void LLEventPump::reset()
     // Resetting mSignal is supposed to disconnect everything on its own
     // But due to crash on 'reset' added explicit cleanup to get more data
     LLCoros::LockType lock(mConnectionListMutex);
-    ConnectionMap::const_iterator iter = mConnections.begin();
-    ConnectionMap::const_iterator end = mConnections.end();
+    auto iter = mConnections.begin();
+    auto end = mConnections.end();
     while (iter!=end)
     {
         iter->second.disconnect();
@@ -428,7 +428,7 @@ LLBoundListener LLEventPump::listen_impl(const std::string& name, const LLEventL
     if (!name.empty()) // should be the same as testing against ANONYMOUS
     {
         // Check for duplicate name before connecting listener to mSignal
-        ConnectionMap::const_iterator found = mConnections.find(name);
+        auto found = mConnections.find(name);
         // In some cases the user might disconnect a connection explicitly -- or
         // might use LLEventTrackable to disconnect implicitly. Either way, we can
         // end up retaining in mConnections a zombie connection object that's
@@ -506,7 +506,7 @@ LLBoundListener LLEventPump::listen_impl(const std::string& name, const LLEventL
                         sortnames.emplace_back(cdmi->second, cdmi->first);
                     }
                 }
-                std::sort(sortnames.begin(), sortnames.end());
+                std::ranges::sort(sortnames);
                 std::ostringstream out;
                 out << "New listener '" << name << "' on " << typeid(*this).name() << " '" << getName()
                     << "' would move previous listener '" << dmi->first << "'\nwas: ";
@@ -582,7 +582,7 @@ LLBoundListener LLEventPump::listen_impl(const std::string& name, const LLEventL
 LLBoundListener LLEventPump::getListener(const std::string& name)
 {
     LLCoros::LockType lock(mConnectionListMutex);
-    ConnectionMap::const_iterator found = mConnections.find(name);
+    auto found = mConnections.find(name);
     if (found != mConnections.end())
     {
         return found->second;
@@ -686,17 +686,19 @@ void LLEventMailDrop::discard()
 *****************************************************************************/
 LLListenerOrPumpName::LLListenerOrPumpName(const std::string& pumpname):
     // Look up the specified pumpname, and bind its post() method as our listener
-    mListener(boost::bind(&LLEventPump::post,
-                          boost::ref(LLEventPumps::instance().obtain(pumpname)),
-                          _1))
+    // The bound pump is a signals2::trackable, so the connection drops when it is destroyed; a lambda would lose
+    // that automatic disconnect.
+    // NOLINTNEXTLINE(modernize-avoid-bind)
+    mListener(boost::bind(&LLEventPump::post, boost::ref(LLEventPumps::instance().obtain(pumpname)), _1))
 {
 }
 
 LLListenerOrPumpName::LLListenerOrPumpName(const char* pumpname):
     // Look up the specified pumpname, and bind its post() method as our listener
-    mListener(boost::bind(&LLEventPump::post,
-                          boost::ref(LLEventPumps::instance().obtain(pumpname)),
-                          _1))
+    // The bound pump is a signals2::trackable, so the connection drops when it is destroyed; a lambda would lose
+    // that automatic disconnect.
+    // NOLINTNEXTLINE(modernize-avoid-bind)
+    mListener(boost::bind(&LLEventPump::post, boost::ref(LLEventPumps::instance().obtain(pumpname)), _1))
 {
 }
 

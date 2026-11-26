@@ -1516,10 +1516,10 @@ S32 LLSDNotationFormatter::format_impl(const LLSD& data, std::ostream& ostr,
                 ostr << std::uppercase;
                 auto oldfill(ostr.fill('0'));
                 auto oldwidth(ostr.width());
-                for (size_t i = 0; i < buffer.size(); i++)
+                for (auto byte : buffer)
                 {
                     // have to restate setw() before every conversion
-                    ostr << std::setw(2) << (int) buffer[i];
+                    ostr << std::setw(2) << (int) byte;
                 }
                 ostr.width(oldwidth);
                 ostr.fill(oldfill);
@@ -2357,7 +2357,10 @@ LLUZipHelper::EZipRresult LLUZipHelper::unzip_llsd(LLSD& data, const U8* in, S32
             return ZR_MEM_ERROR;
         }
         result = new_result;
-        memcpy(result+cur_size, out.get(), have);
+        if (have > 0)
+        {
+            memcpy(result+cur_size, out.get(), have);
+        }
         cur_size += have;
 
     } while (ret == Z_OK && ret != Z_STREAM_END);
@@ -2508,7 +2511,10 @@ U8* unzip_llsdNavMesh( bool& valid, size_t& outsize, std::istream& is, S32 size,
             result = new_result;
             capacity = new_capacity;
         }
-        memcpy(result+cur_size, out.get(), have);
+        if (have > 0)
+        {
+            memcpy(result+cur_size, out.get(), have);
+        }
         cur_size += have;
 
     } while (ret == Z_OK);

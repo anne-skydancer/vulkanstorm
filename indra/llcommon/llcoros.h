@@ -299,9 +299,9 @@ private:
 
     struct ExceptionData
     {
-        ExceptionData(std::string nm, const std::exception_ptr& exc):
+        ExceptionData(std::string nm, std::exception_ptr exc):
             name(std::move(nm)),
-            exception(exc)
+            exception(std::move(exc))
         {}
         // name of coroutine that originally threw this exception
         std::string name;

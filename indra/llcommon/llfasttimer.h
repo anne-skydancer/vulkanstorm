@@ -197,6 +197,10 @@ public:
     // call nextFrame() to reset timers
     static void dumpCurTimes();
 
+    // no-copy
+    BlockTimer(const BlockTimer& other) = delete;
+    BlockTimer& operator=(const BlockTimer& other) = delete;
+
 private:
     friend class BlockTimerStatHandle;
     // FIXME: this friendship exists so that each thread can instantiate a root timer,
@@ -205,10 +209,6 @@ private:
     friend BlockTimer timeThisBlock(BlockTimerStatHandle&);
 
     BlockTimer(BlockTimerStatHandle& timer);
-
-    // no-copy
-    BlockTimer(const BlockTimer& other) = delete;
-    BlockTimer& operator=(const BlockTimer& other) = delete;
 
 private:
     U64                     mStartTime;
@@ -230,7 +230,7 @@ public:
 // which would break the invariants of the timing hierarchy logic
 LL_FORCE_INLINE class BlockTimer timeThisBlock(class BlockTimerStatHandle& timer)
 {
-    return BlockTimer(timer);
+    return {timer};
 }
 
 // stores a "named" timer instance to be reused via multiple BlockTimer stack instances

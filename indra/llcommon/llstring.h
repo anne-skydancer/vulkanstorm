@@ -64,11 +64,11 @@ namespace std
 template<>
 struct char_traits<U16>
 {
-    typedef U16         char_type;
-    typedef int         int_type;
-    typedef streampos   pos_type;
-    typedef streamoff   off_type;
-    typedef mbstate_t   state_type;
+    using char_type = U16;
+    using int_type = int;
+    using pos_type = streampos;
+    using off_type = streamoff;
+    using state_type = mbstate_t;
 
     static void
         assign(char_type& __c1, const char_type& __c2)
@@ -305,13 +305,13 @@ public:
                                               const string_type& quotes,
                                               const string_type& escapes);
 
-    LL_COMMON_API static void formatNumber(string_type& numStr, string_type decimals);
-    LL_COMMON_API static bool formatDatetime(string_type& replacement, string_type token, string_type param, S32 secFromEpoch);
+    LL_COMMON_API static void formatNumber(string_type& numStr, const string_type& decimals);
+    LL_COMMON_API static bool formatDatetime(string_type& replacement, const string_type& token, const string_type& param, S32 secFromEpoch);
     LL_COMMON_API static S32 format(string_type& s, const format_map_t& substitutions);
     LL_COMMON_API static S32 format(string_type& s, const LLSD& substitutions);
-    LL_COMMON_API static bool simpleReplacement(string_type& replacement, string_type token, const format_map_t& substitutions);
-    LL_COMMON_API static bool simpleReplacement(string_type& replacement, string_type token, const LLSD& substitutions);
-    LL_COMMON_API static void setLocale (std::string inLocale);
+    LL_COMMON_API static bool simpleReplacement(string_type& replacement, const string_type& token, const format_map_t& substitutions);
+    LL_COMMON_API static bool simpleReplacement(string_type& replacement, const string_type& token, const LLSD& substitutions);
+    LL_COMMON_API static void setLocale (const std::string& inLocale);
     LL_COMMON_API static std::string getLocale ();
 
     static bool isValidIndex(const string_type& string, size_type i)
@@ -502,7 +502,7 @@ inline std::string chop_tail_copy(
     const std::string& in,
     std::string::size_type count)
 {
-    return std::string(in, 0, in.length() - count);
+    return {in, 0, in.length() - count};
 }
 
 /**
@@ -559,6 +559,7 @@ struct ll_convert_impl<T, const typename T::value_type*>
 };
 
 // specialize ll_convert_impl<TO, FROM> to return EXPR
+// NOLINTBEGIN(bugprone-macro-parentheses): TO and FROM are types in template argument lists, which cannot be parenthesised
 #define ll_convert_alias(TO, FROM, EXPR)                    \
 template<>                                                  \
 struct ll_convert_impl<TO, FROM>                            \
@@ -566,6 +567,7 @@ struct ll_convert_impl<TO, FROM>                            \
     /* param_type optimally passes both char* and string */ \
     TO operator()(typename boost::call_traits<FROM>::param_type in) const { return (EXPR); } \
 }
+// NOLINTEND(bugprone-macro-parentheses)
 
 // If all we're doing is copying characters, pass this to ll_convert_alias as
 // EXPR. Since it expands into the 'return EXPR' slot in the ll_convert_impl

@@ -736,7 +736,7 @@ using LPMODULEINFO = MODULEINFO*;
           LPVOID vData = malloc(dwSize);
           if (vData != nullptr)
           {
-            if (GetFileVersionInfoA(szImg, dwHandle, dwSize, vData) != 0)
+            if (GetFileVersionInfoA(szImg, 0, dwSize, vData) != 0)
             {
               UINT len;
               TCHAR szSubBlock[] = _T("\\");
@@ -1018,6 +1018,9 @@ bool StackWalker::LoadModules()
 static StackWalker::PReadProcessMemoryRoutine s_readMemoryFunction = nullptr;
 static LPVOID s_readMemoryFunction_UserData = nullptr;
 
+// The frame buffers stay on the stack on purpose: this runs while a crash or an assert is being reported, when a heap
+// allocation may be the thing that failed.
+#pragma warning(suppress : 6262)
 bool StackWalker::ShowCallstack(bool verbose, HANDLE hThread, const CONTEXT *context, PReadProcessMemoryRoutine readMemoryFunction, LPVOID pUserData)
 {
   m_verbose = verbose;
@@ -1292,14 +1295,14 @@ void StackWalker::OnLoadModule(LPCSTR img, LPCSTR mod, DWORD64 baseAddr, DWORD s
 {
   CHAR buffer[STACKWALK_MAX_NAMELEN];
   if (fileVersion == 0)
-    _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "%s:%s (%p), size: %d (result: %d), SymType: '%s', PDB: '%s'\n", img, mod, (LPVOID) baseAddr, size, result, symType, pdbName);
+    _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "%s:%s (%p), size: %lu (result: %lu), SymType: '%s', PDB: '%s'\n", img, mod, (LPVOID) baseAddr, size, result, symType, pdbName);
   else
   {
     auto v4 = (DWORD) (fileVersion & 0xFFFF);
     auto v3 = (DWORD) ((fileVersion>>16) & 0xFFFF);
     auto v2 = (DWORD) ((fileVersion>>32) & 0xFFFF);
     auto v1 = (DWORD) ((fileVersion>>48) & 0xFFFF);
-    _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "%s:%s (%p), size: %d (result: %d), SymType: '%s', PDB: '%s', fileVersion: %d.%d.%d.%d\n", img, mod, (LPVOID) baseAddr, size, result, symType, pdbName, v1, v2, v3, v4);
+    _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "%s:%s (%p), size: %lu (result: %lu), SymType: '%s', PDB: '%s', fileVersion: %lu.%lu.%lu.%lu\n", img, mod, (LPVOID) baseAddr, size, result, symType, pdbName, v1, v2, v3, v4);
   }
   if (m_verbose)
   {
@@ -1326,7 +1329,7 @@ void StackWalker::OnCallstackEntry(CallstackEntryType eType, CallstackEntry &ent
       _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "%p (%s): %s: %s\n", (LPVOID) entry.offset, entry.moduleName, entry.lineFileName, entry.name);
     }
     else
-      _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "%s (%d): %s\n", entry.lineFileName, entry.lineNumber, entry.name);
+      _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "%s (%lu): %s\n", entry.lineFileName, entry.lineNumber, entry.name);
     buffer[STACKWALK_MAX_NAMELEN-1] = 0;
     OnOutput(buffer);
   }
@@ -1335,7 +1338,7 @@ void StackWalker::OnCallstackEntry(CallstackEntryType eType, CallstackEntry &ent
 void StackWalker::OnDbgHelpErr(LPCSTR szFuncName, DWORD gle, DWORD64 addr)
 {
   CHAR buffer[STACKWALK_MAX_NAMELEN];
-  _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "ERROR: %s, GetLastError: %d (Address: %p)\n", szFuncName, gle, (LPVOID) addr);
+  _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "ERROR: %s, GetLastError: %lu (Address: %p)\n", szFuncName, gle, (LPVOID) addr);
   if (m_verbose)
   {
       OnOutput(buffer);
@@ -1347,7 +1350,7 @@ void StackWalker::OnDbgHelpErr(LPCSTR szFuncName, DWORD gle, DWORD64 addr)
 void StackWalker::OnSymInit(LPCSTR szSearchPath, DWORD symOptions, LPCSTR szUserName)
 {
   CHAR buffer[STACKWALK_MAX_NAMELEN];
-  _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "SymInit: Symbol-SearchPath: '%s', symOptions: %d, UserName: '%s'\n", szSearchPath, symOptions, szUserName);
+  _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "SymInit: Symbol-SearchPath: '%s', symOptions: %lu, UserName: '%s'\n", szSearchPath, symOptions, szUserName);
   if (m_verbose)
   {
       OnOutput(buffer);
@@ -1371,9 +1374,11 @@ void StackWalker::OnSymInit(LPCSTR szSearchPath, DWORD symOptions, LPCSTR szUser
   OSVERSIONINFOEXA ver;
   ZeroMemory(&ver, sizeof(OSVERSIONINFOEXA));
   ver.dwOSVersionInfoSize = sizeof(ver);
+  // GetVersionExA reports the compatibility-shimmed version; this is only a line of the diagnostic output
+#pragma warning(suppress : 28159)
   if (GetVersionExA( (OSVERSIONINFOA*) &ver) != FALSE)
   {
-    _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "OS-Version: %d.%d.%d (%s) 0x%x-0x%x\n",
+    _snprintf_s(buffer, STACKWALK_MAX_NAMELEN, "OS-Version: %lu.%lu.%lu (%s) 0x%x-0x%x\n",
       ver.dwMajorVersion, ver.dwMinorVersion, ver.dwBuildNumber,
       ver.szCSDVersion, ver.wSuiteMask, ver.wProductType);
     if (m_verbose)

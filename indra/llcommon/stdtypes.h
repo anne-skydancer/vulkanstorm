@@ -54,7 +54,7 @@ using llssize = std::make_signed_t<std::size_t>;
 // In any case, llwchar should be a UTF-32 type.
 using llwchar = U32;
 #else
-typedef wchar_t             llwchar;
+using llwchar = wchar_t;
 // What we'd actually want is a simple module-scope 'if constexpr' to test
 // std::is_same<wchar_t, llwchar>::value and use that to define, or not
 // define, string conversion specializations. Since we don't have that, we'll
@@ -69,8 +69,8 @@ using S64 = signed __int64;
 using U64 = unsigned __int64;
 #define U64L(a)                 (a)
 #else
-typedef long long int           S64;
-typedef long long unsigned int      U64;
+using S64 = long long int;
+using U64 = long long unsigned int;
 #if LL_DARWIN || LL_LINUX
 #define S64L(a)             (a##LL)
 #define U64L(a)             (a##ULL)
@@ -96,11 +96,13 @@ using TPACKETID = U32;
 #define F64_MAX     (DBL_MAX)
 
 #define S8_MIN      (SCHAR_MIN)
+// NOLINTBEGIN(modernize-macro-to-enum): the MIN/MAX macros are used in every library, some in #if; an enum constant would be an int, not the unsigned type of the name
 #define U8_MIN      (0)
 #define S16_MIN     (SHRT_MIN)
 #define U16_MIN     (0)
 #define S32_MIN     (INT_MIN)
 #define U32_MIN     (0)
+// NOLINTEND(modernize-macro-to-enum)
 #define F32_MIN     (FLT_MIN)
 #define F64_MIN     (DBL_MIN)
 
@@ -169,12 +171,10 @@ public:
     constexpr narrow(FROM value): mValue(value) {}
 
     /*---------------------- Narrowing unsigned to signed ----------------------*/
-    template <typename TO,
-              std::enable_if_t<std::is_unsigned_v<FROM> &&
-                                      std::is_signed_v<TO>,
-                                      bool> = true>
+    template <typename TO>
     constexpr
     operator TO() const
+    requires (std::is_unsigned_v<FROM> && std::is_signed_v<TO>)
     {
         // The reason we skip the
         // assert(value >= std::numeric_limits<TO>::lowest());
@@ -187,12 +187,10 @@ public:
     }
 
     /*----------------------- Narrowing all other cases ------------------------*/
-    template <typename TO,
-              std::enable_if_t<! (std::is_unsigned_v<FROM> &&
-                                         std::is_signed_v<TO>),
-                                      bool> = true>
+    template <typename TO>
     constexpr
     operator TO() const
+    requires (! (std::is_unsigned_v<FROM> && std::is_signed_v<TO>))
     {
         // two different assert()s so we can tell which condition failed
         assert(mValue <= std::numeric_limits<TO>::max());

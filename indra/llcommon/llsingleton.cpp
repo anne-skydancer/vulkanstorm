@@ -34,6 +34,7 @@
 #include "llcoros.h"
 #include <algorithm>
 #include <iostream>                 // std::cerr in dire emergency
+#include <ranges>
 #include <sstream>
 #include <stdexcept>
 
@@ -283,10 +284,8 @@ void LLSingletonBase::MasterList::LockedInitializing::log(const char* verb, cons
         LL_DEBUGS("LLSingleton") << verb << ' ' << demangle(name) << ';';
         if (mList)
         {
-            for (list_t::const_reverse_iterator ri(mList->rbegin()), rend(mList->rend());
-                 ri != rend; ++ri)
+            for (auto sb : std::views::reverse(*mList))
             {
-                LLSingletonBase* sb(*ri);
                 LL_CONT << ' ' << classname(sb);
             }
         }
@@ -308,8 +307,8 @@ void LLSingletonBase::capture_dependency()
         // initializing stack?
         // For what it's worth, normally 'initializing' should contain very
         // few elements.
-        list_t::const_iterator found =
-            std::find(initializing.begin(), initializing.end(), this);
+        auto found =
+            std::ranges::find(initializing, this);
         if (found != initializing.end())
         {
             auto it_next = found;

@@ -25,6 +25,7 @@
  */
 
 #include "llcallbacklist.h"
+#include <algorithm>
 #include <utility>
 #include "lleventtimer.h"
 #include "llerrorlegacy.h"
@@ -37,10 +38,7 @@ LLCallbackList gIdleCallbacks;
 // Member functions
 //
 
-LLCallbackList::LLCallbackList()
-{
-    // nothing
-}
+LLCallbackList::LLCallbackList() = default;
 
 LLCallbackList::~LLCallbackList() = default;
 
@@ -108,7 +106,7 @@ LLCallbackList::callback_list_t::iterator
 LLCallbackList::find(callback_t func, void *data)
 {
     callback_pair_t t(func, data);
-    return std::find(mCallbackList.begin(), mCallbackList.end(), t);
+    return std::ranges::find(mCallbackList, t);
 }
 
 void LLCallbackList::deleteAllFunctions()

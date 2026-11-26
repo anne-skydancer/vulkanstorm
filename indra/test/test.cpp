@@ -41,6 +41,7 @@
 #include "stringize.h"
 #include "namedtempfile.h"
 #include "lltrace.h"
+#include "llsingleton.h"
 #include "lltracethreadrecorder.h"
 
 #include "apr_pools.h"
@@ -663,6 +664,12 @@ int main(int argc, char **argv)
         s << "ok" << std::endl;
         s.close();
     }
+
+    // Destroy the singletons the tests created, in dependency order, as the viewer does on exit
+    // (llappviewer.cpp). It also frees the running coroutine's 'initializing' list that
+    // LLSingletonBase::MasterList keeps for the life of the process, so the LeakSanitizer job of the analysis
+    // needs no suppression for it.
+    LLSingletonBase::deleteAll();
 
     ll_cleanup_apr();
 

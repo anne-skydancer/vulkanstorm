@@ -26,6 +26,7 @@
 #include "linden_common.h"
 
 #include "lltracerecording.h"
+#include <algorithm>
 
 #include "lltrace.h"
 #include "llfasttimer.h"
@@ -54,7 +55,6 @@ Recording::Recording(EPlayState state)
 
 // NOLINTNEXTLINE(bugprone-copy-constructor-init): *this = other copies the state; the base keeps its own identity
 Recording::Recording( const Recording& other )
-:   mActiveBuffers(nullptr)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
     *this = other;
@@ -810,7 +810,7 @@ F64 PeriodicRecording::getPeriodMedian( const StatType<SampleAccumulator>& stat,
     {
         return 0.0f;
     }
-    std::sort(buf.begin(), buf.end());
+    std::ranges::sort(buf);
 
     return F64((buf.size() % 2 == 0) ? (buf[buf.size() / 2 - 1] + buf[buf.size() / 2]) / 2 : buf[buf.size() / 2]);
 }

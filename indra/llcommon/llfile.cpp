@@ -32,12 +32,12 @@
 #include "llstring.h"
 #include "llerror.h"
 #include "stringize.h"
+#include <vector>
 
 #if LL_WINDOWS
 #include "llwin32headers.h"
-#include <vector>
 #else
-#include <errno.h>
+#include <cerrno>
 #endif
 
 using namespace std;
@@ -418,7 +418,7 @@ std::string LLFile::getContents(const std::string& filename)
         size_t nread = fread(buffer.data(), 1, length, fp);
         fclose(fp);
 
-        return std::string(buffer.data(), nread);
+        return {buffer.data(), nread};
     }
 
     return LLStringUtil::null;
@@ -514,29 +514,38 @@ int LLFile::rename(const std::string& filename, const std::string& newname, int 
     return warnif(STRINGIZE("rename to '" << newname << "' from"), filename, rc, suppress_error);
 }
 
-// Make this a define rather than using magic numbers multiple times in the code
-#define LLFILE_COPY_BUFFER_SIZE 16384
+// One named size rather than magic numbers multiple times in the code
+static constexpr size_t LLFILE_COPY_BUFFER_SIZE = 16384;
 
 // static
 bool LLFile::copy(const std::string& from, const std::string& to)
 {
     bool copied = false;
+    // on the heap: a 16 KB array is more stack than the callers of a file copy should need. Allocated before the
+    // files are opened, so that an allocation failure cannot leave them open.
+    std::vector<char> buf(LLFILE_COPY_BUFFER_SIZE);
     LLFILE* in = LLFile::fopen(from, "rb");
     if (in)
     {
         LLFILE* out = LLFile::fopen(to, "wb");
         if (out)
         {
-            char buf[LLFILE_COPY_BUFFER_SIZE];
             size_t readbytes;
             bool write_ok = true;
-            while (write_ok && (readbytes = fread(buf, 1, LLFILE_COPY_BUFFER_SIZE, in)))
+            // NOLINTNEXTLINE(clang-analyzer-unix.Stream): fread() returns 0 at the end of the file, which ends the loop; the analyzer reads the next loop test as a second read
+            while (write_ok && (readbytes = fread(buf.data(), 1, buf.size(), in)))
             {
-                if (fwrite(buf, 1, readbytes, out) != readbytes)
+                if (fwrite(buf.data(), 1, readbytes, out) != readbytes)
                 {
                     LL_WARNS("LLFile") << "Short write" << LL_ENDL;
                     write_ok = false;
                 }
+            }
+            // fread() returns 0 on a read error as well as at the end of the file: only the end is a complete copy
+            if (write_ok && ferror(in))
+            {
+                LL_WARNS("LLFile") << "Read error" << LL_ENDL;
+                write_ok = false;
             }
             if ( write_ok )
             {

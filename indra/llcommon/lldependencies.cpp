@@ -82,7 +82,7 @@ LLDependenciesBase::VertexList LLDependenciesBase::topo_sort(size_t vertices, co
     // A peculiarity of boost::topological_sort() is that it emits results in
     // REVERSE topological order: to get the result you want, you must
     // traverse the SortedList using reverse iterators.
-    return VertexList(sorted.rbegin(), sorted.rend());
+    return {sorted.rbegin(), sorted.rend()};
 }
 
 std::ostream& LLDependenciesBase::describe(std::ostream& out, bool full) const

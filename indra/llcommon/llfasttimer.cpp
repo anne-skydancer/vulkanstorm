@@ -37,6 +37,7 @@
 #include "lltracerecording.h"
 #include "lltracethreadrecorder.h"
 
+#include <algorithm>
 #include <boost/bind.hpp>
 #include <queue>
 
@@ -75,9 +76,9 @@ static std::queue<LLSD> sLogQueue;
 
 block_timer_tree_df_iterator_t begin_block_timer_tree_df(BlockTimerStatHandle& id)
 {
-    return block_timer_tree_df_iterator_t(&id,
-        boost::bind(boost::mem_fn(&BlockTimerStatHandle::beginChildren), _1),
-        boost::bind(boost::mem_fn(&BlockTimerStatHandle::endChildren), _1));
+    return {&id,
+        [](BlockTimerStatHandle* timer) { return timer->beginChildren(); },
+        [](BlockTimerStatHandle* timer) { return timer->endChildren(); }};
 }
 
 block_timer_tree_df_iterator_t end_block_timer_tree_df()
@@ -87,9 +88,9 @@ block_timer_tree_df_iterator_t end_block_timer_tree_df()
 
 block_timer_tree_df_post_iterator_t begin_block_timer_tree_df_post(BlockTimerStatHandle& id)
 {
-    return block_timer_tree_df_post_iterator_t(&id,
-                            boost::bind(boost::mem_fn(&BlockTimerStatHandle::beginChildren), _1),
-                            boost::bind(boost::mem_fn(&BlockTimerStatHandle::endChildren), _1));
+    return {&id,
+                            [](BlockTimerStatHandle* timer) { return timer->beginChildren(); },
+                            [](BlockTimerStatHandle* timer) { return timer->endChildren(); }};
 }
 
 block_timer_tree_df_post_iterator_t end_block_timer_tree_df_post()
@@ -99,9 +100,9 @@ block_timer_tree_df_post_iterator_t end_block_timer_tree_df_post()
 
 block_timer_tree_bf_iterator_t begin_block_timer_tree_bf(BlockTimerStatHandle& id)
 {
-    return block_timer_tree_bf_iterator_t(&id,
-        boost::bind(boost::mem_fn(&BlockTimerStatHandle::beginChildren), _1),
-        boost::bind(boost::mem_fn(&BlockTimerStatHandle::endChildren), _1));
+    return {&id,
+        [](BlockTimerStatHandle* timer) { return timer->beginChildren(); },
+        [](BlockTimerStatHandle* timer) { return timer->endChildren(); }};
 }
 
 block_timer_tree_bf_iterator_t end_block_timer_tree_bf()
@@ -111,9 +112,9 @@ block_timer_tree_bf_iterator_t end_block_timer_tree_bf()
 
 block_timer_tree_df_iterator_t begin_timer_tree(BlockTimerStatHandle& id)
     {
-    return block_timer_tree_df_iterator_t(&id,
-        boost::bind(boost::mem_fn(&BlockTimerStatHandle::beginChildren), _1),
-                            boost::bind(boost::mem_fn(&BlockTimerStatHandle::endChildren), _1));
+    return {&id,
+        [](BlockTimerStatHandle* timer) { return timer->beginChildren(); },
+                            [](BlockTimerStatHandle* timer) { return timer->endChildren(); }};
     }
 
 block_timer_tree_df_iterator_t end_timer_tree()
@@ -233,7 +234,7 @@ void BlockTimer::incrementalUpdateTimerTree()
         TimeBlockTreeNode& tree_node = timerp->getTreeNode();
         if (tree_node.mNeedsSorting)
 {
-            std::sort(tree_node.mChildren.begin(), tree_node.mChildren.end(), SortTimerByName());
+            std::ranges::sort(tree_node.mChildren, SortTimerByName());
 }
 
         // skip root timer
@@ -413,6 +414,10 @@ void BlockTimer::dumpCurTimes()
             parent_timerp = parent_timerp->getParent();
         }
 
+        // the iterator never yields a null timer; the loop above only walks its parents
+#ifdef _MSC_VER
+#pragma warning(suppress : 28182)
+#endif
         out_str << timerp->getName() << " "
             << std::setprecision(3) << total_time.valueInUnits<LLUnits::Milliseconds>() << " ms, "
             << num_calls << " calls";

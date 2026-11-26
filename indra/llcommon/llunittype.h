@@ -444,6 +444,10 @@ LL_FORCE_INLINE S2 ll_convert_units(LLUnit<S1, T1> in, LLUnit<S2, T2>& out)
         // T1 and T2 same type, just assign
         out.value((S2)in.value());
     }
+    // sLevel of each unit type is a constant; the comparison folds away at compile time
+#ifdef _MSC_VER
+#pragma warning(suppress : 6326)
+#endif
     else if (T1::sLevel > T2::sLevel)
     {
         // reduce T1

@@ -45,7 +45,7 @@ using LLFILE = FILE;
 // We use _stat64 here to support 64-bit st_size and time_t values
 using llstat = struct _stat64;
 #else
-typedef struct stat     llstat;
+using llstat = struct stat;
 #include <sys/types.h>
 #endif
 
@@ -334,8 +334,8 @@ std::streamsize LL_COMMON_API llofstream_size(llofstream& fstr);
 #else // ! LL_WINDOWS
 
 // on non-windows, llifstream and llofstream are just mapped directly to the std:: equivalents
-typedef std::ifstream llifstream;
-typedef std::ofstream llofstream;
+using llifstream = std::ifstream;
+using llofstream = std::ofstream;
 
 #endif // LL_WINDOWS or ! LL_WINDOWS
 

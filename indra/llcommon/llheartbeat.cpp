@@ -45,11 +45,6 @@ LLHeartbeat::LLHeartbeat(F32 secs_between_heartbeat,
     mPanicTimer.setTimerExpirySec(mAggressiveHeartbeatPanicSecs);
 }
 
-LLHeartbeat::~LLHeartbeat()
-{
-    // do nothing.
-}
-
 void
 LLHeartbeat::setSuppressed(bool is_suppressed)
 {
@@ -68,7 +63,7 @@ LLHeartbeat::rawSend()
 
     int result;
 #ifndef LL_DARWIN
-    union sigval dummy;
+    union sigval dummy{};
     result = sigqueue(getppid(), LL_HEARTBEAT_SIGNAL, dummy);
 #else
     result = kill(getppid(), LL_HEARTBEAT_SIGNAL);

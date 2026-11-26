@@ -1,4 +1,5 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+
 # Analysis CI for the C++ cleanup
 
 Tools, not agents, find the mechanical issues first (`doc/clean/plan.md`). The workflow
@@ -32,7 +33,7 @@ documentation-only changes (`doc/**`, `**/*.md`); a push always runs.
 | `plan` | the branch to library mapping, the test list, the TSan list, and why TSan has no job when it has none (always printed in the job summary) | outputs, job summary |
 | `clang-tidy` (Linux) | clang-tidy (C++20) over the library's **sources** (not its tests) from a `compile_commands.json` written by a GCC configure, no build. Checks: `clang-analyzer-*`, `bugprone-*`, `performance-*`, `concurrency-*`, `modernize-*` (C++20 only), and a short low-noise `cppcoreguidelines-*` list; see `.github/analysis/clang-tidy.yaml`. The number of translation units processed is printed; a unit that makes clang-tidy exit non-zero is a finding | JSON, text, counts per checker and per family |
 | `asan` (Linux) | the library and all its tests built with ASan + UBSan + LSan (`-O1`, no LTO), after a canary | same, per sanitizer kind; test counts |
-| `tsan` (Linux) | the library's tests built with TSan, all of them except the deny list `.github/analysis/tsan/<lib>-deny.txt` (the tests that use coroutines or child processes), after a canary | same |
+| `tsan` (Linux) | the library's tests built with TSan, all of them except the deny list `.github/analysis/tsan/<lib>-deny.txt` (the tests that use coroutines or child processes; **TSan has no say on those tests**, see below), after a canary | same |
 | `msvc` (Windows) | `/analyze` on the library target's **sources** (PREfast, `C6xxx`), logs as SARIF; build errors are findings | same, per rule |
 | `triage` (Linux, report only) | explains the real bug findings of the run, see [Triage](#triage) | `analysis-triage-<lib>` artifact, job summary |
 | `report` | merges the jobs, compares them with the committed baseline, decides red or green, writes the baseline proposal | job summary, `analysis-report-<lib>` artifact |
@@ -66,7 +67,17 @@ Why GCC: the Linux build is GCC only, and GCC 15 has all of ASan, UBSan, LSan an
 UBSan prints to the test's stderr, so it is in `build.log`, not in `san/`: the collector parses sanitizer text from both
 and counts one report once. A **canary** (a deliberately faulty program compiled with the build's own `CMAKE_CXX_FLAGS`
 and run with the job's options) must produce a UBSan and an LSan report (ASan job) or a TSan report; if it does not, the
-job has a `build` finding `canary-silent`, because the build would otherwise look clean while uninstrumented.
+job has a `build` finding `canary-silent` that carries the tail of the canary's output, because the build would
+otherwise look clean while uninstrumented. The canary runs once, with a timeout, and is never retried: the TSan canary
+is deterministic (the worker thread writes, the main thread sleeps 20 ms, then writes), so a silent canary means the
+sanitizer stopped working, which a retry would hide. A `FATAL: ThreadSanitizer` line (the runtime stopped the program)
+is reported as its own cause.
+
+**What the TSan deny list leaves unchecked.** Boost.Fiber is prebuilt without TSan fibre annotations, and TSan and
+`fork` do not mix, so `.github/analysis/tsan/llcommon-deny.txt` skips the llcommon tests `lleventcoro`, `llcond`,
+`workqueue`, `llleap`, `llprocess`, `llprocessstdin` and `llsdserialize`. Those include the tests of the threading
+primitives that part 2 of the cleanup changed (`LLCond`, `WorkQueue`, `LLThreadSafeQueue`): **TSan did not look at them.**
+A green TSan job says nothing about races in that code; ASan/UBSan/LSan do run those tests.
 
 A test target that fails is run once more; it is reported only if it fails again (a pass is listed as flaky in the
 summary). The TSan job runs two build jobs at a time because TSan makes timing-based tests flaky under load. Build and
@@ -119,6 +130,7 @@ reads:
 - clang-tidy: `// NOLINTNEXTLINE(check): reason` (or `NOLINTBEGIN`/`NOLINTEND` around a macro) in the source, next to the
   code. A check that does not fit the code base is disabled in `.github/analysis/clang-tidy.yaml` with the reason there.
 - MSVC `/analyze`: `#pragma warning(suppress : Cnnnn)` or `push`/`disable`/`pop` with the reason in the comment above.
+
 ## Triage
 
 The `triage` job runs after the analysis jobs and turns their findings into cases a person can act on. No AI and no API

@@ -31,6 +31,7 @@
 #include "llapp.h"
 #include "lluri.h"
 #include "llsd.h"
+#include <algorithm>
 #include <iomanip>
 
 #include "lluuid.h"
@@ -75,7 +76,7 @@ std::string LLURI::escape(
         // if it's already sorted, or if the url is quite long, we
         // want to optimize this process.
         std::string sorted_allowed(allowed);
-        std::sort(sorted_allowed.begin(), sorted_allowed.end());
+        std::ranges::sort(sorted_allowed);
         return escape(str, sorted_allowed, true);
     }
 
@@ -219,7 +220,7 @@ std::string LLURI::escape(const std::string& str)
     static bool initialized = false;
     if(!initialized)
     {
-        std::sort(default_allowed.begin(), default_allowed.end());
+        std::ranges::sort(default_allowed);
         initialized = true;
     }
     return escape(str, default_allowed, true);

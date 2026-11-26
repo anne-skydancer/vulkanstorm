@@ -80,7 +80,7 @@ std::string LLDate::asRFC1123() const
     return toHTTPDateString (std::string ("%A, %d %b %Y %H:%M:%S GMT"));
 }
 
-std::string LLDate::toLocalDateString (std::string fmt) const
+std::string LLDate::toLocalDateString (const std::string& fmt) const
 {
     LL_PROFILE_ZONE_SCOPED;
 
@@ -89,7 +89,7 @@ std::string LLDate::toLocalDateString (std::string fmt) const
     return toHTTPDateString(lt, fmt);
 }
 
-std::string LLDate::toHTTPDateString (std::string fmt) const
+std::string LLDate::toHTTPDateString (const std::string& fmt) const
 {
     LL_PROFILE_ZONE_SCOPED;
 

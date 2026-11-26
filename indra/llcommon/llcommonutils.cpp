@@ -26,6 +26,8 @@
 
 #include "linden_common.h"
 #include "llcommonutils.h"
+#include <algorithm>
+#include <functional>
 
 void LLCommonUtils::computeDifference(
     const uuid_vec_t& vnew,
@@ -36,8 +38,10 @@ void LLCommonUtils::computeDifference(
     uuid_vec_t vnew_copy(vnew);
     uuid_vec_t vcur_copy(vcur);
 
-    std::sort(vnew_copy.begin(), vnew_copy.end());
-    std::sort(vcur_copy.begin(), vcur_copy.end());
+    // std::less<> asks only for operator<, which LLUUID has; it is not std::totally_ordered, so the default comparator
+    // of the ranges algorithms would not accept it
+    std::ranges::sort(vnew_copy, std::less<>{});
+    std::ranges::sort(vcur_copy, std::less<>{});
 
     size_t maxsize = llmax(vnew_copy.size(), vcur_copy.size());
     vadded.resize(maxsize);
@@ -45,11 +49,11 @@ void LLCommonUtils::computeDifference(
 
     uuid_vec_t::iterator it;
     // what was removed
-    it = set_difference(vcur_copy.begin(), vcur_copy.end(), vnew_copy.begin(), vnew_copy.end(), vremoved.begin());
+    it = std::ranges::set_difference(vcur_copy, vnew_copy, vremoved.begin(), std::less<>{}).out;
     vremoved.erase(it, vremoved.end());
 
     // what was added
-    it = set_difference(vnew_copy.begin(), vnew_copy.end(), vcur_copy.begin(), vcur_copy.end(), vadded.begin());
+    it = std::ranges::set_difference(vnew_copy, vcur_copy, vadded.begin(), std::less<>{}).out;
     vadded.erase(it, vadded.end());
 }
 

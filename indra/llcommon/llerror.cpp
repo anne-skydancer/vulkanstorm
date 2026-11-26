@@ -35,6 +35,7 @@
 #ifdef __GNUC__
 # include <cxxabi.h>
 #endif // __GNUC__
+#include <ranges>
 #include <sstream>
 #if !LL_WINDOWS
 # include <syslog.h>
@@ -43,6 +44,7 @@
 #else
 # include <io.h>
 #endif // !LL_WINDOWS
+#include <utility>
 #include <vector>
 #include <cstring>
 
@@ -88,8 +90,8 @@ namespace {
     class RecordToSyslog : public LLError::Recorder
     {
     public:
-        RecordToSyslog(const std::string& identity)
-            : mIdentity(identity)
+        RecordToSyslog(std::string identity)
+            : mIdentity(std::move(identity))
         {
             openlog(mIdentity.c_str(), LOG_CONS|LOG_PID, LOG_LOCAL0);
                 // we need to set the string from a local copy of the string
@@ -97,17 +99,17 @@ namespace {
                 // valid even after it returns (presumably until closelog)
         }
 
-        ~RecordToSyslog()
+        ~RecordToSyslog() override
         {
             closelog();
         }
 
-        virtual bool enabled() override
+        bool enabled() override
         {
             return LLError::getEnabledLogTypesMask() & 0x01;
         }
 
-        virtual void recordMessage(LLError::ELevel level,
+        void recordMessage(LLError::ELevel level,
                                     const std::string& message) override
         {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;
@@ -173,6 +175,7 @@ namespace {
             LL_PROFILE_ZONE_SCOPED_CATEGORY_LOGGING;
             if (LLError::getAlwaysFlush())
             {
+                // NOLINTNEXTLINE(performance-avoid-endl): the flush is the point of getAlwaysFlush()
                 mFile << message << std::endl;
             }
             else
@@ -204,9 +207,9 @@ namespace {
         {
             std::string ansi_code;
             ansi_code += '\033';
-            ansi_code += "[";
-            ansi_code += "1";
-            ansi_code += "m";
+            ansi_code += '[';
+            ansi_code += '1';
+            ansi_code += 'm';
 
             return ansi_code;
         }
@@ -215,9 +218,9 @@ namespace {
         {
             std::string ansi_code;
             ansi_code += '\033';
-            ansi_code += "[";
-            ansi_code += "0";
-            ansi_code += "m";
+            ansi_code += '[';
+            ansi_code += '0';
+            ansi_code += 'm';
 
             return ansi_code;
         }
@@ -226,10 +229,10 @@ namespace {
         {
             std::string ansi_code;
             ansi_code  += '\033';
-            ansi_code  += "[";
+            ansi_code  += '[';
             ansi_code += "38;5;";
             ansi_code  += color;
-            ansi_code += "m";
+            ansi_code += 'm';
 
             return ansi_code;
         }
@@ -370,7 +373,7 @@ namespace LLError
         // passing nullptr, 0 forces allocation of a unique buffer we can free
         // fixing MAINT-8724 on OSX 10.14
         int status = -1;
-        char* name = abi::__cxa_demangle(mangled, nullptr, 0, &status);
+        char* name = abi::__cxa_demangle(mangled, nullptr, nullptr, &status);
         std::string result(name ? name : mangled);
         free(name);
         return result;
@@ -629,16 +632,16 @@ namespace LLError
                     const std::type_info& class_info,
                     const char* function,
                     bool printOnce,
-                    const char** tags,
+                    const char** tag_list,
                     size_t tag_count)
-    :   mLevel(level),
-        mFile(file),
-        mLine(line),
+    :   mFile(file),
         mClassInfo(class_info),
         mFunction(function),
-        mPrintOnce(printOnce),
         mTags(new const char* [tag_count]),
-        mTagCount(tag_count)
+        mTagCount(tag_count),
+        mLevel(level),
+        mLine(line),
+        mPrintOnce(printOnce)
     {
         switch (mLevel)
         {
@@ -667,11 +670,11 @@ namespace LLError
 
         for (int i = 0; i < tag_count; i++)
         {
-            if (strchr(tags[i], ' '))
+            if (strchr(tag_list[i], ' '))
             {
                 LL_ERRS() << "Space is not allowed in a log tag at " << mLocationString << LL_ENDL;
             }
-            mTags[i] = tags[i];
+            mTags[i] = tag_list[i];
         }
 
         mTagString.append("#");
@@ -891,9 +894,10 @@ namespace LLError
             level_names["NONE"]     = LLError::LEVEL_NONE;
         }
 
+        // NOLINTNEXTLINE(modernize-use-ranges): toupper is an overload set, which a range algorithm cannot deduce
         std::transform(name.begin(), name.end(), name.begin(), toupper);
 
-        LevelMap::const_iterator i = level_names.find(name);
+        auto i = level_names.find(name);
         if (i == level_names.end())
         {
             LL_WARNS() << "unrecognized logging level: '" << name << "'" << LL_ENDL;
@@ -1450,7 +1454,7 @@ namespace LLError
         return Globals::getInstance()->saveAndResetSettingsConfig();
     }
 
-    void restoreSettings(SettingsStoragePtr pSettingsStorage)
+    void restoreSettings(const SettingsStoragePtr& pSettingsStorage)
     {
         return Globals::getInstance()->restore(pSettingsStorage);
     }
@@ -1463,7 +1467,7 @@ namespace LLError
             return s;
         }
 
-        return std::string(s, where + p.size());
+        return {s, where + p.size()};
     }
 
     void replaceChar(std::string& s, char old, char replacement)
@@ -1574,10 +1578,9 @@ namespace LLError
         if(! sBuffer.empty())
         {
             LL_INFOS() << " ************* PRINT OUT LL CALL STACKS ************* " << LL_ENDL;
-            for (StringVector::const_reverse_iterator ri(sBuffer.rbegin()), re(sBuffer.rend());
-                 ri != re; ++ri)
+            for (const auto& ri : std::views::reverse(sBuffer))
             {
-                LL_INFOS() << (*ri) << LL_ENDL;
+                LL_INFOS() << ri << LL_ENDL;
             }
             LL_INFOS() << " *************** END OF LL CALL STACKS *************** " << LL_ENDL;
         }

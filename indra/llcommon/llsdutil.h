@@ -290,7 +290,7 @@ void map_(LLSD&) {}
 template <typename T0, typename... Ts>
 void map_(LLSD& data, const LLSD::String& k0, T0&& v0, Ts&&... vs)
 {
-    data[k0] = v0;
+    data[k0] = std::forward<T0>(v0);
     map_(data, std::forward<Ts>(vs)...);
 }
 

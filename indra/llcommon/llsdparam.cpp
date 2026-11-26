@@ -94,7 +94,7 @@ void LLParamSDParser::readSD(const LLSD& sd, LLInitParam::BaseBlock& block, bool
     mNameStack.clear();
     setParseSilently(silent);
 
-    LLParamSDParserUtilities::readSDValues(std::bind(&LLParamSDParser::submit, this, std::ref(block), std::placeholders::_1, std::placeholders::_2), sd, mNameStack);
+    LLParamSDParserUtilities::readSDValues([this, &block](auto && value, auto && name_stack) { submit(block, std::forward<decltype(value)>(value), std::forward<decltype(name_stack)>(name_stack)); }, sd, mNameStack);
     //readSDValues(sd, block);
 }
 
@@ -288,7 +288,7 @@ void LLParamSDParserUtilities::readSDValues(const read_sd_cb_t& cb, const LLSD& 
 }
 
 //static
-void LLParamSDParserUtilities::readSDValues(read_sd_cb_t cb, const LLSD& sd)
+void LLParamSDParserUtilities::readSDValues(const read_sd_cb_t& cb, const LLSD& sd)
 {
     LLInitParam::Parser::name_stack_t stack = LLInitParam::Parser::name_stack_t();
     readSDValues(cb, sd, stack);
@@ -330,7 +330,7 @@ namespace LLInitParam
         if (!p.writeValue<LLSD>(mValue, name_stack_range))
         {
             // otherwise read from LLSD value and serialize out to parser (which could be LLSD, XUI, etc)
-            LLParamSDParserUtilities::readSDValues(std::bind(&serializeElement, std::ref(p), std::placeholders::_1, std::placeholders::_2), mValue, name_stack_range);
+            LLParamSDParserUtilities::readSDValues([&p](auto && value, auto && name_stack) { serializeElement(p, std::forward<decltype(value)>(value), std::forward<decltype(name_stack)>(name_stack)); }, mValue, name_stack_range);
         }
         return true;
     }

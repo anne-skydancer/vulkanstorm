@@ -208,7 +208,7 @@ public:
     {
     private:
         using super = snapshot_of<SUBCLASS>;
-        static T& instance_getter(typename super::iterator::reference pair)
+        static T& instance_getter(const typename super::iterator::reference& pair)
         {
             return *pair.second;
         }
@@ -280,7 +280,7 @@ public:
         remove_(lock);
     }
 protected:
-    virtual void setKey(KEY key)
+    virtual void setKey(const KEY& key)
     {
         LockStatic lock; LL_PROFILE_MUTEX_LOCK(lock->mMutex);
         // Even though the shared_ptr we store in our map has a no-op deleter
@@ -293,10 +293,10 @@ protected:
 public:
     virtual const KEY& getKey() const { return mInstanceKey; }
 
-private:
     LLInstanceTracker( const LLInstanceTracker& ) = delete;
     LLInstanceTracker& operator=( const LLInstanceTracker& ) = delete;
 
+private:
     // for logging
     template <typename K>
     static std::string report(K key) { return stringize(key); }
@@ -308,6 +308,10 @@ private:
     {
         mInstanceKey = key;
         InstanceMap& map = lock->mMap;
+        // KEY_COLLISION_BEHAVIOR is a template constant: the comparisons of the switch are meant to fold away
+#ifdef _MSC_VER
+#pragma warning(suppress : 6326)
+#endif
         switch(KEY_COLLISION_BEHAVIOR)
         {
         case LLInstanceTrackerErrorOnCollision:

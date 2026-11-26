@@ -333,10 +333,13 @@ namespace tut
         set_test_name("getInstance() from many coroutines keeps one bounded initializing list per coroutine");
         // Every coroutine that calls getInstance() gets a coroutine-local
         // 'initializing' list in the master list; it is freed when the
-        // coroutine ends. Run many of them: if the lists were not freed, the
-        // LeakSanitizer job of the analysis would report one leak per
-        // coroutine instead of at most one for the running (main) coroutine,
-        // which ~MasterList() frees.
+        // coroutine ends. The LeakSanitizer job of the analysis has no
+        // suppression for these lists: it reports one leak per coroutine if
+        // they are not freed. The list of the running (main) coroutine is
+        // freed by ~MasterList(), which the shared test main() reaches through
+        // LLSingletonBase::deleteAll() at the end of the run, as the viewer
+        // does on exit. Outside a LeakSanitizer build this test only proves
+        // that the coroutines run and finish.
         int done = 0;
         const int count = 200;
         for (int i = 0; i < count; ++i)

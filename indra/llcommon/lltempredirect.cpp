@@ -15,6 +15,7 @@
 #include "lltempredirect.h"
 // STL headers
 // std headers
+#include <cerrno>
 #if !LL_WINDOWS
 # include <unistd.h>
 #else
@@ -46,6 +47,23 @@ int llfd::close(int fd)
 {
     return fhclose(fd);
 }
+
+namespace
+{
+// dup2() reports a failure only through its return value, and neither the
+// constructor nor reset() can pass it on: the redirect then simply did not
+// happen, so say so in the log instead of dropping the result.
+void redirect_fd(int target, int reference)
+{
+    if (fhdup2(target, reference) < 0)
+    {
+        // copy errno first: formatting the message can change it
+        const int error = errno;
+        LL_WARNS("LLTempRedirect") << "dup2(" << target << ", " << reference
+                                   << ") failed, errno " << error << LL_ENDL;
+    }
+}
+} // anonymous namespace
 
 int llfd::dup(int target)
 {
@@ -91,7 +109,7 @@ LLTempRedirect::LLTempRedirect(int target, int reference):
         // As promised, force 'reference' to refer to 'target'. This first
         // implicitly closes 'reference', which is why we first capture a
         // duplicate so the original target file stays open.
-        fhdup2(target, reference);
+        redirect_fd(target, reference);
     }
 }
 
@@ -119,7 +137,7 @@ void LLTempRedirect::reset()
         // Restore mReference to point to mOrigTarget. This implicitly closes
         // the duplicate created by our constructor of its 'target' file
         // descriptor.
-        fhdup2(mOrigTarget, mReference);
+        redirect_fd(mOrigTarget, mReference);
         // mOrigTarget has served its purpose
         fhclose(mOrigTarget);
     }

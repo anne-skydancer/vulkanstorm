@@ -147,7 +147,7 @@ void LLMemory::updateMemoryInfo()
     }
 #elif defined(LL_LINUX)
     // Use sysinfo() to get the total physical memory.
-    struct sysinfo info;
+    struct sysinfo info{};
     sysinfo(&info);
     sAllocatedMemInKB = U32Kilobytes::convert(U64Bytes(LLMemory::getCurrentRSS())); // represents the RAM allocated by this process only (in line with the windows implementation)
 #else
@@ -172,6 +172,8 @@ void LLMemory::updateMemoryInfo()
 void* LLMemory::tryToAlloc(void* address, U32 size)
 {
 #if LL_WINDOWS
+    // 'address' is the caller's hint and VirtualAlloc replaces it; the analysis cannot see that the hint is optional
+#pragma warning(suppress : 6001)
     address = VirtualAlloc(address, size, MEM_RESERVE | MEM_TOP_DOWN, PAGE_NOACCESS) ;
     if(address)
     {
@@ -180,6 +182,7 @@ void* LLMemory::tryToAlloc(void* address, U32 size)
             LL_ERRS() << "error happens when free some memory reservation." << LL_ENDL ;
         }
     }
+#pragma warning(suppress : 6001)
     return address ;
 #else
     return (void*)0x01 ; //skip checking
@@ -369,7 +372,7 @@ U64 LLMemory::getCurrentRSS()
 
 U64 LLMemory::getCurrentRSS()
 {
-    struct rusage usage;
+    struct rusage usage{};
 
     if (getrusage(RUSAGE_SELF, &usage) != 0) {
         // Error handling code could be here

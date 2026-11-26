@@ -1,9 +1,12 @@
 # ThreadSanitizer suppressions for llcommon (the analysis workflow passes this file when it exists:
 # .github/analysis/suppressions/<lib>-tsan.txt; see doc/clean/analysis.md). One reason per entry.
 #
-# Lock-order inversion between the locks of two LLSingleton subclasses (lockstatic.h): two singletons that build each
-# other nest their locks A->B in one test and B->A in another. LLSingleton nests locks only on the main thread:
-# another thread takes a singleton's lock briefly, releases it and hands the construction to the main thread
-# (llsingleton.h, the wait loop of getInstance). A deadlock needs two threads taking the locks in opposite orders;
-# only one thread ever nests them, so the inversion cannot deadlock.
-deadlock:LLSingleton
+# Lock-order inversion between the locks of the two test singletons A and B of tests/llsingleton_test.cpp (lockstatic.h):
+# they build each other, so one test nests their locks A->B and another B->A. LLSingleton nests locks only on the main
+# thread: another thread takes a singleton's lock briefly, releases it and hands the construction to the main thread
+# (llsingleton.h, the wait loop of getInstance). A deadlock needs two threads taking the locks in opposite orders; only
+# one thread ever nests them, so the inversion cannot deadlock.
+# This covers exactly the lock of LLSingleton<A> and of LLSingleton<B>, the two global-namespace test classes of that
+# file. A lock-order inversion between any other singleton's lock and another mutex is still reported.
+deadlock:LLSingleton<A>
+deadlock:LLSingleton<B>

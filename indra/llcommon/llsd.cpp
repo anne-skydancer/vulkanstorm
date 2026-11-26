@@ -229,6 +229,7 @@ namespace
                 mValue = value;
             }
         }
+        // NOLINTNEXTLINE(modernize-use-override): DataMove is a template parameter and Impl::assign is virtual only for some of its instances
         void assign(LLSD::Impl*& var, DataMove value) {
             if (shared())
             {
@@ -319,8 +320,8 @@ namespace
         LLSD::Real      asReal() const override;
         LLSD::String    asString() const override    { return mValue; }
         LLSD::UUID      asUUID() const override  { return LLUUID(mValue); }
-        LLSD::Date      asDate() const override  { return LLDate(mValue); }
-        LLSD::URI       asURI() const override   { return LLURI(mValue); }
+        LLSD::Date      asDate() const override  { return {mValue}; }
+        LLSD::URI       asURI() const override   { return {mValue}; }
         size_t          size() const override    { return mValue.size(); }
         const LLSD::String& asStringRef() const override { return mValue; }
 
@@ -602,13 +603,13 @@ namespace
 
     void ImplMap::dumpStats() const
     {
-        std::cout << "Map size: " << mData.size() << std::endl;
+        std::cout << "Map size: " << mData.size() << '\n';
 
-        std::cout << "LLSD Net Objects: " << llsd::sLLSDNetObjects << std::endl;
-        std::cout << "LLSD allocations: " << llsd::sLLSDAllocationCount << std::endl;
+        std::cout << "LLSD Net Objects: " << llsd::sLLSDNetObjects << '\n';
+        std::cout << "LLSD allocations: " << llsd::sLLSDAllocationCount << '\n';
 
-        std::cout << "LLSD::Impl Net Objects: " << sOutstandingCount << std::endl;
-        std::cout << "LLSD::Impl allocations: " << sAllocationCount << std::endl;
+        std::cout << "LLSD::Impl Net Objects: " << sOutstandingCount << '\n';
+        std::cout << "LLSD::Impl allocations: " << sAllocationCount << '\n';
 
         Impl::dumpStats();
     }
@@ -948,6 +949,9 @@ void LLSD::Impl::assign(Impl*& var, LLSD::String&& v)
     reset(var, new ImplString(std::move(v)));
 }
 
+// The rvalue overloads exist for every LLSD scalar type, so that callers and templates need no per-type cases; moving a
+// trivially copyable UUID or Date is a copy, which performance-move-const-arg flags.
+// NOLINTBEGIN(performance-move-const-arg)
 void LLSD::Impl::assign(Impl*& var, LLSD::UUID&& v)
 {
     reset(var, new ImplUUID(std::move(v)));
@@ -957,6 +961,7 @@ void LLSD::Impl::assign(Impl*& var, LLSD::Date&& v)
 {
     reset(var, new ImplDate(std::move(v)));
 }
+// NOLINTEND(performance-move-const-arg)
 
 void LLSD::Impl::assign(Impl*& var, LLSD::URI&& v)
 {
@@ -992,7 +997,7 @@ void LLSD::Impl::dumpStats() const
         std::cout << LLSD::typeString((LLSD::Type)type_index) << " type "
             << type_counts[type_index] << " objects, "
             << share_counts[type_index] << " shared"
-            << std::endl;
+            << '\n';
         type_index++;
     }
 }
@@ -1057,8 +1062,10 @@ LLSD::LLSD(const String& v) : impl(nullptr)   { ALLOC_LLSD_OBJECT;    assign(v);
 LLSD::LLSD(const Date& v) : impl(nullptr)     { ALLOC_LLSD_OBJECT;    assign(v); }
 LLSD::LLSD(const URI& v) : impl(nullptr)      { ALLOC_LLSD_OBJECT;    assign(v); }
 LLSD::LLSD(const Binary& v) : impl(nullptr)   { ALLOC_LLSD_OBJECT;    assign(v); }
+// NOLINTNEXTLINE(performance-move-const-arg): trivially copyable, see Impl::assign(UUID&&)
 LLSD::LLSD(UUID&& v) : impl(nullptr)          { ALLOC_LLSD_OBJECT;    assign(std::move(v)); }
 LLSD::LLSD(String&& v) : impl(nullptr)        { ALLOC_LLSD_OBJECT;    assign(std::move(v)); }
+// NOLINTNEXTLINE(performance-move-const-arg): trivially copyable, see Impl::assign(UUID&&)
 LLSD::LLSD(Date&& v) : impl(nullptr)          { ALLOC_LLSD_OBJECT;    assign(std::move(v)); }
 LLSD::LLSD(URI&& v) : impl(nullptr)           { ALLOC_LLSD_OBJECT;    assign(std::move(v)); }
 LLSD::LLSD(Binary&& v) : impl(nullptr)        { ALLOC_LLSD_OBJECT;    assign(std::move(v)); }
@@ -1073,7 +1080,9 @@ void LLSD::assign(const Date& v)        { safe(impl).assign(impl, v); }
 void LLSD::assign(const URI& v)         { safe(impl).assign(impl, v); }
 void LLSD::assign(const Binary& v)      { safe(impl).assign(impl, v); }
 void LLSD::assign(String&& v)           { safe(impl).assign(impl, std::move(v)); }
+// NOLINTNEXTLINE(performance-move-const-arg): trivially copyable, see Impl::assign(UUID&&)
 void LLSD::assign(UUID&& v)             { safe(impl).assign(impl, std::move(v)); }
+// NOLINTNEXTLINE(performance-move-const-arg): trivially copyable, see Impl::assign(UUID&&)
 void LLSD::assign(Date&& v)             { safe(impl).assign(impl, std::move(v)); }
 void LLSD::assign(URI&& v)              { safe(impl).assign(impl, std::move(v)); }
 void LLSD::assign(Binary&& v)           { safe(impl).assign(impl, std::move(v)); }
@@ -1174,7 +1183,9 @@ size_t LLSD::size() const               { return safe(impl).size(); }
 
 LLSD LLSD::get(Integer i) const         { return safe(impl).get(i); }
 void LLSD::set(Integer i, const LLSD& v){ makeArray(impl).set(i, v); }
+// NOLINTBEGIN(performance-move-const-arg): the LLSD overload set takes rvalues for every element type; the tool reads the const set(Integer, const LLSD&) next to it
 void LLSD::set(Integer i, LLSD&& v)     { makeArray(impl).set(i, std::move(v)); }
+// NOLINTEND(performance-move-const-arg)
 void LLSD::insert(Integer i, const LLSD& v) { makeArray(impl).insert(i, v); }
 void LLSD::insert(Integer i, LLSD&& v) { makeArray(impl).insert(i, std::move(v)); }
 

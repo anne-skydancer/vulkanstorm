@@ -50,13 +50,11 @@ public:
 
     using time_type = U64;                              /// Relative microseconds
 
-private:
     LLProcInfo() = delete;
     ~LLProcInfo() = delete;
     LLProcInfo(const LLProcInfo&) = delete;
     LLProcInfo& operator=(const LLProcInfo&) = delete;
 
-public:
     /// Get accumulated system and user CPU time in
     /// microseconds.  Syscalls involved in every invocation.
     ///

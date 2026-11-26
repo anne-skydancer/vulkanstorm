@@ -209,10 +209,8 @@ protected:
 
 private:
     friend T;
-    LLHandleProvider()
-    {
-        // provided here to enforce T deriving from LLHandleProvider<T>
-    }
+    // provided here to enforce T deriving from LLHandleProvider<T>
+    LLHandleProvider() = default;
 
     mutable LLRootHandle<T> mHandle;
 };

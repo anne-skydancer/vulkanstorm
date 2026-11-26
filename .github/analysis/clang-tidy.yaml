@@ -14,20 +14,33 @@ Checks: >-
   -bugprone-reserved-identifier,
   -bugprone-branch-clone,
   performance-*,
+  -performance-enum-size,
   concurrency-*,
   -concurrency-mt-unsafe,
   modernize-*,
+  -modernize-use-integer-sign-comparison,
   -modernize-use-trailing-return-type,
   -modernize-avoid-c-arrays,
   -modernize-use-std-print,
   -modernize-use-nodiscard,
   cppcoreguidelines-pro-type-member-init,
   cppcoreguidelines-slicing,
-  cppcoreguidelines-prefer-member-initializer,
-  cppcoreguidelines-missing-std-forward,
-  cppcoreguidelines-rvalue-reference-param-not-moved
+  cppcoreguidelines-missing-std-forward
 # cppcoreguidelines-virtual-class-destructor is left out on purpose: the intrusive reference-counted and singleton
 # classes (LLRefCount, LLSingletonBase, LLEvent, the LLSD parsers and formatters, ...) have a protected virtual
 # destructor so that only the owner can delete them. Making it public would let any holder delete a shared object;
 # making it non-virtual would leak the derived part when the owner deletes through the base.
+# Left out, each for a reason found on llcommon (doc/clean/llcommon-findings.md):
+# - performance-enum-size: shrinking an enum's underlying type changes the layout of every struct that holds it and of
+#   the values that cross libraries; no measured win, so the 41 llcommon enums keep their type.
+# - modernize-use-integer-sign-comparison: 23 hits in llcommon's .cpp files (Windows translation units; more in the
+#   headers), too many to review as a batch. std::cmp_less and friends change the result where the code compares across
+#   signs on purpose: a U32 flag word against ~0 (llpredicate.h) is true today and false with std::cmp_equal.
+# - cppcoreguidelines-prefer-member-initializer: 41 hits in llcommon's .cpp files (Windows translation units). The
+#   fix-it moves an assignment from the constructor body into the initializer list, which runs in declaration order,
+#   not in the order of the assignments it replaces, so each site needs its order and side effects checked (a body
+#   that registers or allocates, a member initialised from another). No hazard was found in LLThread's constructor
+#   (two allocations in declaration order and a nullptr); the check stays off because of the count, not a known bug.
+# - cppcoreguidelines-rvalue-reference-param-not-moved: the flagged parameters are class-template parameters that are
+#   forwarded with std::forward on purpose, because the template is also instantiated with lvalue references.
 WarningsAsErrors: ''

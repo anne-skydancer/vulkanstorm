@@ -300,36 +300,36 @@ public:
     virtual std::string getCPUFeatureDescription() const
     {
         std::ostringstream out;
-        out << std::endl << std::endl;
-        out << "// CPU General Information" << std::endl;
-        out << "//////////////////////////" << std::endl;
-        out << "Processor Name:   " << getCPUBrandName() << std::endl;
-        out << "Frequency:        " << getCPUFrequency() << " MHz" << std::endl;
-        out << "Vendor:           " << getInfo(eVendor, "Unset vendor").asString() << std::endl;
-        out << "Family:           " << getCPUFamilyName() << " (" << getInfo(eFamily, 0) << ")" << std::endl;
-        out << "Extended family:  " << getInfo(eExtendedFamily, 0) << std::endl;
-        out << "Model:            " << getInfo(eModel, 0) << std::endl;
-        out << "Extended model:   " << getInfo(eExtendedModel, 0) << std::endl;
-        out << "Type:             " << getInfo(eType, 0) << std::endl;
-        out << "Brand ID:         " << getInfo(eBrandID, 0) << std::endl;
-        out << std::endl;
-        out << "// CPU Configuration" << std::endl;
-        out << "//////////////////////////" << std::endl;
+        out << '\n' << '\n';
+        out << "// CPU General Information" << '\n';
+        out << "//////////////////////////" << '\n';
+        out << "Processor Name:   " << getCPUBrandName() << '\n';
+        out << "Frequency:        " << getCPUFrequency() << " MHz" << '\n';
+        out << "Vendor:           " << getInfo(eVendor, "Unset vendor").asString() << '\n';
+        out << "Family:           " << getCPUFamilyName() << " (" << getInfo(eFamily, 0) << ")" << '\n';
+        out << "Extended family:  " << getInfo(eExtendedFamily, 0) << '\n';
+        out << "Model:            " << getInfo(eModel, 0) << '\n';
+        out << "Extended model:   " << getInfo(eExtendedModel, 0) << '\n';
+        out << "Type:             " << getInfo(eType, 0) << '\n';
+        out << "Brand ID:         " << getInfo(eBrandID, 0) << '\n';
+        out << '\n';
+        out << "// CPU Configuration" << '\n';
+        out << "//////////////////////////" << '\n';
 
         // Iterate through the dictionary of configuration options.
         LLSD configs = mProcessorInfo["config"];
-        for(LLSD::map_const_iterator cfgItr = configs.beginMap(); cfgItr != configs.endMap(); ++cfgItr)
+        for(auto cfgItr = configs.beginMap(); cfgItr != configs.endMap(); ++cfgItr)
         {
-            out << cfgItr->first << " = " << cfgItr->second << std::endl;
+            out << cfgItr->first << " = " << cfgItr->second << '\n';
         }
-        out << std::endl;
+        out << '\n';
 
-        out << "// CPU Extensions" << std::endl;
-        out << "//////////////////////////" << std::endl;
+        out << "// CPU Extensions" << '\n';
+        out << "//////////////////////////" << '\n';
 
         for(auto itr = mProcessorInfo["extension"].beginMap(); itr != mProcessorInfo["extension"].endMap(); ++itr)
         {
-            out << "  " << itr->first << std::endl;
+            out << "  " << itr->first << '\n';
         }
         return out.str();
     }
@@ -797,7 +797,7 @@ public:
         get_proc_cpuinfo();
     }
 
-    virtual ~LLProcessorInfoLinuxImpl() {}
+    ~LLProcessorInfoLinuxImpl() override = default;
 private:
 
     void get_proc_cpuinfo()
@@ -813,16 +813,16 @@ private:
                 // /proc/cpuinfo on Linux looks like:
                 // name\t*: value\n
                 char* tabspot = strchr( line, '\t' );
-                if (tabspot == NULL)
+                if (tabspot == nullptr)
                     continue;
                 char* colspot = strchr( tabspot, ':' );
-                if (colspot == NULL)
+                if (colspot == nullptr)
                     continue;
                 char* spacespot = strchr( colspot, ' ' );
-                if (spacespot == NULL)
+                if (spacespot == nullptr)
                     continue;
                 char* nlspot = strchr( line, '\n' );
-                if (nlspot == NULL)
+                if (nlspot == nullptr)
                     nlspot = line + strlen( line ); // Fallback to terminating NUL
                 std::string linename( line, tabspot );
                 std::string llinename(linename);
@@ -918,7 +918,7 @@ private:
         }
     }
 
-    std::string getCPUFeatureDescription() const
+    std::string getCPUFeatureDescription() const override
     {
         std::ostringstream s;
 
@@ -932,14 +932,14 @@ private:
             {
                 line[strlen(line)-1] = ' ';
                 s << line;
-                s << std::endl;
+                s << '\n';
             }
             fclose(cpuinfo);
-            s << std::endl;
+            s << '\n';
         }
         else
         {
-            s << "Unable to collect processor information" << std::endl;
+            s << "Unable to collect processor information" << '\n';
         }
         return s.str();
     }
@@ -969,8 +969,6 @@ LLProcessorInfo::LLProcessorInfo()
     }
 }
 
-
-LLProcessorInfo::~LLProcessorInfo() = default;
 F64MegahertzImplicit LLProcessorInfo::getCPUFrequency() const { return mImpl->getCPUFrequency(); }
 bool LLProcessorInfo::hasSSE() const { return mImpl->hasSSE(); }
 bool LLProcessorInfo::hasSSE2() const { return mImpl->hasSSE2(); }

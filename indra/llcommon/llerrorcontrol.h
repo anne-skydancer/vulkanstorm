@@ -233,7 +233,7 @@ namespace LLError
 
     using SettingsStoragePtr = LLPointer<LLRefCount>;
     LL_COMMON_API SettingsStoragePtr saveAndResetSettings();
-    LL_COMMON_API void restoreSettings(SettingsStoragePtr pSettingsStorage);
+    LL_COMMON_API void restoreSettings(const SettingsStoragePtr& pSettingsStorage);
 
     LL_COMMON_API std::string abbreviateFile(const std::string& filePath);
     LL_COMMON_API int shouldLogCallCount();

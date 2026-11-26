@@ -583,7 +583,7 @@ S32 LLUUID::getNodeID(unsigned char* node_id)
  */
 #include <unistd.h>
 #include <fcntl.h>
-#include <errno.h>
+#include <cerrno>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/stat.h>
@@ -603,8 +603,8 @@ S32 LLUUID::getNodeID(unsigned char* node_id)
 S32 LLUUID::getNodeID(unsigned char* node_id)
 {
     int         sd;
-    struct ifreq    ifr, * ifrp;
-    struct ifconf   ifc;
+    struct ifreq    ifr{}, * ifrp;
+    struct ifconf   ifc{};
     char buf[1024];
     int     n, i;
     unsigned char* a;
@@ -701,8 +701,8 @@ void LLUUID::getSystemTime(uuid_time_t* timestamp)
     timestamp->high = time.HighPart;
     timestamp->low = time.LowPart;
 #else
-    struct timeval tp;
-    gettimeofday(&tp, 0);
+    struct timeval tp{};
+    gettimeofday(&tp, nullptr);
 
     // Offset between UUID formatted times and Unix formatted times.
     // UUID UTC base time is October 15, 1582.
@@ -733,7 +733,7 @@ void LLUUID::getCurrentTime(uuid_time_t* timestamp)
         mMutex = new LLMutex();
     }
 
-    uuid_time_t time_now = { 0,0 };
+    uuid_time_t time_now = { .high=0,.low=0 };
 
     while (true) {
         getSystemTime(&time_now);
@@ -776,7 +776,7 @@ void LLUUID::generate()
     static int has_init = 0;
 
     // Create a UUID.
-    static uuid_time_t time_last = { 0,0 };
+    static uuid_time_t time_last = { .high=0,.low=0 };
     static U16 clock_seq = 0;
 #if LL_USE_JANKY_RANDOM_NUMBER_GENERATOR
     static U32 seed = 0L; // dummy seed.  reset it below

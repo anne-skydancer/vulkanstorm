@@ -33,6 +33,7 @@
 #include "llsys.h"
 
 #include <iostream>
+#include <vector>
 #ifdef LL_USESYSTEMLIBS
 # include <zlib.h>
 #else
@@ -75,7 +76,7 @@ using namespace llsd;
 #   include <sys/types.h>
 #   include <mach/mach_init.h>
 #elif LL_LINUX
-#   include <errno.h>
+#   include <cerrno>
 #   include <sys/utsname.h>
 #   include <unistd.h>
 #   include <sys/sysinfo.h>
@@ -190,6 +191,8 @@ LLOSInfo::LLOSInfo() :
     SYSTEM_INFO si; //System Info object file contains architecture info
     PGNSI pGNSI; //pointer object
     ZeroMemory(&si, sizeof(SYSTEM_INFO)); //zero out the memory in information
+    // kernel32 is mapped into every Windows process, so GetModuleHandle cannot return null here
+#pragma warning(suppress : 6387)
     pGNSI = (PGNSI)GetProcAddress(GetModuleHandle(TEXT("kernel32.dll")), "GetNativeSystemInfo"); //load kernel32 get function
     if (nullptr != pGNSI) //check if it has failed
         pGNSI(&si); //success
@@ -198,7 +201,7 @@ LLOSInfo::LLOSInfo() :
     //(Warning: If GetSystemInfo it may result in incorrect information in a WOW64 machine, if the kernel fails to load)
 
 #pragma warning(push)
-#pragma warning(disable : 4996) // ignore 'deprecated.' GetVersionEx is deprecated
+#pragma warning(disable : 4996 28159) // GetVersionEx is deprecated and lies after Windows 8.1, but only the build number is taken from it
 
     // Try calling GetVersionEx using the OSVERSIONINFOEX structure.
     OSVERSIONINFOEX osvi;
@@ -319,7 +322,7 @@ LLOSInfo::LLOSInfo() :
 
 #elif LL_LINUX
 
-    struct utsname un;
+    struct utsname un{};
     if(uname(&un) != -1)
     {
         mOSStringSimple.append(un.sysname);
@@ -333,12 +336,12 @@ LLOSInfo::LLOSInfo() :
         mOSString.append(un.machine);
 
         // Simplify 'Simple'
-        std::string ostype = mOSStringSimple.substr(0, mOSStringSimple.find_first_of(" ", 0));
+        std::string ostype = mOSStringSimple.substr(0, mOSStringSimple.find(' '));
         if (ostype == "Linux")
         {
             // Only care about major and minor Linux versions, truncate at second '.'
-            std::string::size_type idx1 = mOSStringSimple.find_first_of(".", 0);
-            std::string::size_type idx2 = (idx1 != std::string::npos) ? mOSStringSimple.find_first_of(".", idx1+1) : std::string::npos;
+            std::string::size_type idx1 = mOSStringSimple.find('.');
+            std::string::size_type idx2 = (idx1 != std::string::npos) ? mOSStringSimple.find('.', idx1+1) : std::string::npos;
             std::string simple = mOSStringSimple.substr(0, idx2);
             if (simple.length() > 0)
                 mOSStringSimple = simple;
@@ -472,7 +475,8 @@ long LLOSInfo::getMaxOpenFiles()
     {
         // First time through.
         errno = 0;
-        if ( (open_max = sysconf(_SC_OPEN_MAX)) < 0)
+        open_max = sysconf(_SC_OPEN_MAX);
+        if (open_max < 0)
         {
             if (0 == errno)
             {
@@ -523,7 +527,6 @@ U32 LLOSInfo::getProcessVirtualSizeKB()
     LLFILE* status_filep = LLFile::fopen("/proc/self/status", "rb");
     if (status_filep)
     {
-        S32 numRead = 0;
         char buff[STATUS_SIZE];     /* Flawfinder: ignore */
 
         size_t nbytes = fread(buff, 1, STATUS_SIZE-1, status_filep);
@@ -533,7 +536,10 @@ U32 LLOSInfo::getProcessVirtualSizeKB()
         char *memp = strstr(buff, "VmSize:");
         if (memp)
         {
-            numRead += sscanf(memp, "%*s %u", &virtual_size);
+            if (sscanf(memp, "%*s %u", &virtual_size) != 1)
+            {
+                virtual_size = 0;
+            }
         }
         fclose(status_filep);
     }
@@ -547,9 +553,8 @@ U32 LLOSInfo::getProcessResidentSizeKB()
     U32 resident_size = 0;
 #if LL_LINUX
     LLFILE* status_filep = LLFile::fopen("/proc/self/status", "rb");
-    if (status_filep != NULL)
+    if (status_filep != nullptr)
     {
-        S32 numRead = 0;
         char buff[STATUS_SIZE];     /* Flawfinder: ignore */
 
         size_t nbytes = fread(buff, 1, STATUS_SIZE-1, status_filep);
@@ -559,7 +564,10 @@ U32 LLOSInfo::getProcessResidentSizeKB()
         char *memp = strstr(buff, "VmRSS:");
         if (memp)
         {
-            numRead += sscanf(memp, "%*s %u", &resident_size);
+            if (sscanf(memp, "%*s %u", &resident_size) != 1)
+            {
+                resident_size = 0;
+            }
         }
         fclose(status_filep);
     }
@@ -703,16 +711,16 @@ void LLCPUInfo::stream(std::ostream& s) const
 
     // These are interesting as they reflect our internal view of the
     // CPU's attributes regardless of platform
-    s << "->mHasSSE:     " << (U32)mHasSSE << std::endl;
-    s << "->mHasSSE2:    " << (U32)mHasSSE2 << std::endl;
-    s << "->mHasSSE3:    " << (U32)mHasSSE3 << std::endl;
-    s << "->mHasSSE3S:    " << (U32)mHasSSE3S << std::endl;
-    s << "->mHasSSE41:    " << (U32)mHasSSE41 << std::endl;
-    s << "->mHasSSE42:    " << (U32)mHasSSE42 << std::endl;
-    s << "->mHasSSE4a:    " << (U32)mHasSSE4a << std::endl;
-    s << "->mHasAltivec: " << (U32)mHasAltivec << std::endl;
-    s << "->mCPUMHz:     " << mCPUMHz << std::endl;
-    s << "->mCPUString:  " << mCPUString << std::endl;
+    s << "->mHasSSE:     " << (U32)mHasSSE << '\n';
+    s << "->mHasSSE2:    " << (U32)mHasSSE2 << '\n';
+    s << "->mHasSSE3:    " << (U32)mHasSSE3 << '\n';
+    s << "->mHasSSE3S:    " << (U32)mHasSSE3S << '\n';
+    s << "->mHasSSE41:    " << (U32)mHasSSE41 << '\n';
+    s << "->mHasSSE42:    " << (U32)mHasSSE42 << '\n';
+    s << "->mHasSSE4a:    " << (U32)mHasSSE4a << '\n';
+    s << "->mHasAltivec: " << (U32)mHasAltivec << '\n';
+    s << "->mCPUMHz:     " << mCPUMHz << '\n';
+    s << "->mCPUString:  " << mCPUString << '\n';
 }
 
 // Helper class for LLMemoryInfo: accumulate stats in the form we store for
@@ -926,7 +934,7 @@ void LLMemoryInfo::stream(std::ostream& s) const
             value.asDate().toStream(s);
         else
             s << value;           // just use default LLSD formatting
-        s << std::endl;
+        s << '\n';
     }
 }
 
@@ -1230,7 +1238,7 @@ public:
         // Hooking onto the "mainloop" event pump gets us one call per frame.
         mConnection(LLEventPumps::instance()
                     .obtain("mainloop")
-                    .listen("FrameWatcher", boost::bind(&FrameWatcher::tick, this, _1))),
+                    .listen("FrameWatcher", [this](auto && event) { return tick(std::forward<decltype(event)>(event)); })),
         // Both MEM_INFO_WINDOW and MEM_INFO_THROTTLE are in seconds. We need
         // the number of integer MEM_INFO_THROTTLE sample slots that will fit
         // in MEM_INFO_WINDOW. Round up.
@@ -1292,12 +1300,11 @@ public:
         // probably cheaper (and certainly easier to reason about) than
         // attempting to optimize away some of the scans.
         mSlowest = framerate;       // pick an arbitrary entry to start
-        for (boost::circular_buffer<F32>::const_iterator si(mSamples.begin()), send(mSamples.end());
-             si != send; ++si)
+        for (float mSample : mSamples)
         {
-            if (*si < mSlowest)
+            if (mSample < mSlowest)
             {
-                mSlowest = *si;
+                mSlowest = mSample;
             }
         }
 
@@ -1367,7 +1374,7 @@ bool gunzip_file(const std::string& srcfile, const std::string& dstfile)
     const S32 UNCOMPRESS_BUFFER_SIZE = 32768;
     bool retval = false;
     gzFile src = nullptr;
-    U8 buffer[UNCOMPRESS_BUFFER_SIZE];
+    std::vector<U8> buffer(UNCOMPRESS_BUFFER_SIZE); // on the heap: 32 KB is a lot of stack for a helper
     LLFILE *dst = nullptr;
     S32 bytes = 0;
     int gzerrnum = Z_OK;
@@ -1383,7 +1390,7 @@ bool gunzip_file(const std::string& srcfile, const std::string& dstfile)
     if (! dst) goto err;
     do
     {
-        bytes = gzread(src, buffer, UNCOMPRESS_BUFFER_SIZE);
+        bytes = gzread(src, buffer.data(), UNCOMPRESS_BUFFER_SIZE);
         // gzread() returns -1 on corrupt data and records Z_BUF_ERROR
         // when the compressed stream is truncated.
         gzerror(src, &gzerrnum);
@@ -1395,7 +1402,7 @@ bool gunzip_file(const std::string& srcfile, const std::string& dstfile)
             LLFile::remove(tmpfile);
             goto err;
         }
-        size_t nwrit = fwrite(buffer, sizeof(U8), bytes, dst);
+        size_t nwrit = fwrite(buffer.data(), sizeof(U8), bytes, dst);
         if (nwrit < (size_t) bytes)
         {
             LL_WARNS() << "Short write on " << tmpfile << ": Wrote " << nwrit << " of " << bytes << " bytes." << LL_ENDL;
@@ -1417,7 +1424,7 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
     const S32 COMPRESS_BUFFER_SIZE = 32768;
     std::string tmpfile;
     bool retval = false;
-    U8 buffer[COMPRESS_BUFFER_SIZE];
+    std::vector<U8> buffer(COMPRESS_BUFFER_SIZE); // on the heap, like gunzip_file()
     gzFile dst = nullptr;
     LLFILE *src = nullptr;
     S32 bytes = 0;
@@ -1435,9 +1442,9 @@ bool gzip_file(const std::string& srcfile, const std::string& dstfile)
     src = LLFile::fopen(srcfile, "rb");     /* Flawfinder: ignore */
     if (! src) goto err;
 
-    while ((bytes = (S32)fread(buffer, sizeof(U8), COMPRESS_BUFFER_SIZE, src)) > 0)
+    while ((bytes = (S32)fread(buffer.data(), sizeof(U8), COMPRESS_BUFFER_SIZE, src)) > 0)
     {
-        if (gzwrite(dst, buffer, bytes) <= 0)
+        if (gzwrite(dst, buffer.data(), bytes) <= 0)
         {
             LL_WARNS() << "gzwrite failed: " << gzerror(dst, nullptr) << LL_ENDL;
             goto err;

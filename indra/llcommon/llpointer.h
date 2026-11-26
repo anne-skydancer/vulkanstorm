@@ -150,6 +150,7 @@ public:
     // and Move Assignment, respectively. In other words, even in the presence
     // of the LLPointer<Subclass> assignment operators, we still must specify
     // the LLPointer<Type> operators.
+    // NOLINTNEXTLINE(bugprone-unhandled-self-assignment): copy-and-swap, the copy takes its reference before the swap
     LLPointer<Type>& operator =(const LLPointer<Type>& ptr)
     {
         LLPointer temp(ptr);

@@ -85,7 +85,7 @@ public:
         {
             LL_DEBUGS("LLProcess") << "listening on \"mainloop\"" << LL_ENDL;
             mConnection = LLEventPumps::instance().obtain("mainloop")
-                .listen("LLProcessListener", boost::bind(&LLProcessListener::tick, this, _1));
+                .listen("LLProcessListener", [this](auto && event) { return tick(std::forward<decltype(event)>(event)); });
         }
     }
 
@@ -173,7 +173,7 @@ public:
         // </Vulkanstorm>
         mConnection = LLEventPumps::instance().obtain("mainloop")
             .listen(LLEventPump::inventName("WritePipe"),
-                    boost::bind(&WritePipeImpl::tick, this, _1));
+                    [this](auto && event) { return tick(std::forward<decltype(event)>(event)); });
 
 #if ! LL_WINDOWS
         // We can't count on every child process reading everything we try to
@@ -351,11 +351,11 @@ public:
     }
 #else // ! LL_WINDOWS
     // </Vulkanstorm>
-    virtual size_type size() const { return mStreambuf.size(); }
+    size_type size() const override { return mStreambuf.size(); }
 
     bool tick(const LLSD&)
     {
-        typedef boost::asio::streambuf::const_buffers_type const_buffer_sequence;
+        using const_buffer_sequence = boost::asio::streambuf::const_buffers_type;
         // If there's anything to send, try to send it.
         // <Vulkanstorm>
         if (mBroken)
@@ -495,7 +495,7 @@ public:
     {
         mConnection = LLEventPumps::instance().obtain("mainloop")
             .listen(LLEventPump::inventName("ReadPipe"),
-                    boost::bind(&ReadPipeImpl::tick, this, _1));
+                    [this](auto && event) { return tick(std::forward<decltype(event)>(event)); });
     }
 
     ~ReadPipeImpl() override
@@ -529,7 +529,7 @@ public:
         // Since we've already clamped 'readlen', we can think of no reason
         // why mStream.read() should read fewer than 'readlen' bytes.
         // Nonetheless, use the actual retrieved length.
-        return std::string(&buffer[0], mStream.gcount());
+        return {&buffer[0], static_cast<std::string::size_type>(mStream.gcount())};
     }
 
     std::string peek(size_type offset=0, size_type len=npos) const override
@@ -539,8 +539,8 @@ public:
         size_type   want_end    = (len == npos)? npos : (real_offset + len);
         std::size_t real_end    = (std::min)(mStreambuf.size(), std::size_t(want_end));
         boost::asio::streambuf::const_buffers_type cbufs = mStreambuf.data();
-        return std::string(boost::asio::buffers_begin(cbufs) + real_offset,
-                           boost::asio::buffers_begin(cbufs) + real_end);
+        return {boost::asio::buffers_begin(cbufs) + real_offset,
+                           boost::asio::buffers_begin(cbufs) + real_end};
     }
 
     size_type find(const std::string& seek, size_type offset=0) const override
@@ -904,7 +904,7 @@ LLProcess::LLProcess(const LLSDOrParams& params):
     }
 
     // terminate with a null pointer
-    argv.push_back(NULL);
+    argv.push_back(nullptr);
 
     // Launch! The NULL would be the environment block, if we were passing
     // one. Hand-expand chkapr() macro so we can fill in the actual command
@@ -985,6 +985,7 @@ static std::string getDesc(const LLProcess::Params& params)
 {
     // If caller specified a description string, by all means use it.
     if (params.desc.isProvided())
+        // NOLINTNEXTLINE(modernize-return-braced-init-list): params.desc is a Param<std::string> that converts to the return type
         return params.desc;
 
     // Caller didn't say. Use the executable name -- but use just the filename
@@ -1455,9 +1456,9 @@ static std::string WindowsErrorString(const std::string& operation)
 *****************************************************************************/
 #else // Mac and linux
 
-#include <signal.h>
+#include <csignal>
 #include <fcntl.h>
-#include <errno.h>
+#include <cerrno>
 #include <sys/wait.h>
 
 void LLProcess::autokill()
@@ -1476,7 +1477,7 @@ void LLProcess::autokill()
 }
 
 // Attempt to reap a process ID -- returns true if the process has exited and been reaped, false otherwise.
-static bool reap_pid(pid_t pid, LLProcess::Status* pstatus=NULL)
+static bool reap_pid(pid_t pid, LLProcess::Status* pstatus=nullptr)
 {
     LLProcess::Status dummy;
     if (! pstatus)

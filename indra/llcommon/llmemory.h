@@ -78,6 +78,7 @@ LL_COMMON_API void ll_assert_aligned_func(uintptr_t ptr,U32 alignment);
 #include <xmmintrin.h>
 #endif
 
+// NOLINTBEGIN(performance-no-int-to-ptr): rounding an address up to a boundary is the whole job of these two; the result stays inside the same allocation
 template <typename T> T* LL_NEXT_ALIGNED_ADDRESS(T* address)
 {
     return reinterpret_cast<T*>(
@@ -89,6 +90,7 @@ template <typename T> T* LL_NEXT_ALIGNED_ADDRESS_64(T* address)
     return reinterpret_cast<T*>(
         (uintptr_t(address) + 0x3F) & ~0x3F);
 }
+// NOLINTEND(performance-no-int-to-ptr)
 
 #if LL_LINUX || LL_DARWIN
 
@@ -147,7 +149,7 @@ public:                                     \
     #if defined(LL_WINDOWS)
         void* ret = (_aligned_malloc)(size, align);
     #else
-        char* aligned = NULL;
+        char* aligned = nullptr;
         void* mem = malloc( size + (align - 1) + sizeof(void*) );
         if (mem)
         {

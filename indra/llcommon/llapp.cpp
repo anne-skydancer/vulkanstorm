@@ -28,6 +28,7 @@
 
 #include "llapp.h"
 
+#include <algorithm>
 #include <cstdlib>
 
 #ifdef LL_DARWIN
@@ -53,7 +54,7 @@
 //
 // Signal handling
 #ifndef LL_WINDOWS
-# include <signal.h>
+# include <csignal>
 # include <unistd.h> // for fork()
 void setup_signals();
 void default_unix_signal_handler(int signum, siginfo_t *info, void *);
@@ -130,7 +131,7 @@ LLApp::~LLApp()
 {
 
     // reclaim live file memory
-    std::for_each(mLiveFiles.begin(), mLiveFiles.end(), DeletePointer());
+    std::ranges::for_each(mLiveFiles, DeletePointer());
     mLiveFiles.clear();
 
     setStopped();
@@ -515,79 +516,79 @@ void setup_signals()
     //
     // Set up signal handlers that may result in program termination
     //
-    struct sigaction act;
+    struct sigaction act{};
     act.sa_sigaction = default_unix_signal_handler;
     sigemptyset( &act.sa_mask );
     act.sa_flags = SA_SIGINFO;
 
     // Synchronous signals
 #   ifndef LL_BUGSPLAT
-    sigaction(SIGABRT, &act, NULL);
+    sigaction(SIGABRT, &act, nullptr);
 #   endif
-    sigaction(SIGALRM, &act, NULL);
-    sigaction(SIGBUS, &act, NULL);
-    sigaction(SIGFPE, &act, NULL);
-    sigaction(SIGHUP, &act, NULL);
-    sigaction(SIGILL, &act, NULL);
-    sigaction(SIGPIPE, &act, NULL);
-    sigaction(SIGSEGV, &act, NULL);
-    sigaction(SIGSYS, &act, NULL);
+    sigaction(SIGALRM, &act, nullptr);
+    sigaction(SIGBUS, &act, nullptr);
+    sigaction(SIGFPE, &act, nullptr);
+    sigaction(SIGHUP, &act, nullptr);
+    sigaction(SIGILL, &act, nullptr);
+    sigaction(SIGPIPE, &act, nullptr);
+    sigaction(SIGSEGV, &act, nullptr);
+    sigaction(SIGSYS, &act, nullptr);
 
-    sigaction(LL_HEARTBEAT_SIGNAL, &act, NULL);
-    sigaction(LL_SMACKDOWN_SIGNAL, &act, NULL);
+    sigaction(LL_HEARTBEAT_SIGNAL, &act, nullptr);
+    sigaction(LL_SMACKDOWN_SIGNAL, &act, nullptr);
 
     // Asynchronous signals that are normally ignored
 #ifndef LL_IGNORE_SIGCHLD
-    sigaction(SIGCHLD, &act, NULL);
+    sigaction(SIGCHLD, &act, nullptr);
 #endif // LL_IGNORE_SIGCHLD
-    sigaction(SIGUSR2, &act, NULL);
+    sigaction(SIGUSR2, &act, nullptr);
 
     // Asynchronous signals that result in attempted graceful exit
-    sigaction(SIGHUP, &act, NULL);
-    sigaction(SIGTERM, &act, NULL);
-    sigaction(SIGINT, &act, NULL);
+    sigaction(SIGHUP, &act, nullptr);
+    sigaction(SIGTERM, &act, nullptr);
+    sigaction(SIGINT, &act, nullptr);
 
     // Asynchronous signals that result in core
-    sigaction(SIGQUIT, &act, NULL);
+    sigaction(SIGQUIT, &act, nullptr);
 
 }
 
 void clear_signals()
 {
-    struct sigaction act;
+    struct sigaction act{};
     act.sa_handler = SIG_DFL;
     sigemptyset( &act.sa_mask );
     act.sa_flags = SA_SIGINFO;
 
     // Synchronous signals
 #   ifndef LL_BUGSPLAT
-    sigaction(SIGABRT, &act, NULL);
+    sigaction(SIGABRT, &act, nullptr);
 #   endif
-    sigaction(SIGALRM, &act, NULL);
-    sigaction(SIGBUS, &act, NULL);
-    sigaction(SIGFPE, &act, NULL);
-    sigaction(SIGHUP, &act, NULL);
-    sigaction(SIGILL, &act, NULL);
-    sigaction(SIGPIPE, &act, NULL);
-    sigaction(SIGSEGV, &act, NULL);
-    sigaction(SIGSYS, &act, NULL);
+    sigaction(SIGALRM, &act, nullptr);
+    sigaction(SIGBUS, &act, nullptr);
+    sigaction(SIGFPE, &act, nullptr);
+    sigaction(SIGHUP, &act, nullptr);
+    sigaction(SIGILL, &act, nullptr);
+    sigaction(SIGPIPE, &act, nullptr);
+    sigaction(SIGSEGV, &act, nullptr);
+    sigaction(SIGSYS, &act, nullptr);
 
-    sigaction(LL_HEARTBEAT_SIGNAL, &act, NULL);
-    sigaction(LL_SMACKDOWN_SIGNAL, &act, NULL);
+    sigaction(LL_HEARTBEAT_SIGNAL, &act, nullptr);
+    sigaction(LL_SMACKDOWN_SIGNAL, &act, nullptr);
 
     // Asynchronous signals that are normally ignored
 #ifndef LL_IGNORE_SIGCHLD
-    sigaction(SIGCHLD, &act, NULL);
+    sigaction(SIGCHLD, &act, nullptr);
 #endif // LL_IGNORE_SIGCHLD
 
     // Asynchronous signals that result in attempted graceful exit
-    sigaction(SIGHUP, &act, NULL);
-    sigaction(SIGTERM, &act, NULL);
-    sigaction(SIGINT, &act, NULL);
+    sigaction(SIGHUP, &act, nullptr);
+    sigaction(SIGTERM, &act, nullptr);
+    sigaction(SIGINT, &act, nullptr);
 
     // Asynchronous signals that result in core
-    sigaction(SIGUSR2, &act, NULL);
-    sigaction(SIGQUIT, &act, NULL);
+    sigaction(SIGUSR2, &act, nullptr);
+    sigaction(SIGQUIT, &act, nullptr);
 }
 
 

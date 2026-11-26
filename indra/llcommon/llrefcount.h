@@ -37,6 +37,7 @@ class LLMutex;
 //----------------------------------------------------------------------------
 
 //nonsense but recognizable value for freed LLRefCount (aids in debugging)
+// NOLINTNEXTLINE(modernize-macro-to-enum): compared against the S32 count in headers of other libraries; the macro keeps one spelling for all of them
 #define LL_REFCOUNT_FREE 1234567890
 extern const S32 gMaxRefCount;
 
