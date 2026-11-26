@@ -134,11 +134,11 @@ namespace
     LL::Task<LLSD> await_async_result(std::string pump_prefix,
                             F32 timeout,
                             std::string timeout_msg,
-                            Kickoff&& kickoff)
+                            Kickoff kickoff)
     {
         LLEventMailDrop pump(pump_prefix + "." + LLUUID::generateNewID().asString(), true);
         std::string pump_name = pump.getName();
-        std::forward<Kickoff>(kickoff)(pump_name);
+        kickoff(pump_name);
         LLSD result = co_await llcoro::co::suspendUntilEventOnWithTimeout(
             pump, timeout, LLSD().with("timeout", true));
         if (result.has("timeout"))
