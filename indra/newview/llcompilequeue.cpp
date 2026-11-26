@@ -416,6 +416,8 @@ void LLFloaterCompileQueue::handleScriptRetrieval(const LLUUID& assetId,
 
     LLEventPumps::instance().post(((HandleScriptUserData *)userData)->getPumpName(), result);
 
+    // allocated by the requesting coroutine, which may be gone already (timeout)
+    delete (HandleScriptUserData *)userData;
 }
 
 /*static*/
@@ -561,17 +563,19 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
     {
         // <FS:Ansariel> [LSL PreProc]
         //HandleScriptUserData    userData(pump.getName());
-        HandleScriptUserData userData;
+        // Heap-allocated: the asset callback can fire after the timeout below has
+        // returned from this coroutine, so a local would dangle. The callback deletes it.
+        HandleScriptUserData* userData = nullptr;
         if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor") &&
             item->getInventorySubType() != SST_LUA && requested_target != "luau")
         {
             // Need to dump some stuff into an LLScriptQueueData struct for the LSL PreProc.
             LLScriptQueueData* datap = new LLScriptQueueData(hfloater.get()->getKey().asUUID(), object->getID(), experienceId, item, compile_target);
-            userData = HandleScriptUserData(pump.getName(), datap);
+            userData = new HandleScriptUserData(pump.getName(), datap);
         }
         else
         {
-            userData = HandleScriptUserData(pump.getName(), NULL);
+            userData = new HandleScriptUserData(pump.getName(), NULL);
         }
         // </FS:Ansariel>
 
@@ -585,7 +589,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
             item->getAssetUUID(),
             item->getType(),
             &LLFloaterCompileQueue::handleScriptRetrieval,
-            &userData);
+            userData);
 
         result = llcoro::suspendUntilEventOnWithTimeout(pump, QUEUE_INVENTORY_FETCH_TIMEOUT,
             LLSDMap("timeout", LLSD::Boolean(true)));
