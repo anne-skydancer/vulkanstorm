@@ -36,7 +36,7 @@
 #if LL_WINDOWS
 #   include "llwin32headers.h"
 #elif LL_LINUX || LL_DARWIN
-#   include <errno.h>
+#   include <cerrno>
 #   include <sys/time.h>
 #else
 #   error "architecture not supported"

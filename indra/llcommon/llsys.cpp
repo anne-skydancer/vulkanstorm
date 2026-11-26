@@ -75,7 +75,7 @@ using namespace llsd;
 #   include <sys/types.h>
 #   include <mach/mach_init.h>
 #elif LL_LINUX
-#   include <errno.h>
+#   include <cerrno>
 #   include <sys/utsname.h>
 #   include <unistd.h>
 #   include <sys/sysinfo.h>

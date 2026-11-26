@@ -53,7 +53,7 @@
 //
 // Signal handling
 #ifndef LL_WINDOWS
-# include <signal.h>
+# include <csignal>
 # include <unistd.h> // for fork()
 void setup_signals();
 void default_unix_signal_handler(int signum, siginfo_t *info, void *);

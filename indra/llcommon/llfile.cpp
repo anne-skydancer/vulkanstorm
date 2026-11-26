@@ -37,7 +37,7 @@
 #include "llwin32headers.h"
 #include <vector>
 #else
-#include <errno.h>
+#include <cerrno>
 #endif
 
 using namespace std;
