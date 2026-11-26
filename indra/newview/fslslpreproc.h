@@ -37,6 +37,8 @@
 #include "llviewerprecompiledheaders.h"
 #include "llpreviewscript.h"
 
+#include <memory>
+
 struct LLScriptQueueData;
 
 class FSLSLPreprocessor
@@ -63,7 +65,7 @@ public:
     static void FSProcCacheCallback(const LLUUID& uuid, LLAssetType::EType type,
                                     void *userdata, S32 result, LLExtStat extstat);
     void preprocess_script(bool close = false, bool sync = false, bool defcache = false);
-    void preprocess_script(const LLUUID& asset_id, LLScriptQueueData* data, LLAssetType::EType type, const std::string& script_data);
+    void preprocess_script(const LLUUID& asset_id, std::shared_ptr<LLScriptQueueData> data, LLAssetType::EType type, const std::string& script_data);
     void start_process();
     void display_message(std::string_view msg);
     void display_error(std::string_view err);
@@ -94,7 +96,7 @@ public:
     bool mStandalone;
     std::string mScript;
     LLUUID mAssetID;
-    LLScriptQueueData* mData;
+    std::shared_ptr<LLScriptQueueData> mData;
     LLAssetType::EType mType;
 };
 

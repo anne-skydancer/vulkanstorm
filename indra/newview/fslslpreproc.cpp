@@ -807,7 +807,7 @@ void FSLSLPreprocessor::preprocess_script(bool close, bool sync, bool defcache)
     start_process();
 }
 
-void FSLSLPreprocessor::preprocess_script(const LLUUID& asset_id, LLScriptQueueData* data, LLAssetType::EType type, const std::string& script_data)
+void FSLSLPreprocessor::preprocess_script(const LLUUID& asset_id, std::shared_ptr<LLScriptQueueData> data, LLAssetType::EType type, const std::string& script_data)
 {
     if (!data)
     {
@@ -818,7 +818,7 @@ void FSLSLPreprocessor::preprocess_script(const LLUUID& asset_id, LLScriptQueueD
 
     mScript = script;
     mAssetID = asset_id;
-    mData = data;
+    mData = std::move(data);
     mType = type;
 
     mDefinitionCaching = false;
@@ -1558,7 +1558,8 @@ void FSLSLPreprocessor::start_process()
 
         if (mStandalone)
         {
-            LLFloaterCompileQueue::scriptPreprocComplete(mData, mType, output);
+            LLFloaterCompileQueue::scriptPreprocComplete(mData.get(), mType, output);
+            mData.reset();
         }
         else
         {
@@ -1584,7 +1585,7 @@ void FSLSLPreprocessor::display_message(std::string_view msg)
 {
     if (mStandalone)
     {
-        LLFloaterCompileQueue::scriptLogMessage(mData, msg);
+        LLFloaterCompileQueue::scriptLogMessage(mData.get(), msg);
     }
     else
     {
@@ -1596,7 +1597,7 @@ void FSLSLPreprocessor::display_error(std::string_view err)
 {
     if (mStandalone)
     {
-        LLFloaterCompileQueue::scriptLogMessage(mData, err);
+        LLFloaterCompileQueue::scriptLogMessage(mData.get(), err);
     }
     else
     {
