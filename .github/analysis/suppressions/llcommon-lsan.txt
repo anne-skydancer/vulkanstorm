@@ -3,7 +3,7 @@
 #
 # The logging configuration watcher is allocated once, on purpose, and never freed: LLError::LogControlFile::
 # fromDirectory() makes it with `new` (llerror.cpp, see the comment there). Logging runs during shutdown; freeing the
-# watcher (an LLLiveFile with its Impl and its LiveFileEventTimer, which also owns a LLInstanceTracker entry) brings
+# watcher (an LLLiveFile with its Impl and its LiveFileEventTimer, which also owns an LLInstanceTracker entry) brings
 # back destruction-order crashes. Every allocation of that chain has one of these frames.
 leak:LogControlFile
 leak:LiveFileEventTimer
