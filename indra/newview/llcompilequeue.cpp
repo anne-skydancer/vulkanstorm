@@ -67,6 +67,10 @@
 #include "llsdutil.h"
 // </FS:KC>
 
+#include <algorithm>
+#include <memory>
+#include <vector>
+
 namespace
 {
 
@@ -132,6 +136,25 @@ namespace
         LLScriptQueueData* mData;
     };
 
+    // Owner of the user data handed to the asset request. Main thread only, like the
+    // coroutine that adds to it and the asset callback that releases from it.
+    std::vector<std::unique_ptr<HandleScriptUserData>> sPendingRetrievals;
+
+    HandleScriptUserData* addPendingRetrieval(HandleScriptUserData* data)
+    {
+        sPendingRetrievals.emplace_back(data);
+        return data;
+    }
+
+    void releasePendingRetrieval(HandleScriptUserData* data)
+    {
+        auto it = std::find_if(sPendingRetrievals.begin(), sPendingRetrievals.end(),
+            [data](const std::unique_ptr<HandleScriptUserData>& p) { return p.get() == data; });
+        if (it != sPendingRetrievals.end())
+        {
+            sPendingRetrievals.erase(it);
+        }
+    }
 
 }
 
@@ -416,8 +439,8 @@ void LLFloaterCompileQueue::handleScriptRetrieval(const LLUUID& assetId,
 
     LLEventPumps::instance().post(((HandleScriptUserData *)userData)->getPumpName(), result);
 
-    // allocated by the requesting coroutine, which may be gone already (timeout)
-    delete (HandleScriptUserData *)userData;
+    // the requesting coroutine may be gone already (timeout)
+    releasePendingRetrieval((HandleScriptUserData *)userData);
 }
 
 /*static*/
@@ -563,19 +586,20 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
     {
         // <FS:Ansariel> [LSL PreProc]
         //HandleScriptUserData    userData(pump.getName());
-        // Heap-allocated: the asset callback can fire after the timeout below has
-        // returned from this coroutine, so a local would dangle. The callback deletes it.
+        // Not a local: the asset callback can fire after the timeout below has returned
+        // from this coroutine. sPendingRetrievals owns it until the callback releases it
+        // (or until static destruction, if shutdown drops the request without a callback).
         HandleScriptUserData* userData = nullptr;
         if (gSavedSettings.getBOOL("_NACL_LSLPreprocessor") &&
             item->getInventorySubType() != SST_LUA && requested_target != "luau")
         {
             // Need to dump some stuff into an LLScriptQueueData struct for the LSL PreProc.
             LLScriptQueueData* datap = new LLScriptQueueData(hfloater.get()->getKey().asUUID(), object->getID(), experienceId, item, compile_target);
-            userData = new HandleScriptUserData(pump.getName(), datap);
+            userData = addPendingRetrieval(new HandleScriptUserData(pump.getName(), datap));
         }
         else
         {
-            userData = new HandleScriptUserData(pump.getName(), NULL);
+            userData = addPendingRetrieval(new HandleScriptUserData(pump.getName(), NULL));
         }
         // </FS:Ansariel>
 
