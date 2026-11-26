@@ -733,7 +733,7 @@ void LLUUID::getCurrentTime(uuid_time_t* timestamp)
         mMutex = new LLMutex();
     }
 
-    uuid_time_t time_now = { 0,0 };
+    uuid_time_t time_now = { .high=0,.low=0 };
 
     while (true) {
         getSystemTime(&time_now);
@@ -776,7 +776,7 @@ void LLUUID::generate()
     static int has_init = 0;
 
     // Create a UUID.
-    static uuid_time_t time_last = { 0,0 };
+    static uuid_time_t time_last = { .high=0,.low=0 };
     static U16 clock_seq = 0;
 #if LL_USE_JANKY_RANDOM_NUMBER_GENERATOR
     static U32 seed = 0L; // dummy seed.  reset it below
