@@ -190,7 +190,7 @@ void LLSharedMutex::lockShared()
         mSharedMutex.lock_shared();
         mLockMutex.lock();
         // Continue after acquiring the mutex
-        mLockingThreads.emplace(std::make_pair(current_thread, 1));
+        mLockingThreads.emplace(current_thread, 1);
         mIsShared = true;
     }
     mLockMutex.unlock();
@@ -223,7 +223,7 @@ void LLSharedMutex::lockExclusive()
         mSharedMutex.lock();
         mLockMutex.lock();
         // Continue after acquiring the mutex (and possible quitting the locking state)
-        mLockingThreads.emplace(std::make_pair(current_thread, 1));
+        mLockingThreads.emplace(current_thread, 1);
         mIsShared = false;
     }
     mLockMutex.unlock();
@@ -245,7 +245,7 @@ bool LLSharedMutex::trylockShared()
         if (!mSharedMutex.try_lock_shared())
             return false;
 
-        mLockingThreads.emplace(std::make_pair(current_thread, 1));
+        mLockingThreads.emplace(current_thread, 1);
         mIsShared = true;
     }
 
@@ -267,7 +267,7 @@ bool LLSharedMutex::trylockExclusive()
         if (!mSharedMutex.try_lock())
             return false;
 
-        mLockingThreads.emplace(std::make_pair(current_thread, 1));
+        mLockingThreads.emplace(current_thread, 1);
         mIsShared = false;
     }
 
