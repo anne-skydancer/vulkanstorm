@@ -32,6 +32,8 @@ TSAN_DIR = ROOT / ".github" / "analysis" / "tsan"
 TIDY_CONFIG = ROOT / ".github" / "analysis" / "clang-tidy.yaml"
 SELF_TEST_LIB = "llcommon"
 NEWVIEW_BASE = os.environ.get("NEWVIEW_BASE", "origin/release-clean")
+# A cleanup branch that is not named after a library but works in one (doc/clean/analysis.md, "What a run analyses").
+BRANCH_LIBRARY = {"coroutines": "llcommon"}
 JOBS = ("clang-tidy", "asan", "tsan", "msvc")
 # A pull request from a branch that is not clean/<lib> runs the self-test only when it changes one of these.
 ANALYSIS_FILES = (
@@ -117,6 +119,7 @@ def resolve(head_ref, event, lib_input="", root=ROOT, changed=None, has_pull_req
         head_ref = f"clean/{SELF_TEST_LIB}"
         plan["reason"] = f"not a clean/<lib> branch; it changes analysis files: self-test on {SELF_TEST_LIB}"
     name = head_ref[len("clean/"):]
+    name = BRANCH_LIBRARY.get(name, name)
     known = libraries(root)
     if re.fullmatch(r"newview-[a-z0-9][a-z0-9-]*", name):
         plan.update(scope="newview", lib=name)

@@ -19,7 +19,9 @@ names, so that an agent reads code only after the tools have had their say.
 
 A library is a directory `indra/<lib>` whose `CMakeLists.txt` has `add_library(<lib>`, except `cmake`, `llkdu`,
 `llphysicsextensionsos` and `llimagej2cneo` (the configure does not build them). `clean/newview-<area>` needs an area
-(`clean/newview` alone fails).
+(`clean/newview` alone fails). One branch is named after its work, not a library: `clean/coroutines` (the coroutine migration,
+`doc/clean/plan.md`) analyses `llcommon`, where the new task core and its tests live. The mapping is `BRANCH_LIBRARY` in
+`scripts/ci_analysis.py`; the baseline is `baseline/llcommon.json`.
 
 A push and its pull request do not cancel each other: the concurrency group has the event name and the dispatch input
 in it, a newer run of the same event replaces the older, and the plan job skips the push run when an open pull request
@@ -31,7 +33,7 @@ documentation-only changes (`doc/**`, `**/*.md`); a push always runs.
 | Job | Runs | Output |
 |---|---|---|
 | `plan` | the branch to library mapping, the test list, the TSan list, and why TSan has no job when it has none (always printed in the job summary) | outputs, job summary |
-| `clang-tidy` (Linux) | clang-tidy (C++20) over the library's **sources** (not its tests) from a `compile_commands.json` written by a GCC configure, no build. Checks: `clang-analyzer-*`, `bugprone-*`, `performance-*`, `concurrency-*`, `modernize-*` (C++20 only), and a short low-noise `cppcoreguidelines-*` list; see `.github/analysis/clang-tidy.yaml`. The number of translation units processed is printed; a unit that makes clang-tidy exit non-zero is a finding | JSON, text, counts per checker and per family |
+| `clang-tidy` (Linux) | clang-tidy (C++20) over the library's **sources** (not its tests) from a `compile_commands.json` written by a GCC configure, no build. Checks: `clang-analyzer-*`, `bugprone-*`, `performance-*`, `concurrency-*`, `modernize-*` (C++20 only), and a short low-noise `cppcoreguidelines-*` list (it includes the two coroutine checks, `avoid-reference-coroutine-parameters` and `avoid-capturing-lambda-coroutines`); see `.github/analysis/clang-tidy.yaml`. The number of translation units processed is printed; a unit that makes clang-tidy exit non-zero is a finding | JSON, text, counts per checker and per family |
 | `asan` (Linux) | the library and all its tests built with ASan + UBSan + LSan (`-O1`, no LTO), after a canary | same, per sanitizer kind; test counts |
 | `tsan` (Linux) | the library's tests built with TSan, all of them except the deny list `.github/analysis/tsan/<lib>-deny.txt` (the tests that use coroutines or child processes; **TSan has no say on those tests**, see below), after a canary | same |
 | `msvc` (Windows) | `/analyze` on the library target's **sources** (PREfast, `C6xxx`), logs as SARIF; build errors are findings | same, per rule |
@@ -76,9 +78,11 @@ is reported as its own cause.
 
 **What the TSan deny list leaves unchecked.** Boost.Fiber is prebuilt without TSan fibre annotations, and TSan and
 `fork` do not mix, so `.github/analysis/tsan/llcommon-deny.txt` skips the llcommon tests `lleventcoro`, `llcond`,
-`workqueue`, `llleap`, `llprocess`, `llprocessstdin` and `llsdserialize`. Those include the tests of the threading
+`workqueue`, `llleap`, `llprocess`, `llprocessstdin`, `llsdserialize` and `llcoros_order` (the run-order oracle, which
+runs on fibres). Those include the tests of the threading
 primitives that part 2 of the cleanup changed (`LLCond`, `WorkQueue`, `LLThreadSafeQueue`): **TSan did not look at them.**
-A green TSan job says nothing about races in that code; ASan/UBSan/LSan do run those tests.
+A green TSan job says nothing about races in that code; ASan/UBSan/LSan do run those tests. `lltask`, the oracle's
+scenarios on `LL::Executor` with no fibre, is not on the list: it is the first coroutine test TSan can run.
 
 A test target that fails is run once more; it is reported only if it fails again (a pass is listed as flaky in the
 summary). The TSan job runs two build jobs at a time because TSan makes timing-based tests flaky under load. Build and

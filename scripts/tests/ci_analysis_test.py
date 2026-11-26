@@ -89,6 +89,11 @@ class PlanTest(unittest.TestCase):
         (self.root / ".github" / "analysis" / "tsan" / "llcommon-deny.txt").write_text("lltrace\nllcond\nllsingleton")
         self.assertIn("deny list", ca.resolve("clean/llcommon", "push", root=self.root)["tsan_reason"])
 
+    def test_coroutines_branch_analyses_llcommon(self):
+        plan = ca.resolve("clean/coroutines", "pull_request", root=self.root)
+        self.assertEqual((plan["run"], plan["lib"], plan["scope"]), (True, "llcommon", "lib"))
+        self.assertEqual(plan["tsan_tests"], ["lltrace", "llsingleton"])
+
     def test_newview_area(self):
         plan = ca.resolve("clean/newview-render-pipeline", "pull_request", root=self.root)
         self.assertEqual((plan["run"], plan["lib"], plan["scope"]), (True, "newview-render-pipeline", "newview"))
