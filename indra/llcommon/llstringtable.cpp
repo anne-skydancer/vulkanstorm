@@ -55,15 +55,17 @@ LLStringTable::LLStringTable(int tablesize)
     S32 i;
     if (!tablesize)
         tablesize = 4096; // some arbitrary default
-    // Make sure tablesize is power of 2
-    for (i = 31; i>0; i--)
+    // Make sure tablesize is power of 2. The top bit is left out: 1 << 31 does not fit the int
+    // table size, and shifting by 32 below it is undefined.
+    const U32 requested = static_cast<U32>(tablesize);
+    for (i = 30; i>0; i--)
     {
-        if (tablesize & (1<<i))
+        if (requested & (1u<<i))
         {
-            if (tablesize >= (3<<(i-1)))
-                tablesize = (1<<(i+1));
+            if (i < 30 && requested >= (3u<<(i-1)))
+                tablesize = static_cast<int>(1u<<(i+1));
             else
-                tablesize = (1<<i);
+                tablesize = static_cast<int>(1u<<i);
             break;
         }
     }
