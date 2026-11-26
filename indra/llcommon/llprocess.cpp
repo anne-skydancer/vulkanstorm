@@ -985,6 +985,7 @@ static std::string getDesc(const LLProcess::Params& params)
 {
     // If caller specified a description string, by all means use it.
     if (params.desc.isProvided())
+        // NOLINTNEXTLINE(modernize-return-braced-init-list): params.desc is a Param<std::string> that converts to the return type
         return params.desc;
 
     // Caller didn't say. Use the executable name -- but use just the filename

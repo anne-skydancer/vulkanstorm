@@ -231,7 +231,6 @@ namespace LLError
         static std::string classname(const T& obj) { return demangle(typeid(obj).name()); }
     };
 // NOLINTNEXTLINE(clang-analyzer-optin.performance.Padding): the logging macros brace-initialise CallSite positionally, reordering the fields would break them
-
     struct LL_COMMON_API CallSite
     {
         // Represents a specific place in the code where a message is logged

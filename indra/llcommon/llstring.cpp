@@ -85,6 +85,7 @@ U8 hex_as_nybble(char hex)
 
 bool iswindividual(llwchar elem)
 {
+    // NOLINTNEXTLINE(bugprone-signed-char-misuse): llwchar is a UTF-32 code point, not a char; the tool mistakes wchar_t for one
     U32 cur_char = (U32)elem;
     bool result = false;
     if (0x2E80<= cur_char && cur_char <= 0x9FFF)
@@ -142,6 +143,7 @@ std::string rawstr_to_utf8(const std::string& raw)
 
 std::ptrdiff_t wchar_to_utf8chars(llwchar in_char, char* outchars)
 {
+    // NOLINTNEXTLINE(bugprone-signed-char-misuse): llwchar is a UTF-32 code point, not a char; the tool mistakes wchar_t for one
     U32 cur_char = (U32)in_char;
     char* base = outchars;
     if (cur_char < 0x80)
@@ -218,6 +220,7 @@ llutf16string wstring_to_utf16str(const llwchar* utf32str, size_t len)
     S32 i = 0;
     while (i < len)
     {
+        // NOLINTNEXTLINE(bugprone-signed-char-misuse): llwchar is a UTF-32 code point, not a char; the tool mistakes wchar_t for one
         U32 cur_char = utf32str[i];
         if (cur_char > 0xFFFF)
         {
@@ -1434,7 +1437,7 @@ LLStringUtil::size_type LLStringUtil::getSubstitution(const std::string& instr, 
 
 // static
 template<>
-bool LLStringUtil::simpleReplacement(std::string &replacement, std::string token, const format_map_t& substitutions)
+bool LLStringUtil::simpleReplacement(std::string &replacement, const std::string& token, const format_map_t& substitutions)
 {
     // see if we have a replacement for the bracketed string (without the brackets)
     // test first using has() because if we just look up with operator[] we get back an
@@ -1459,7 +1462,7 @@ bool LLStringUtil::simpleReplacement(std::string &replacement, std::string token
 
 // static
 template<>
-bool LLStringUtil::simpleReplacement(std::string &replacement, std::string token, const LLSD& substitutions)
+bool LLStringUtil::simpleReplacement(std::string &replacement, const std::string& token, const LLSD& substitutions)
 {
     // see if we have a replacement for the bracketed string (without the brackets)
     // test first using has() because if we just look up with operator[] we get back an
@@ -1482,7 +1485,7 @@ bool LLStringUtil::simpleReplacement(std::string &replacement, std::string token
 
 //static
 template<>
-void LLStringUtil::setLocale(std::string inLocale)
+void LLStringUtil::setLocale(const std::string& inLocale)
 {
     if(startsWith(inLocale, "MissingString"))
     {
@@ -1504,7 +1507,7 @@ std::string LLStringUtil::getLocale()
 
 // static
 template<>
-void LLStringUtil::formatNumber(std::string& numStr, std::string decimals)
+void LLStringUtil::formatNumber(std::string& numStr, const std::string& decimals)
 {
 // <FS:ND> Windows does not/cannot use UTF8 in char strings(1). So to get valid conversions we need to widen the strings to wchar_t(2) do the formatting in std::wstring, then convert
 // down to UTF8 again.
@@ -1601,8 +1604,8 @@ void LLStringUtil::formatNumber(std::string& numStr, std::string decimals)
 
 // static
 template<>
-bool LLStringUtil::formatDatetime(std::string& replacement, std::string token,
-                                  std::string param, S32 secFromEpoch)
+bool LLStringUtil::formatDatetime(std::string& replacement, const std::string& token,
+                                  const std::string& param, S32 secFromEpoch)
 {
     if (param == "local")   // local
     {

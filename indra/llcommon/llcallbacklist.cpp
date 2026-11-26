@@ -37,10 +37,7 @@ LLCallbackList gIdleCallbacks;
 // Member functions
 //
 
-LLCallbackList::LLCallbackList()
-{
-    // nothing
-}
+LLCallbackList::LLCallbackList() = default;
 
 LLCallbackList::~LLCallbackList() = default;
 

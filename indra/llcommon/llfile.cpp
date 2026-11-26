@@ -531,6 +531,7 @@ bool LLFile::copy(const std::string& from, const std::string& to)
             std::vector<char> buf(LLFILE_COPY_BUFFER_SIZE);
             size_t readbytes;
             bool write_ok = true;
+            // NOLINTNEXTLINE(clang-analyzer-unix.Stream): fread() returns 0 at the end of the file, which ends the loop; the analyzer reads the next loop test as a second read
             while (write_ok && (readbytes = fread(buf.data(), 1, buf.size(), in)))
             {
                 if (fwrite(buf.data(), 1, readbytes, out) != readbytes)

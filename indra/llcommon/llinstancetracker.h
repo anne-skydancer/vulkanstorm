@@ -280,6 +280,7 @@ public:
         remove_(lock);
     }
 protected:
+    // NOLINTNEXTLINE(performance-unnecessary-value-param): virtual, and overridden in other libraries; a const reference would silently stop them overriding
     virtual void setKey(KEY key)
     {
         LockStatic lock; LL_PROFILE_MUTEX_LOCK(lock->mMutex);

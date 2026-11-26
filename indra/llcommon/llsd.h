@@ -238,11 +238,13 @@ public:
         LLSD& operator=(const Date& v)      { assign(v); return *this; }
         LLSD& operator=(const URI& v)       { assign(v); return *this; }
         LLSD& operator=(const Binary& v)    { assign(v); return *this; }
+        // NOLINTBEGIN(performance-move-const-arg): the rvalue overloads exist for every LLSD scalar type so that callers and templates need no per-type cases; moving a trivially copyable UUID or Date is a copy, by design
         LLSD& operator=(String&& v)         { assign(std::move(v)); return *this; }
         LLSD& operator=(UUID&& v)               { assign(std::move(v)); return *this; }
         LLSD& operator=(Date&& v)               { assign(std::move(v)); return *this; }
         LLSD& operator=(URI&& v)                { assign(std::move(v)); return *this; }
         LLSD& operator=(Binary&& v)         { assign(std::move(v)); return *this; }
+        // NOLINTEND(performance-move-const-arg)
     //@}
 
     /**

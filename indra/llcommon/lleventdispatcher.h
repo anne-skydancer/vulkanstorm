@@ -280,6 +280,7 @@ public:
     template <typename CALLABLE>
     void add(const std::string& name,
              const std::string& desc,
+             // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward): addV() takes its callable by value and copies it once, whatever the category of f
              CALLABLE&& f)
     requires (! std::is_invocable<CALLABLE, LLSD>()) {
         addV(name, desc, f);

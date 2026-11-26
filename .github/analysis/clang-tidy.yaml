@@ -14,20 +14,30 @@ Checks: >-
   -bugprone-reserved-identifier,
   -bugprone-branch-clone,
   performance-*,
+  -performance-enum-size,
   concurrency-*,
   -concurrency-mt-unsafe,
   modernize-*,
+  -modernize-use-integer-sign-comparison,
   -modernize-use-trailing-return-type,
   -modernize-avoid-c-arrays,
   -modernize-use-std-print,
   -modernize-use-nodiscard,
   cppcoreguidelines-pro-type-member-init,
   cppcoreguidelines-slicing,
-  cppcoreguidelines-prefer-member-initializer,
-  cppcoreguidelines-missing-std-forward,
-  cppcoreguidelines-rvalue-reference-param-not-moved
+  cppcoreguidelines-missing-std-forward
 # cppcoreguidelines-virtual-class-destructor is left out on purpose: the intrusive reference-counted and singleton
 # classes (LLRefCount, LLSingletonBase, LLEvent, the LLSD parsers and formatters, ...) have a protected virtual
 # destructor so that only the owner can delete them. Making it public would let any holder delete a shared object;
 # making it non-virtual would leak the derived part when the owner deletes through the base.
+# Left out, each for a reason found on llcommon (doc/clean/llcommon-findings.md):
+# - performance-enum-size: shrinking an enum's underlying type changes the layout of every struct that holds it and of
+#   the values that cross libraries; no measured win, so the 41 llcommon enums keep their type.
+# - modernize-use-integer-sign-comparison: std::cmp_less and friends change the result where the code compares across
+#   signs on purpose, e.g. a U32 flag word against ~0 (llpredicate.h) is true today and false with std::cmp_equal.
+# - cppcoreguidelines-prefer-member-initializer: moving an assignment from a constructor body into the initializer list
+#   can change the order of side effects; the tool's own fix swapped the order of three allocations in LLThread's
+#   constructor, and the findings left are bodies that allocate or register.
+# - cppcoreguidelines-rvalue-reference-param-not-moved: the flagged parameters are class-template parameters that are
+#   forwarded with std::forward on purpose, because the template is also instantiated with lvalue references.
 WarningsAsErrors: ''

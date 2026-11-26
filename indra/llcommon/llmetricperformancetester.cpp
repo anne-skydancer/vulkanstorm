@@ -250,6 +250,7 @@ void LLMetricPerformanceTesterBasic::analyzePerformance(llofstream* os, LLSD* ba
 }
 
 /*virtual*/
+// NOLINTNEXTLINE(performance-unnecessary-value-param): overrides a virtual that subclasses in other libraries also override by value
 void LLMetricPerformanceTesterBasic::compareTestResults(llofstream* os, std::string metric_string, S32 v_base, S32 v_current)
 {
     *os << llformat(" ,%s, %d, %d, %d, %.4f\n", metric_string.c_str(), v_base, v_current,
@@ -257,6 +258,7 @@ void LLMetricPerformanceTesterBasic::compareTestResults(llofstream* os, std::str
 }
 
 /*virtual*/
+// NOLINTNEXTLINE(performance-unnecessary-value-param): same virtual, F32 overload
 void LLMetricPerformanceTesterBasic::compareTestResults(llofstream* os, std::string metric_string, F32 v_base, F32 v_current)
 {
     *os << llformat(" ,%s, %.4f, %.4f, %.4f, %.4f\n", metric_string.c_str(), v_base, v_current,
