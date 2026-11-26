@@ -13,7 +13,7 @@ name: Analysis setup
 description: Toolchain, packages and one configure for an analysis job (doc/clean/analysis.md).
 inputs:
   mode:
-    description: "asan (ASan+UBSan+LSan), tsan, tidy (a compile database for clang-tidy) or msvc (/analyze)."
+    description: "asan (ASan+UBSan+LSan), tsan, tidy (a compile database for clang-tidy), msvc (/analyze) or codegen (objects that compare equal when the code does)."
     required: true
   directory:
     description: "The CMake build directory."
@@ -115,6 +115,16 @@ runs:
             fi
             options+=("-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags"
               "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O1 -g -DNDEBUG" "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O1 -g -DNDEBUG"
+              -DGCC_DISABLE_FATAL_WARNINGS:BOOL=ON)
+            ;;
+          codegen)
+            # The identical-code check (scripts/ci_codegen.py): -O2 without debug info like the shipped build, one section per
+            # function and variable (stable names and positions), no build path in __FILE__, a fixed random seed. The script
+            # also replaces __LINE__ by 0 in the project's own files at each commit it builds, because a style edit shifts
+            # lines and every logging and assert call site bakes __LINE__ into the code.
+            flags="-ffunction-sections -fdata-sections -frandom-seed=vkstorm-codegen -ffile-prefix-map=$GITHUB_WORKSPACE=."
+            options+=("-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags"
+              "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O2 -DNDEBUG" "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O2 -DNDEBUG"
               -DGCC_DISABLE_FATAL_WARNINGS:BOOL=ON)
             ;;
           tidy)

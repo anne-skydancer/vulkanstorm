@@ -28,7 +28,8 @@ split by what they can do to behaviour, so that review effort goes where behavio
 2. **Style.** The families that only change how the code is written: `use-auto`, `use-using`, `use-nullptr`,
    `return-braced-init-list`, `concat-nested-namespaces`, `use-designated-initializers` and the like, one commit per
    family. Each commit is proven by identical compiled code: the analysis CI builds the subsystem before and after the
-   commit and compares the machine code. A style commit whose code differs moves to the first pull request and gets a
+   commit and compares the machine code (`doc/clean/analysis.md`, "Identical compiled code"). A style commit's subject
+   ends with the tag `(style)`, for example `llmath: modernize-use-auto (style)`; an untagged commit is not checked. A style commit whose code differs moves to the first pull request and gets a
    full read; the auditor only samples the style pull request for readability.
 
 Both pull requests come from `clean/<subsystem>`; the second is cut after the first has landed. `llcommon` (#612, #613)

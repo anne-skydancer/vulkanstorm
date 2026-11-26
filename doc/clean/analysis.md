@@ -11,7 +11,7 @@ names, so that an agent reads code only after the tools have had their say.
 |---|---|
 | push to `clean/<lib>` | `indra/<lib>` and its own tests |
 | push to `clean/newview-<area>` | clang-tidy over the newview translation units the branch's changed files affect |
-| pull request into `release-clean` | the library named by the head branch, the same way |
+| pull request into `release-clean` | the library named by the head branch, the same way; the `codegen` job also checks the pull request's `(style)` commits |
 | pull request from any other branch | `llcommon` as a self-test, **only** when the pull request changes `.github/workflows/analysis.yaml`, `.github/actions/analysis-setup/**`, `.github/analysis/**`, `scripts/ci_analysis.py`, `scripts/ci_triage.py`, `scripts/tests/ci_analysis_test.py`, `scripts/tests/ci_triage_test.py` or `scripts/tests/ci_analysis_setup_test.py` (the test fixtures are under `.github/analysis/fixtures/`); otherwise nothing runs |
 | a `clean/...` branch that names no library | the **plan job fails** with `::error::` and the reason; nothing else runs |
 | `workflow_dispatch` (input `lib`) | the named library; only possible once the file is on the default branch |
@@ -35,6 +35,7 @@ documentation-only changes (`doc/**`, `**/*.md`); a push always runs.
 | `tsan` (Linux) | the library's tests built with TSan, all of them except the deny list `.github/analysis/tsan/<lib>-deny.txt` (the tests that use coroutines or child processes), after a canary | same |
 | `msvc` (Windows) | `/analyze` on the library target's **sources** (PREfast, `C6xxx`), logs as SARIF; build errors are findings | same, per rule |
 | `triage` (Linux, report only) | explains the real bug findings of the run, see [Triage](#triage) | `analysis-triage-<lib>` artifact, job summary |
+| `codegen` (Linux) | the **identical compiled code** check of the pull request's `(style)` commits, see [Identical compiled code](#identical-compiled-code); red when a style commit changes the machine code | `analysis-codegen-<lib>` artifact, job summary |
 | `report` | merges the jobs, compares them with the committed baseline, decides red or green, writes the baseline proposal | job summary, `analysis-report-<lib>` artifact |
 
 Every job uploads its artifact (`analysis-<job>`: `findings-<job>.json`, `summary-<job>.md`, the raw logs, the sanitizer
@@ -109,6 +110,60 @@ To create or update a baseline: download the `analysis-report-<lib>` artifact of
 to `.github/analysis/baseline/<lib>.json`. **Each cleanup pull request commits its own baseline update**, so the baseline
 lives in the pull request and the owner reviews it with the code: shrink it when the cleanup fixes findings; add to it
 only for a finding the owner accepts. newview has one baseline per area (`baseline/newview-<area>.json`).
+
+## Identical compiled code
+
+`doc/clean/plan.md` splits a subsystem's cleanup into a bugs-and-safety pull request and a style pull request. The `codegen`
+job proves the second: every commit of the pull request whose subject **ends with the tag `(style)`** (for example
+`llmath: modernize-use-auto (style)`) must compile to the same machine code as its parent. A commit without the tag at the end is
+listed as skipped and not checked; the job summary lists both. A style commit that differs turns the job red and moves to
+the bugs-and-safety pull request.
+
+It runs on a pull request into `release-clean` whose head names a library (`clean/<lib>`, or the `llcommon` self-test),
+over the commits of `base..head`, and does nothing when none has the tag. `workflow_dispatch` takes `codegen_range` (a range
+`A..B` or a list of commits) and `codegen_all_style` (check every commit of it, tagged or not; this is how the check is
+proven on history), and runs the job for the library of the `lib` input.
+
+**How.** The job configures once (`analysis-setup`, mode `codegen`: the shipped options, RelWithDebInfo with `-O2 -DNDEBUG`
+and no debug info), then for each style commit checks out its parent and the commit and builds the library target
+(`cmake --build --target <lib>`). Only the translation units whose sources changed recompile, so a commit that edits two
+files costs two compiles; a changed header recompiles what includes it. `scripts/ci_codegen.py` then reads the library's
+object files (those its link line names) and compares each with the same object at the parent. A commit's parent that is the
+previous checked commit is not built twice.
+
+**What the comparison covers.** The objects are ELF files, read by the script itself (no `objdump`): per section the type,
+flags, alignment, entry size, size, bytes and relocations (offset, type, target symbol name, addend), and per symbol its
+binding, type, visibility, section and size. The build puts every function and variable in its own section
+(`-ffunction-sections -fdata-sections`), so a section is a symbol, its name is its mangled name and its offsets do not move
+when a neighbour changes. A changed, added or removed section or symbol, or an added or removed object, is a difference; the
+summary names the symbols (demangled) per object.
+
+**What it ignores, and why that is safe.**
+
+| Ignored | Why |
+|---|---|
+| debug info (`.debug*`), notes, `.comment`, the symbol table order | they describe the code, they are not code; the build has no `-g` anyway |
+| the unwind tables (`.eh_frame`) | generated from the function's instructions: they differ only if the code does |
+| the build path | `-ffile-prefix-map=<workspace>=.` turns `__FILE__` and the debug paths relative |
+| random names and seeds | `-frandom-seed` is fixed |
+| `__LINE__` in the project's files | a style edit adds or removes lines, and every logging (`LL_INFOS`...) and assert call site bakes `__LINE__` into the code, so a whole file would differ. At each commit it builds, the script replaces the token `__LINE__` by `0` in the files under `indra/` that contain it (and puts the originals back before moving on; the commit under test is not changed). Only the files a commit changes are rewritten, so the build stays incremental. A line number only appears in what the code prints or asserts, which is not what a style commit is about. Not reached: `__LINE__` inside third-party headers (`BOOST_THROW_EXCEPTION`, `std::source_location`, `__builtin_LINE`): a style edit that shifts a line that uses one shows as a difference, never as a false "identical". A macro that builds a unique name from `__LINE__` and is used twice in one scope breaks the build with `0` (`LLREGISTER_STATIC`): the job reports `build-failed` and the commit gets a full read |
+
+What it does not prove: the code of other libraries that include a changed header (only the library's own objects are
+compared), a build with another compiler or flags (a different optimiser may order code differently; a difference found
+there is a reason to read the commit, not proof of a bug), and anything at link time (no LTO here). A commit that differs only
+because the compiler's choices moved (for instance an inlining decision after a signature change) is reported as differing
+and is read; that is the safe direction.
+
+A commit that cannot be proven says why in the summary: `build-failed` when the library does not build at the commit or at its parent on Linux (the
+GCC build; a commit made from a Windows-only fix-it pass may not compile there), or `differs` with the symbols. Two
+things in a `differs` list are not noise: a changed string literal (for example `llassert_always(p != NULL)` becomes
+`p != nullptr`, and the assertion prints its expression) and an `auto` that deduces another type than the one it replaced
+(`iterator` for `const_iterator`). The compiler's numbered local labels (`.LC27`) are compared by the place they point to,
+and the clone suffixes (`.constprop.0`, `.cold`, `.isra.0`) appear in the demangled names.
+
+The artifact `analysis-codegen-<lib>` holds `codegen.json` (the verdict per commit and every differing symbol), `codegen.md`
+(the job summary) and one build log per commit. The script's tests (`scripts/tests/ci_codegen_test.py`) run without a
+compiler.
 
 ## Suppressions
 A finding that is proven not to be a bug is suppressed, with the reason written beside the entry, never in a list nobody
