@@ -18,6 +18,7 @@
 #include "linden_common.h"
 #include "llcoros.h"
 #include "lleventcoro.h"
+#include "lltask.h"
 #include "llevents.h"
 #include "llsd.h"
 #include "../test/lltut.h"
@@ -250,4 +251,95 @@ void object::test<8>()
     ensure_equals(what, "order_X");
 }
 #endif
+#if ! LL_CORO_NATIVE
+// 9-11. The fibre bridge: the same scenarios 1, 5 and 7 written as tasks. LLCoros::launch() of a callable that returns
+//    an LL::Task runs it in a fibre, and every co_await of llcoro::co blocks that fibre, so the order is today's.
+template<> template<>
+void object::test<9>()
+{
+    set_test_name("bridge: wake order and frame boundary");
+    settle();
+    LLEventStream pa("order_pa", true), pb("order_pb", true), pc("order_pc", true);
+    LLCoros::instance().launch("order_A", [&pa]() -> LL::Task<void>
+        {
+            mark("A0"); co_await llcoro::co::suspendUntilEventOn(pa); mark("A1"); co_await llcoro::co::suspend();
+            mark("A2");
+        });
+    LLCoros::instance().launch("order_B", [&pb, &pc]() -> LL::Task<void>
+        {
+            mark("B0"); co_await llcoro::co::suspendUntilEventOn(pb); mark("B1"); pc.post(LLSD()); mark("B2");
+        });
+    LLCoros::instance().launch("order_C", [&pc]() -> LL::Task<void>
+        {
+            mark("C0"); co_await llcoro::co::suspendUntilEventOn(pc); mark("C1");
+        });
+    mark("M:post");
+    pb.post(LLSD());
+    pa.post(LLSD());
+    mark("M:f1"); frame();
+    mark("M:f2"); frame();
+    mark("M:f3"); frame();
+    ensure_equals(sTrace, "A0 B0 C0 M:post M:f1 B1 B2 A1 M:f2 C1 A2 M:f3");
+}
+
+template<> template<>
+void object::test<10>()
+{
+    set_test_name("bridge: first event wins, consuming, timeout result");
+    settle();
+    LLEventStream pe("order_pe", true), pw("order_pw", true);
+    LLCoros::instance().launch("order_E", [&pe]() -> LL::Task<void>
+        {
+            LLSD v = co_await llcoro::co::suspendUntilEventOn(pe); mark("E:" + v.asString());
+        });
+    LLCoros::instance().launch("order_K", [&pe]() -> LL::Task<void>
+        {
+            LLCoros::OverrideConsuming consuming(true);
+            LLSD v = co_await llcoro::co::suspendUntilEventOn(pe); mark("K:" + v.asString());
+        });
+    LLCoros::instance().launch("order_W", [&pw]() -> LL::Task<void>
+        {
+            LLSD v = co_await llcoro::co::suspendUntilEventOnWithTimeout(pw, 0.001f, "timeout");
+            mark("W:" + v.asString());
+        });
+    std::string late;
+    LLTempBoundListener tail(pe.listen("order_tail", [&late](const LLSD& v) { late += v.asString(); return false; }));
+    pe.post("one");
+    pe.post("two");
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    frame();
+    frame();
+    ensure_equals(sTrace, "K:one E:two W:timeout");
+    ensure_equals(late, "onetwo");
+}
+
+template<> template<>
+void object::test<11>()
+{
+    set_test_name("bridge: LLApp status stops a task, an uncaught exception is rethrown");
+    settle();
+    LLEventStream ps("order_ps", true);
+    LLCoros::instance().launch("order_S", [&ps]() -> LL::Task<void>
+        {
+            try { co_await llcoro::co::suspendUntilEventOn(ps); mark("S:event"); }
+            catch (const LLCoros::Stopping&) { mark("S:stopping"); throw; }
+        });
+    OrderTestApp::status(LLApp::APP_STATUS_QUITTING);
+    frame();
+    OrderTestApp::status(LLApp::APP_STATUS_RUNNING);
+    ensure_equals(sTrace, "S:stopping");
+#if ! LL_WINDOWS
+    LLEventStream px("order_px", true);
+    LLCoros::instance().launch("order_X", [&px]() -> LL::Task<void>
+        {
+            co_await llcoro::co::suspendUntilEventOn(px); throw std::runtime_error("order_X");
+        });
+    px.post(LLSD());
+    std::string what;
+    try { frame(); }
+    catch (const std::runtime_error& e) { what = e.what(); }
+    ensure_equals(what, "order_X");
+#endif
+}
+#endif // ! LL_CORO_NATIVE
 } // namespace tut
