@@ -64,8 +64,6 @@ class LLFloater360Capture:
 
         void mockSnapShot(LLImageRaw* raw);
 
-        void suspendForAFrame();
-
         const std::string generate_proposed_filename();
 
         void setSourceImageSize();

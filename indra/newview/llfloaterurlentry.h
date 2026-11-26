@@ -31,6 +31,7 @@
 #include "llpanellandmedia.h"
 #include "lleventcoro.h"
 #include "llcoros.h"
+#include "lltask.h"
 
 class LLLineEditor;
 class LLComboBox;
@@ -61,7 +62,7 @@ private:
     static void     onBtnClear(void*);
     bool            callback_clear_url_list(const LLSD& notification, const LLSD& response);
 
-    static void     getMediaTypeCoro(std::string url, LLHandle<LLFloater> parentHandle);
+    static LL::Task<void> getMediaTypeCoro(std::string url, LLHandle<LLFloater> parentHandle);
 
 };
 

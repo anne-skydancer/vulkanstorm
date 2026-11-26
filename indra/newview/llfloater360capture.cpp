@@ -406,18 +406,6 @@ void LLFloater360Capture::encodeAndSave(LLPointer<LLImageRaw> raw_image, const s
     }
 }
 
-// Defer back to the main loop for a single rendered frame to give
-// the renderer a chance to update the UI if it is needed
-void LLFloater360Capture::suspendForAFrame()
-{
-    const U32 frame_count_delta = 1;
-    U32 curr_frame_count = LLFrameTimer::getFrameCount();
-    while (LLFrameTimer::getFrameCount() <= curr_frame_count + frame_count_delta)
-    {
-        llcoro::suspendUntilNextFrame();
-    }
-}
-
 // A debug version of the snapshot code that simply fills the
 // buffer with a pattern that can be used to investigate
 // issues with encoding and saving off each RAW image.

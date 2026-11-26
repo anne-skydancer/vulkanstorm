@@ -35,6 +35,7 @@
 #include "llremoteparcelrequest.h"
 #include "lleventcoro.h"
 #include "llcoros.h"
+#include "lltask.h"
 
 class LLPanelScriptLimitsInfo;
 class LLTabContainer;
@@ -139,9 +140,9 @@ private:
     boost::signals2::scoped_connection mAvatarNameCacheConnection;
     boost::signals2::scoped_connection mGroupNameCacheConnection;
 
-    void getLandScriptResourcesCoro(std::string url);
-    void getLandScriptSummaryCoro(std::string url);
-    void getLandScriptDetailsCoro(std::string url);
+    LL::Task<void> getLandScriptResourcesCoro(std::string url);
+    LL::Task<void> getLandScriptSummaryCoro(std::string url);
+    LL::Task<void> getLandScriptDetailsCoro(std::string url);
 
 protected:
 

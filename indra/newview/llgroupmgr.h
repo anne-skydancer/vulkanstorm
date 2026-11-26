@@ -34,6 +34,7 @@
 #include <map>
 #include "lleventcoro.h"
 #include "llcoros.h"
+#include "lltask.h"
 
 // Forward Declarations
 class LLMessageSystem;
@@ -447,11 +448,11 @@ public:
     void clearGroupData(const LLUUID& group_id);
 
 private:
-    void groupMembersRequestCoro(std::string url, LLUUID group_id, U32 page_size, U32 page_start, U32 sort_column, bool sort_descending);
+    LL::Task<void> groupMembersRequestCoro(std::string url, LLUUID group_id, U32 page_size, U32 page_start, U32 sort_column, bool sort_descending);
     void processCapGroupMembersResponse(const LLSD& response, const std::string& url, U32 page_size, U32 page_start, U32 sort_column, bool sort_descending);
 
-    void getGroupBanRequestCoro(std::string url, LLUUID group_id);
-    void postGroupBanRequestCoro(std::string url, LLUUID group_id, U32 action, uuid_vec_t ban_list, bool update);
+    LL::Task<void> getGroupBanRequestCoro(std::string url, LLUUID group_id);
+    LL::Task<void> postGroupBanRequestCoro(std::string url, LLUUID group_id, U32 action, uuid_vec_t ban_list, bool update);
 
     static void processGroupBanRequest(const LLSD& content);
 

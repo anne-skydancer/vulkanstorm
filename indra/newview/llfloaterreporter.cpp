@@ -427,14 +427,14 @@ void LLFloaterReporter::onAvatarNameCache(const LLUUID& avatar_id, const LLAvata
     }
 }
 
-void LLFloaterReporter::requestAbuseCategoriesCoro(std::string url, LLHandle<LLFloater> handle)
+LL::Task<void> LLFloaterReporter::requestAbuseCategoriesCoro(std::string url, LLHandle<LLFloater> handle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("requestAbuseCategoriesCoro", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -442,13 +442,13 @@ void LLFloaterReporter::requestAbuseCategoriesCoro(std::string url, LLHandle<LLF
     if (!status || !result.has("categories")) // success = httpResults["success"].asBoolean();
     {
         LL_WARNS() << "Error requesting Abuse Categories from capability: " << url << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (handle.isDead())
     {
         // nothing to do
-        return;
+        co_return;
     }
 
     LLFloater* floater = handle.get();
@@ -456,7 +456,7 @@ void LLFloaterReporter::requestAbuseCategoriesCoro(std::string url, LLHandle<LLF
     if (!combo)
     {
         LL_WARNS() << "categories category_combo not found!" << LL_ENDL;
-        return;
+        co_return;
     }
 
     //get selection (in case capability took a while)

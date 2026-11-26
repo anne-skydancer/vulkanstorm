@@ -73,7 +73,7 @@ LLAvatarRenderInfoAccountant::~LLAvatarRenderInfoAccountant()
 }
 
 
-void LLAvatarRenderInfoAccountant::avatarRenderInfoGetCoro(std::string url, U64 regionHandle)
+LL::Task<void> LLAvatarRenderInfoAccountant::avatarRenderInfoGetCoro(std::string url, U64 regionHandle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -86,14 +86,14 @@ void LLAvatarRenderInfoAccountant::avatarRenderInfoGetCoro(std::string url, U64 
     httpOpts->setRetries(0);
     httpOpts->setTimeout((unsigned int)SECS_BETWEEN_REGION_REQUEST);
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
 
     LLWorld *world_inst = LLWorld::getInstance();
     if (!world_inst)
     {
         LL_WARNS("AvatarRenderInfoAccountant") << "Avatar render weight info received but world no longer exists "
             << regionHandle << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLViewerRegion * regionp = world_inst->getRegionFromHandle(regionHandle);
@@ -101,7 +101,7 @@ void LLAvatarRenderInfoAccountant::avatarRenderInfoGetCoro(std::string url, U64 
     {
         LL_WARNS("AvatarRenderInfoAccountant") << "Avatar render weight info received but region not found for "
                 << regionHandle << LL_ENDL;
-        return;
+        co_return;
     }
 
     regionp->getRenderInfoRequestTimer().resetWithExpiry(SECS_BETWEEN_REGION_REQUEST);
@@ -112,7 +112,7 @@ void LLAvatarRenderInfoAccountant::avatarRenderInfoGetCoro(std::string url, U64 
     if (!status)
     {
         LL_WARNS("AvatarRenderInfoAccountant") << "HTTP status, " << status.toTerseString() << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (result.has(KEY_AGENTS))
@@ -190,7 +190,7 @@ void LLAvatarRenderInfoAccountant::avatarRenderInfoGetCoro(std::string url, U64 
 }
 
 //-------------------------------------------------------------------------
-void LLAvatarRenderInfoAccountant::avatarRenderInfoReportCoro(std::string url, U64 regionHandle)
+LL::Task<void> LLAvatarRenderInfoAccountant::avatarRenderInfoReportCoro(std::string url, U64 regionHandle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -207,7 +207,7 @@ void LLAvatarRenderInfoAccountant::avatarRenderInfoReportCoro(std::string url, U
     {
         LL_WARNS("AvatarRenderInfoAccountant") << "Avatar render weight calculation but world no longer exists "
             << regionHandle << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLViewerRegion * regionp = world_inst->getRegionFromHandle(regionHandle);
@@ -215,7 +215,7 @@ void LLAvatarRenderInfoAccountant::avatarRenderInfoReportCoro(std::string url, U
     {
         LL_WARNS("AvatarRenderInfoAccountant") << "Avatar render weight calculation but region not found for "
             << regionHandle << LL_ENDL;
-        return;
+        co_return;
     }
 
     LL_DEBUGS("AvatarRenderInfoAccountant")
@@ -255,21 +255,21 @@ void LLAvatarRenderInfoAccountant::avatarRenderInfoReportCoro(std::string url, U
     regionp->getRenderInfoReportTimer().resetWithExpiry(SECS_BETWEEN_REGION_REPORTS + (2.f * num_avs));
 
     if (num_avs == 0)
-        return; // nothing to report
+        co_return; // nothing to report
 
     LLSD report = LLSD::emptyMap();
     report[KEY_AGENTS] = agents;
 
     regionp = NULL;
     world_inst = NULL;
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, report, httpOpts);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, report, httpOpts);
 
     world_inst = LLWorld::getInstance();
     if (!world_inst)
     {
         LL_WARNS("AvatarRenderInfoAccountant") << "Avatar render weight POST result but world no longer exists "
             << regionHandle << LL_ENDL;
-        return;
+        co_return;
     }
 
     regionp = world_inst->getRegionFromHandle(regionHandle);
@@ -277,7 +277,7 @@ void LLAvatarRenderInfoAccountant::avatarRenderInfoReportCoro(std::string url, U
     {
         LL_INFOS("AvatarRenderInfoAccountant") << "Avatar render weight POST result received but region not found for "
                 << regionHandle << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLSD httpResults = result["http_result"];
@@ -285,7 +285,7 @@ void LLAvatarRenderInfoAccountant::avatarRenderInfoReportCoro(std::string url, U
     if (!status)
     {
         LL_WARNS("AvatarRenderInfoAccountant") << "HTTP status, " << status.toTerseString() << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (result.isMap())

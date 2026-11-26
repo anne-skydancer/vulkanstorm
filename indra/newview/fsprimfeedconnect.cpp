@@ -51,11 +51,11 @@ void FSPrimfeedConnect::uploadPhoto(const LLSD& params, LLImageFormatted* image,
     LL_DEBUGS("primfeed") << "Launching upload coroutine" << LL_ENDL;
     LLCoros::instance().launch(
         "FSPrimfeedConnect::uploadPhotoCoro",
-        [this, params, image]() { uploadPhotoCoro(params, image); }
+        [this, params, image]() { return uploadPhotoCoro(params, image); }
     );
 }
 
-void FSPrimfeedConnect::uploadPhotoCoro(const LLSD& params, LLImageFormatted* image)
+LL::Task<void> FSPrimfeedConnect::uploadPhotoCoro(LLSD params, LLImageFormatted* image)
 {
     LL_DEBUGS("primfeed") << "Entered uploadPhotoCoro" << LL_ENDL;
     setConnectionState(PRIMFEED_POSTING);
@@ -131,7 +131,7 @@ void FSPrimfeedConnect::uploadPhotoCoro(const LLSD& params, LLImageFormatted* im
     LL_DEBUGS("primfeed") << "Headers set" << LL_ENDL;
 
     LL_DEBUGS("primfeed") << "Starting HTTP POST" << LL_ENDL;
-    LLSD result = adapter.postRawAndSuspend(request,
+    LLSD result = co_await adapter.postRawAndSuspend(request,
         "https://api.primfeed.com/pf/viewer/post",
         raw,
         options,

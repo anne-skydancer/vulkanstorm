@@ -2014,7 +2014,7 @@ void LLGroupMgr::sendGroupMemberEjects(const LLUUID& group_id,
     group_datap->mMemberVersion.generate();
 }
 
-void LLGroupMgr::getGroupBanRequestCoro(std::string url, LLUUID group_id)
+LL::Task<void> LLGroupMgr::getGroupBanRequestCoro(std::string url, LLUUID group_id)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -2023,7 +2023,7 @@ void LLGroupMgr::getGroupBanRequestCoro(std::string url, LLUUID group_id)
 
     std::string finalUrl = url + "?group_id=" + group_id.asString();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, finalUrl);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, finalUrl);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -2031,7 +2031,7 @@ void LLGroupMgr::getGroupBanRequestCoro(std::string url, LLUUID group_id)
     if (!status)
     {
         LL_WARNS("GrpMgr") << "Error receiving group member data " << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (result.has("ban_list"))
@@ -2042,7 +2042,7 @@ void LLGroupMgr::getGroupBanRequestCoro(std::string url, LLUUID group_id)
     }
 }
 
-void LLGroupMgr::postGroupBanRequestCoro(std::string url, LLUUID group_id,
+LL::Task<void> LLGroupMgr::postGroupBanRequestCoro(std::string url, LLUUID group_id,
     U32 action, uuid_vec_t ban_list, bool update)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -2070,7 +2070,7 @@ void LLGroupMgr::postGroupBanRequestCoro(std::string url, LLUUID group_id,
 
     LL_WARNS() << "post: " << ll_pretty_print_sd(postData) << LL_ENDL;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, finalUrl, postData, httpOptions, httpHeaders);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, finalUrl, postData, httpOptions, httpHeaders);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -2078,7 +2078,7 @@ void LLGroupMgr::postGroupBanRequestCoro(std::string url, LLUUID group_id,
     if (!status)
     {
         LL_WARNS("GrpMgr") << "Error posting group member data " << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (result.has("ban_list"))
@@ -2090,7 +2090,7 @@ void LLGroupMgr::postGroupBanRequestCoro(std::string url, LLUUID group_id,
 
     if (update)
     {
-        getGroupBanRequestCoro(url, group_id);
+        co_await getGroupBanRequestCoro(url, group_id);
     }
 }
 
@@ -2177,7 +2177,7 @@ void LLGroupMgr::processGroupBanRequest(const LLSD& content)
     LLGroupMgr::getInstance()->notifyObservers(GC_BANLIST);
 }
 
-void LLGroupMgr::groupMembersRequestCoro(std::string url, LLUUID group_id, U32 page_size, U32 page_start, U32 sort_column, bool sort_descending)
+LL::Task<void> LLGroupMgr::groupMembersRequestCoro(std::string url, LLUUID group_id, U32 page_size, U32 page_start, U32 sort_column, bool sort_descending)
 {
     LL_INFOS("GrpMgr") << "group_id: '" << group_id << "'"
         << ", page_size: " << page_size << ", page_start: " << page_start
@@ -2211,7 +2211,7 @@ void LLGroupMgr::groupMembersRequestCoro(std::string url, LLUUID group_id, U32 p
 
     mMemberRequestInFlight = true;
 
-    LLSD response = httpAdapter->postAndSuspend(httpRequest, url, postData, httpOpts);
+    LLSD response = co_await httpAdapter->postAndSuspend(httpRequest, url, postData, httpOpts);
 
     mMemberRequestInFlight = false;
 
@@ -2221,7 +2221,7 @@ void LLGroupMgr::groupMembersRequestCoro(std::string url, LLUUID group_id, U32 p
     if (!status)
     {
         LL_WARNS("GrpMgr") << "Error receiving group member data " << LL_ENDL;
-        return;
+        co_return;
     }
 
     response.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
@@ -2288,9 +2288,10 @@ void LLGroupMgr::sendCapGroupMembersRequest(const LLUUID& group_id, U32 page_siz
         }
     }
 
-    LLCoros::instance().launch("LLGroupMgr::groupMembersRequestCoro", [&]()
+    LLCoros::instance().launch("LLGroupMgr::groupMembersRequestCoro",
+        [this, cap_url, group_id, page_size, page_start, sort_column, sort_descending]()
         {
-            groupMembersRequestCoro(cap_url, group_id, page_size, page_start, sort_column, sort_descending);
+            return groupMembersRequestCoro(cap_url, group_id, page_size, page_start, sort_column, sort_descending);
         });
 }
 
@@ -2419,9 +2420,10 @@ void LLGroupMgr::processCapGroupMembersResponse(const LLSD& response, const std:
 
     if (page_size && members_loaded >= page_size && member_count > members_before)
     {
-        LLCoros::instance().launch("LLGroupMgr::groupMembersRequestCoro", [&]()
+        LLCoros::instance().launch("LLGroupMgr::groupMembersRequestCoro",
+            [this, url, group_id, page_size, page_start, sort_column, sort_descending]()
             {
-                groupMembersRequestCoro(url, group_id, page_size, page_start, sort_column, sort_descending);
+                return groupMembersRequestCoro(url, group_id, page_size, page_start, sort_column, sort_descending);
             });
     }
 

@@ -7056,11 +7056,12 @@ void LLAppViewer::forceErrorCoroprocedureCrash()
 {
     LL_WARNS() << "Forcing a crash in LLCoprocedureManager" << LL_ENDL;
     LLCoprocedureManager::instance().enqueueCoprocedure("Upload", "DeliberateCrash",
-        [](LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t&, const LLUUID&)
+        [](LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID) -> LL::Task<void>
     {
         LL_WARNS() << "Forcing a deliberate bad memory access from LLCoprocedureManager" << LL_ENDL;
         S32* crash = NULL;
         *crash = 0xDEADBEEF;
+        co_return;
     });
 }
 

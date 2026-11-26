@@ -45,7 +45,7 @@ LLAccountingCostManager::LLAccountingCostManager()
 // Coroutine for sending and processing avatar name cache requests.
 // Do not call directly.  See documentation in lleventcoro.h and llcoro.h for
 // further explanation.
-void LLAccountingCostManager::accountingCostCoro(std::string url,
+LL::Task<void> LLAccountingCostManager::accountingCostCoro(std::string url,
     eSelectionType selectionType, const LLHandle<LLAccountingCostObserver> observerHandle)
 {
     LL_DEBUGS("LLAccountingCostManager") << "Entering coroutine " << LLCoros::getName()
@@ -68,7 +68,7 @@ void LLAccountingCostManager::accountingCostCoro(std::string url,
                             std::inserter(diffSet, diffSet.begin()));
 
         if (diffSet.empty())
-            return;
+            co_return;
 
         self->mObjectList.clear();
 
@@ -84,7 +84,7 @@ void LLAccountingCostManager::accountingCostCoro(std::string url,
         else
         {
             LL_INFOS() << "Invalid selection type " << LL_ENDL;
-            return;
+            co_return;
         }
 
         LLSD objectList(LLSD::emptyMap());
@@ -99,7 +99,7 @@ void LLAccountingCostManager::accountingCostCoro(std::string url,
         LLSD dataToPost = LLSD::emptyMap();
         dataToPost[keystr.c_str()] = objectList;
 
-        LLSD results = httpAdapter->postAndSuspend(httpRequest, url, dataToPost);
+        LLSD results = co_await httpAdapter->postAndSuspend(httpRequest, url, dataToPost);
 
         LLSD httpResults = results["http_result"];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -108,7 +108,7 @@ void LLAccountingCostManager::accountingCostCoro(std::string url,
             || observerHandle.isDead()
             || !LLAccountingCostManager::instanceExists())
         {
-            return;
+            co_return;
         }
 
         LLAccountingCostObserver* observer = NULL;

@@ -264,22 +264,20 @@ FSDiscordConnect::~FSDiscordConnect()
 
 void FSDiscordConnect::connectToDiscord()
 {
-    LLCoros::instance().launch("FSDiscordConnect::discordConnectCoro",
-        std::bind(&FSDiscordConnect::discordConnectCoro, this));
+    // These three never wait: plain calls (they were launched as coroutines that ran to their end at once).
+    discordConnectCoro();
 }
 
 void FSDiscordConnect::disconnectFromDiscord()
 {
     setConnectionState(FSDiscordConnect::DISCORD_DISCONNECTING);
 
-    LLCoros::instance().launch("FSDiscordConnect::discordDisconnectCoro",
-        std::bind(&FSDiscordConnect::discordDisconnectCoro, this));
+    discordDisconnectCoro();
 }
 
 void FSDiscordConnect::checkConnectionToDiscord(bool auto_connect)
 {
-    LLCoros::instance().launch("FSDiscordConnect::discordConnectedCoro",
-        std::bind(&FSDiscordConnect::discordConnectedCoro, this, auto_connect));
+    discordConnectedCoro(auto_connect);
 }
 
 bool FSDiscordConnect::Tick(const LLSD&)

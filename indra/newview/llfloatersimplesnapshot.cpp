@@ -50,7 +50,7 @@ const S32 LLFloaterSimpleSnapshot::THUMBNAIL_SNAPSHOT_DIM_MIN = 64;
 
 static const std::string THUMBNAIL_UPLOAD_CAP = "InventoryThumbnailUpload";
 
-void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, LLSD first_data, LLFloaterSimpleSnapshot::completion_t callback)
+LL::Task<void> post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, LLSD first_data, LLFloaterSimpleSnapshot::completion_t callback)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -69,7 +69,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
     while (upload_retry_count <= MAX_UPLOAD_RETRIES)
     {
         // Stage 1: Request uploader URL
-        LLSD result = httpAdapter->postAndSuspend(httpRequest, cap_url, first_data, httpOpts, httpHeaders);
+        LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, cap_url, first_data, httpOpts, httpHeaders);
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -82,7 +82,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
                 callback(LLUUID());
             }
             LLFile::remove(path_to_image);
-            return;
+            co_return;
         }
 
         if (!result.has("uploader"))
@@ -93,7 +93,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
                 callback(LLUUID());
             }
             LLFile::remove(path_to_image);
-            return;
+            co_return;
         }
 
         std::string uploader_cap = result["uploader"].asString();
@@ -105,7 +105,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
                 callback(LLUUID());
             }
             LLFile::remove(path_to_image);
-            return;
+            co_return;
         }
 
         // Stage 2: Upload the image
@@ -124,7 +124,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
                     callback(LLUUID());
                 }
                 LLFile::remove(path_to_image);
-                return;
+                co_return;
             }
             length = instream.tellg();
         }
@@ -133,7 +133,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
         uploaderhttpHeaders->append(HTTP_OUT_HEADER_CONTENT_LENGTH, std::to_string(length));
         uploaderhttpOpts->setFollowRedirects(true);
 
-        result = httpAdapter->postFileAndSuspend(uploaderhttpRequest, uploader_cap, path_to_image, uploaderhttpOpts, uploaderhttpHeaders);
+        result = co_await httpAdapter->postFileAndSuspend(uploaderhttpRequest, uploader_cap, path_to_image, uploaderhttpOpts, uploaderhttpHeaders);
 
         httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -148,7 +148,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
                 LL_WARNS("Thumbnail") << "Failed to upload image (attempt " << upload_retry_count
                                      << " of " << (MAX_UPLOAD_RETRIES + 1) << "): " << status.toString()
                                      << ", re-requesting uploader..." << LL_ENDL;
-                llcoro::suspendUntilTimeout(1.0f);
+                co_await llcoro::co::suspendUntilTimeout(1.0f);
                 continue;
             }
             else
@@ -160,7 +160,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
                     callback(LLUUID());
                 }
                 LLFile::remove(path_to_image);
-                return;
+                co_return;
             }
         }
 
@@ -182,7 +182,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
                                          << " of " << (MAX_UPLOAD_RETRIES + 1)
                                          << "), re-requesting uploader..." << LL_ENDL;
                 }
-                llcoro::suspendUntilTimeout(1.0f);
+                co_await llcoro::co::suspendUntilTimeout(1.0f);
                 continue;
             }
             else
@@ -203,7 +203,7 @@ void post_thumbnail_image_coro(std::string cap_url, std::string path_to_image, L
                     callback(LLUUID());
                 }
                 LLFile::remove(path_to_image);
-                return;
+                co_return;
             }
         }
 

@@ -4304,19 +4304,19 @@ void LLPanelEstateAccess::updateLists()
     }
 }
 
-void LLPanelEstateAccess::requestEstateGetAccessCoro(std::string url)
+LL::Task<void> LLPanelEstateAccess::requestEstateGetAccessCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("requestEstateGetAccessoCoro", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
     LLPanelEstateAccess* panel = LLFloaterRegionInfo::getPanelAccess();
-    if (!panel) return;
+    if (!panel) co_return;
 
     LLNameListCtrl* allowed_agent_name_list = panel->getChild<LLNameListCtrl>("allowed_avatar_name_list");
     if (allowed_agent_name_list && result.has("AllowedAgents"))

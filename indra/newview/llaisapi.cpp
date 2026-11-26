@@ -140,7 +140,7 @@ void AISAPI::CreateInventory(const LLUUID& parentId, const LLSD& newInventory, c
     //
     invokationFn_t postFn = boost::bind(
         // Humans ignore next line.  It is just a cast.
-        static_cast<LLSD (LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, const LLSD &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLSD, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -177,7 +177,7 @@ void AISAPI::SlamFolder(const LLUUID& folderId, const LLSD& newInventory, comple
     // see comment above in CreateInventoryCommand
     invokationFn_t putFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, const LLSD &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLSD, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -213,7 +213,7 @@ void AISAPI::RemoveCategory(const LLUUID &categoryId, completion_t callback)
 
     invokationFn_t delFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -250,7 +250,7 @@ void AISAPI::RemoveItem(const LLUUID &itemId, completion_t callback)
 
     invokationFn_t delFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -297,7 +297,7 @@ void AISAPI::CopyLibraryCategory(const LLUUID& sourceId, const LLUUID& destId, b
 
     invokationFn_t copyFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, const std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -334,7 +334,7 @@ void AISAPI::PurgeDescendents(const LLUUID &categoryId, completion_t callback)
 
     invokationFn_t delFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -370,7 +370,7 @@ void AISAPI::UpdateCategory(const LLUUID &categoryId, const LLSD &updates, compl
 
     invokationFn_t patchFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, const LLSD &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLSD, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -406,7 +406,7 @@ void AISAPI::UpdateItem(const LLUUID &itemId, const LLSD &updates, completion_t 
 
     invokationFn_t patchFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, const LLSD &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLSD, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -441,7 +441,7 @@ void AISAPI::FetchItem(const LLUUID &itemId, ITEM_TYPE type, completion_t callba
 
     invokationFn_t getFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -489,7 +489,7 @@ void AISAPI::FetchCategoryChildren(const LLUUID &catId, ITEM_TYPE type, bool rec
 
     invokationFn_t getFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -542,7 +542,7 @@ void AISAPI::FetchCategoryChildren(const std::string &identifier, bool recursive
 
     invokationFn_t getFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -593,7 +593,7 @@ void AISAPI::FetchCategoryCategories(const LLUUID &catId, ITEM_TYPE type, bool r
 
     invokationFn_t getFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -670,7 +670,7 @@ void AISAPI::FetchCategorySubset(const LLUUID& catId,
 
     invokationFn_t getFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string&, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -707,7 +707,7 @@ void AISAPI::FetchCOF(completion_t callback)
 
     invokationFn_t getFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string&, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -743,7 +743,7 @@ void AISAPI::FetchCategoryLinks(const LLUUID &catId, completion_t callback)
 
     invokationFn_t getFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD (LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &,
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string,
                                                                    LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
@@ -780,7 +780,7 @@ void AISAPI::FetchOrphans(completion_t callback)
 
     invokationFn_t getFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t , const std::string& , LLCore::HttpOptions::ptr_t , LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t , std::string , LLCore::HttpOptions::ptr_t , LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -847,7 +847,7 @@ void AISAPI::onIdle(void *userdata)
 }
 
 /*static*/
-void AISAPI::onUpdateReceived(const LLSD& update, COMMAND_TYPE type, const LLSD& request_body)
+LL::Task<void> AISAPI::onUpdateReceived(LLSD update, COMMAND_TYPE type, LLSD request_body)
 {
     LLTimer timer;
     if ( (type == UPDATECATEGORY || type == UPDATEITEM)
@@ -856,13 +856,15 @@ void AISAPI::onUpdateReceived(const LLSD& update, COMMAND_TYPE type, const LLSD&
         dump_sequential_xml(gAgentAvatarp->getDebugName() + "_ais_update", update);
     }
 
-    AISUpdate ais_update(update, type, request_body);
-    ais_update.doUpdate(); // execute the updates in the appropriate order.
+    AISUpdate ais_update(type, request_body);
+    // The parse waits (checkTimeout) when it runs long, which a constructor cannot do.
+    co_await ais_update.parseUpdate(update);
+    co_await ais_update.doUpdate(); // execute the updates in the appropriate order.
     LL_DEBUGS("Inventory", "AIS3") << "Elapsed processing: " << timer.getElapsedTimeF32() << LL_ENDL;
 }
 
 /*static*/
-void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter,
+LL::Task<void> AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter,
         invokationFn_t invoke, std::string url,
         LLUUID targetId, LLSD body, completion_t callback, COMMAND_TYPE type)
 {
@@ -872,7 +874,7 @@ void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ht
         {
             callback(LLUUID::null);
         }
-        return;
+        co_return;
     }
 
     LLCore::HttpOptions::ptr_t httpOptions = std::make_shared<LLCore::HttpOptions>();
@@ -888,7 +890,7 @@ void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ht
     LLCore::HttpStatus status;
 
     httpAdapter->setLLSDMaxDepth(AIS_MAX_REPLY_DEPTH); // <Vulkanstorm/> the AIS depth cap
-    result = invoke(httpAdapter , httpRequest , url , body , httpOptions , httpHeaders);
+    result = co_await invoke(httpAdapter , httpRequest , url , body , httpOptions , httpHeaders);
     httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -963,7 +965,7 @@ void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ht
     }
 
     LL_DEBUGS("Inventory", "AIS3") << "Result: " << result << LL_ENDL;
-    onUpdateReceived(result, type, body);
+    co_await onUpdateReceived(result, type, body);
 
     if (callback != nullptr)
     {
@@ -1057,7 +1059,7 @@ void AISAPI::InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ht
 U32 AISUpdate::sBatchFrameCount = 0;
 LLTimer AISUpdate::sBatchTimer;
 
-AISUpdate::AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& request_body)
+AISUpdate::AISUpdate(AISAPI::COMMAND_TYPE type, const LLSD& request_body)
 : mType(type)
 {
     mFetch = (type == AISAPI::FETCHITEM)
@@ -1085,7 +1087,6 @@ AISUpdate::AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& 
         sBatchTimer.setTimerExpirySec(AIS_BATCH_EXPIRY_SECONDS);
         sBatchFrameCount = current_frame;
     }
-    parseUpdate(update);
 }
 
 void AISUpdate::clearParseResults()
@@ -1103,7 +1104,7 @@ void AISUpdate::clearParseResults()
     mCategoryIds.clear();
 }
 
-void AISUpdate::checkTimeout()
+LL::Task<void> AISUpdate::checkTimeout()
 {
     // Loop: every waiting update resumes on the same frame event, so the
     // frame's shared batch budget may already be spent when this one runs.
@@ -1114,7 +1115,7 @@ void AISUpdate::checkTimeout()
         // If we use normal suspend(), there will be a chance of
         // waking up from other suspends, before main coro had
         // a chance, so wait for a frame tick instead.
-        llcoro::suspendUntilNextFrame();
+        co_await llcoro::co::suspendUntilNextFrame();
         LLCoros::checkStop();
         mTaskTimer.setTimerExpirySec(AIS_TASK_EXPIRY_SECONDS);
 
@@ -1129,11 +1130,11 @@ void AISUpdate::checkTimeout()
     }
 }
 
-void AISUpdate::parseUpdate(const LLSD& update)
+LL::Task<void> AISUpdate::parseUpdate(LLSD update)
 {
     clearParseResults();
     parseMeta(update);
-    parseContent(update);
+    co_await parseContent(update);
 }
 
 void AISUpdate::parseMeta(const LLSD& update)
@@ -1214,7 +1215,7 @@ void AISUpdate::parseMeta(const LLSD& update)
     }
 }
 
-void AISUpdate::parseContent(const LLSD& update)
+LL::Task<void> AISUpdate::parseContent(LLSD update)
 {
     // Errors from a fetch request might contain id without
     // full item or folder.
@@ -1222,7 +1223,7 @@ void AISUpdate::parseContent(const LLSD& update)
     // like removing a 404 item or refetching parent folder
     if (update.has("linked_id") && update.has("parent_id"))
     {
-        parseLink(update, mFetchDepth);
+        co_await parseLink(update, mFetchDepth);
     }
     else if (update.has("item_id") && update.has("parent_id"))
     {
@@ -1235,18 +1236,18 @@ void AISUpdate::parseContent(const LLSD& update)
         // go for content instead
         if (update.has("_embedded"))
         {
-            parseEmbedded(update["_embedded"], mFetchDepth - 1);
+            co_await parseEmbedded(update["_embedded"], mFetchDepth - 1);
         }
     }
     else if (update.has("category_id") && update.has("parent_id"))
     {
-        parseCategory(update, mFetchDepth);
+        co_await parseCategory(update, mFetchDepth);
     }
     else
     {
         if (update.has("_embedded"))
         {
-            parseEmbedded(update["_embedded"], mFetchDepth);
+            co_await parseEmbedded(update["_embedded"], mFetchDepth);
         }
     }
 }
@@ -1296,7 +1297,7 @@ void AISUpdate::parseItem(const LLSD& item_map)
     }
 }
 
-void AISUpdate::parseLink(const LLSD& link_map, S32 depth)
+LL::Task<void> AISUpdate::parseLink(LLSD link_map, S32 depth)
 {
     LLUUID item_id = link_map["item_id"].asUUID();
     LLPointer<LLViewerInventoryItem> new_link(new LLViewerInventoryItem);
@@ -1351,7 +1352,7 @@ void AISUpdate::parseLink(const LLSD& link_map, S32 depth)
 
         if (link_map.has("_embedded"))
         {
-            parseEmbedded(link_map["_embedded"], depth);
+            co_await parseEmbedded(link_map["_embedded"], depth);
         }
     }
     else
@@ -1362,7 +1363,7 @@ void AISUpdate::parseLink(const LLSD& link_map, S32 depth)
 }
 
 
-void AISUpdate::parseCategory(const LLSD& category_map, S32 depth)
+LL::Task<void> AISUpdate::parseCategory(LLSD category_map, S32 depth)
 {
     LLUUID category_id = category_map["category_id"].asUUID();
     S32 version = LLViewerInventoryCategory::VERSION_UNKNOWN;
@@ -1391,7 +1392,7 @@ void AISUpdate::parseCategory(const LLSD& category_map, S32 depth)
             curr_cat->fetch();
         }
         // </FS:Beq>
-        return;
+        co_return;
     }
 
     LLPointer<LLViewerInventoryCategory> new_cat;
@@ -1506,7 +1507,7 @@ void AISUpdate::parseCategory(const LLSD& category_map, S32 depth)
     // Check for more embedded content.
     if (category_map.has("_embedded"))
     {
-        parseEmbedded(category_map["_embedded"], depth - 1);
+        co_await parseEmbedded(category_map["_embedded"], depth - 1);
     }
 }
 
@@ -1528,13 +1529,13 @@ void AISUpdate::parseDescendentCount(const LLUUID& category_id, LLFolderType::ET
     }
 }
 
-void AISUpdate::parseEmbedded(const LLSD& embedded, S32 depth)
+LL::Task<void> AISUpdate::parseEmbedded(LLSD embedded, S32 depth)
 {
-    checkTimeout();
+    co_await checkTimeout();
 
     if (embedded.has("links")) // _embedded in a category
     {
-        parseEmbeddedLinks(embedded["links"], depth);
+        co_await parseEmbeddedLinks(embedded["links"], depth);
     }
     if (embedded.has("items")) // _embedded in a category
     {
@@ -1546,11 +1547,11 @@ void AISUpdate::parseEmbedded(const LLSD& embedded, S32 depth)
     }
     if (embedded.has("categories")) // _embedded in a category
     {
-        parseEmbeddedCategories(embedded["categories"], depth);
+        co_await parseEmbeddedCategories(embedded["categories"], depth);
     }
     if (embedded.has("category")) // _embedded in a link
     {
-        parseEmbeddedCategory(embedded["category"], depth);
+        co_await parseEmbeddedCategory(embedded["category"], depth);
     }
 }
 
@@ -1567,7 +1568,7 @@ void AISUpdate::parseUUIDArray(const LLSD& content, const std::string& name, uui
     }
 }
 
-void AISUpdate::parseEmbeddedLinks(const LLSD& links, S32 depth)
+LL::Task<void> AISUpdate::parseEmbeddedLinks(LLSD links, S32 depth)
 {
     for(LLSD::map_const_iterator linkit = links.beginMap(),
             linkend = links.endMap();
@@ -1581,7 +1582,7 @@ void AISUpdate::parseEmbeddedLinks(const LLSD& links, S32 depth)
         }
         else
         {
-            parseLink(link_map, depth);
+            co_await parseLink(link_map, depth);
         }
     }
 }
@@ -1618,19 +1619,19 @@ void AISUpdate::parseEmbeddedItems(const LLSD& items)
     }
 }
 
-void AISUpdate::parseEmbeddedCategory(const LLSD& category, S32 depth)
+LL::Task<void> AISUpdate::parseEmbeddedCategory(LLSD category, S32 depth)
 {
     // a single category (_embedded in a link)
     if (category.has("category_id"))
     {
         if (mFetch || mCategoryIds.end() != mCategoryIds.find(category["category_id"].asUUID()))
         {
-            parseCategory(category, depth);
+            co_await parseCategory(category, depth);
         }
     }
 }
 
-void AISUpdate::parseEmbeddedCategories(const LLSD& categories, S32 depth)
+LL::Task<void> AISUpdate::parseEmbeddedCategories(LLSD categories, S32 depth)
 {
     // a map of categories (_embedded in a category)
     for(LLSD::map_const_iterator categoryit = categories.beginMap(),
@@ -1645,14 +1646,14 @@ void AISUpdate::parseEmbeddedCategories(const LLSD& categories, S32 depth)
         }
         else
         {
-            parseCategory(category_map, depth);
+            co_await parseCategory(category_map, depth);
         }
     }
 }
 
-void AISUpdate::doUpdate()
+LL::Task<void> AISUpdate::doUpdate()
 {
-    checkTimeout();
+    co_await checkTimeout();
 
     // Do version/descendant accounting.
     for (std::map<LLUUID,size_t>::const_iterator catit = mCatDescendentDeltas.begin();
@@ -1714,7 +1715,7 @@ void AISUpdate::doUpdate()
         if (gInventory.getChangedIDs().size() > MAX_UPDATE_BACKLOG)
         {
             gInventory.notifyObservers();
-            checkTimeout();
+            co_await checkTimeout();
         }
     }
 
@@ -1775,7 +1776,7 @@ void AISUpdate::doUpdate()
         if (gInventory.getChangedIDs().size() > MAX_UPDATE_BACKLOG)
         {
             gInventory.notifyObservers();
-            checkTimeout();
+            co_await checkTimeout();
         }
     }
 
@@ -1867,7 +1868,7 @@ void AISUpdate::doUpdate()
         }
     }
 
-    checkTimeout();
+    co_await checkTimeout();
 
     gInventory.notifyObservers();
 }

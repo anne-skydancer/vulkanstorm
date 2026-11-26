@@ -32,6 +32,7 @@
 #include "v3dmath.h"    // LLVector3d
 #include <list>
 #include <map>
+#include "lltask.h"
 
 // For Flags in AvatarPropertiesReply
 const U32 AVATAR_ALLOW_PUBLISH          = 0x1 << 0; // whether profile is externally visible or not
@@ -310,7 +311,7 @@ public:
 
     static bool hasPaymentInfoOnFile(const LLAvatarData* avatar_data);
 
-    static void requestAvatarPropertiesCoro(std::string cap_url, LLUUID avatar_id, EAvatarProcessorType type);
+    static LL::Task<void> requestAvatarPropertiesCoro(std::string cap_url, LLUUID avatar_id, EAvatarProcessorType type);
 
     // Processing of UDP variant of properties, truncates certain fields!
     static void processAvatarLegacyPropertiesReply(LLMessageSystem* msg, void**);

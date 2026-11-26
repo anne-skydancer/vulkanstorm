@@ -89,14 +89,14 @@ bool LLFloaterMyScripts::requestAttachmentDetails()
     }
 }
 
-void LLFloaterMyScripts::getAttachmentLimitsCoro(std::string url)
+LL::Task<void> LLFloaterMyScripts::getAttachmentLimitsCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("getAttachmentLimitsCoro", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -104,7 +104,7 @@ void LLFloaterMyScripts::getAttachmentLimitsCoro(std::string url)
     if (!status)
     {
         LL_WARNS() << "Unable to retrieve attachment limits." << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLFloaterMyScripts* instance = LLFloaterReg::getTypedInstance<LLFloaterMyScripts>("my_scripts");
@@ -112,7 +112,7 @@ void LLFloaterMyScripts::getAttachmentLimitsCoro(std::string url)
     if (!instance)
     {
         LL_WARNS() << "Failed to get LLFloaterMyScripts instance" << LL_ENDL;
-        return;
+        co_return;
     }
 
     instance->getChild<LLUICtrl>("loading_text")->setValue(LLSD(std::string("")));

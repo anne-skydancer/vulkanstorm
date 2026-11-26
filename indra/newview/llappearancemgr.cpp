@@ -4168,25 +4168,25 @@ void LLAppearanceMgr::requestServerAppearanceUpdate()
     }
 }
 
-void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter)
+LL::Task<void> LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter)
 {
     BoolSetter outstanding(mOutstandingAppearanceBakeRequest);
     if (!gAgent.getRegion())
     {
         LL_WARNS("Avatar") << "Region not set, cannot request server appearance update" << LL_ENDL;
-        return;
+        co_return;
     }
     if (gAgent.getRegion()->getCentralBakeVersion() == 0)
     {
         LL_WARNS("Avatar") << "Region does not support baking" << LL_ENDL;
-        return;
+        co_return;
     }
 
     std::string url = gAgent.getRegion()->getCapability("UpdateAvatarAppearance");
     if (url.empty())
     {
         LL_WARNS("Agent") << "Could not retrieve region capability \"UpdateAvatarAppearance\"" << LL_ENDL;
-        return;
+        co_return;
     }
 
     //----------------
@@ -4194,13 +4194,13 @@ void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAd
     {
         LL_WARNS("Avatar") << "Avatar editing appearance, not sending request." << LL_ENDL;
         // don't send out appearance updates if in appearance editing mode
-        return;
+        co_return;
     }
 
-    llcoro::suspend();
+    co_await llcoro::co::suspend();
     if (LLApp::isExiting())
     {
-        return;
+        co_return;
     }
     S32 retryCount(0);
     bool bRetry;
@@ -4219,7 +4219,7 @@ void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAd
         if (cofVersion == LLViewerInventoryCategory::VERSION_UNKNOWN)
         {
             LL_INFOS("AVatar") << "COF version is unknown... not requesting until COF version is known." << LL_ENDL;
-            return;
+            co_return;
         }
         else
         {
@@ -4227,13 +4227,13 @@ void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAd
             {
                 LL_WARNS("Avatar") << "Have already received update for cof version " << lastRcv
                     << " but requesting for " << cofVersion << LL_ENDL;
-                return;
+                co_return;
             }
             if (lastReq >= cofVersion)
             {
                 LL_WARNS("Avatar") << "Request already in flight for cof version " << lastReq
                     << " but requesting for " << cofVersion << LL_ENDL;
-                return;
+                co_return;
             }
         }
 
@@ -4263,11 +4263,11 @@ void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAd
 
         gAgentAvatarp->mLastUpdateRequestCOFVersion = cofVersion;
 
-        LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+        LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData);
 
         if (LLApp::isExiting())
         {
-            return;
+            co_return;
         }
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
@@ -4304,10 +4304,10 @@ void LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAd
 
                 LL_WARNS("Avatar") << "Bake retry #" << retryCount << " in " << timeout << " seconds." << LL_ENDL;
 
-                llcoro::suspendUntilTimeout(timeout);
+                co_await llcoro::co::suspendUntilTimeout(timeout);
                 if (LLApp::isExiting())
                 {
-                    return;
+                    co_return;
                 }
                 bRetry = true;
                 continue;
@@ -4336,20 +4336,20 @@ void LLAppearanceMgr::syncCofVersionAndRefresh()
         boost::bind(&LLAppearanceMgr::syncCofVersionAndRefreshCoro, this));
 }
 
-void LLAppearanceMgr::syncCofVersionAndRefreshCoro()
+LL::Task<void> LLAppearanceMgr::syncCofVersionAndRefreshCoro()
 {
     // If we don't have a region, report it as an error
     if (gAgent.getRegion() == NULL)
     {
         LL_WARNS("Avatar") << "Region not set, cannot request cof_version increment" << LL_ENDL;
-        return;
+        co_return;
     }
 
     std::string url = gAgent.getRegion()->getCapability("IncrementCOFVersion");
     if (url.empty())
     {
         LL_WARNS("Avatar") << "No cap for IncrementCofVersion." << LL_ENDL;
-        return;
+        co_return;
     }
 
     LL_INFOS("Avatar") << "Requesting cof_version be incremented via capability to: " << url << LL_ENDL;
@@ -4357,7 +4357,7 @@ void LLAppearanceMgr::syncCofVersionAndRefreshCoro()
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter(
         new LLCoreHttpUtil::HttpCoroutineAdapter("syncCofVersionAndRefreshCoro", LLCore::HttpRequest::DEFAULT_POLICY_ID));
 
-    llcoro::suspend();
+    co_await llcoro::co::suspend();
     S32 retryCount(0);
     bool bRetry;
     do
@@ -4368,7 +4368,7 @@ void LLAppearanceMgr::syncCofVersionAndRefreshCoro()
         bRetry = false;
         LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-        LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+        LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -4388,7 +4388,7 @@ void LLAppearanceMgr::syncCofVersionAndRefreshCoro()
 
             LL_WARNS("Avatar") << "COF increment retry #" << retryCount << " in " << timeout << " seconds." << LL_ENDL;
 
-            llcoro::suspendUntilTimeout(timeout);
+            co_await llcoro::co::suspendUntilTimeout(timeout);
             bRetry = true;
         }
         else

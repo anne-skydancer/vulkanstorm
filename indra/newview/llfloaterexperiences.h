@@ -29,6 +29,7 @@
 
 #include "llfloater.h"
 #include "llcorehttputil.h"
+#include "lltask.h"
 
 class LLPanelExperiences;
 
@@ -65,10 +66,10 @@ protected:
         const std::string &errorNotify, Callback_t cback);
 
 private:
-    typedef std::function<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLCore::HttpRequest::ptr_t,
-        const std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t) > invokationFn_t;
+    typedef std::function<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLCore::HttpRequest::ptr_t,
+        std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t) > invokationFn_t;
 
-    static void retrieveExperienceListCoro(std::string url, LLHandle<LLFloaterExperiences> hparent,
+    static LL::Task<void> retrieveExperienceListCoro(std::string url, LLHandle<LLFloaterExperiences> hparent,
         NameMap_t tabMapping, std::string errorNotify, Callback_t cback, invokationFn_t invoker);
     std::vector<LLUUID> mPrepurchaseIds;
     boost::signals2::scoped_connection mCapsReceivedConnection;

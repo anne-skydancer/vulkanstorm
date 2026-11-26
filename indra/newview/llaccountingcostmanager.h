@@ -30,6 +30,7 @@
 #include "llhandle.h"
 
 #include "llaccountingcost.h"
+#include "lltask.h"
 
 //===============================================================================
 // An interface class for panels which display the parcel accounting information.
@@ -70,7 +71,7 @@ private:
     //a fetch has been instigated.
     uuid_set_t mPendingObjectQuota;
 
-    static void accountingCostCoro(std::string url, eSelectionType selectionType, const LLHandle<LLAccountingCostObserver> observerHandle);
+    static LL::Task<void> accountingCostCoro(std::string url, eSelectionType selectionType, const LLHandle<LLAccountingCostObserver> observerHandle);
 
 };
 //===============================================================================

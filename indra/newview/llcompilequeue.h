@@ -35,6 +35,7 @@
 #include "llscrolllistctrl.h"
 
 #include "llevents.h"
+#include "lltask.h"
 
 // <FS:KC> [LSL PreProc]
 class FSLSLPreprocessor;
@@ -124,8 +125,8 @@ protected:
     std::string mStartString;
     std::string mCompileTarget { "lsl2" };
 
-    typedef std::function<bool(const LLPointer<LLViewerObject> &, LLInventoryObject*, LLEventPump &)>   fnQueueAction_t;
-    static void objectScriptProcessingQueueCoro(std::string action, LLHandle<LLFloaterScriptQueue> hfloater, object_data_list_t objectList, fnQueueAction_t func);
+    typedef std::function<LL::Task<bool>(LLPointer<LLViewerObject>, LLInventoryObject*, LLEventPump*)>   fnQueueAction_t;
+    static LL::Task<void> objectScriptProcessingQueueCoro(std::string action, LLHandle<LLFloaterScriptQueue> hfloater, object_data_list_t objectList, fnQueueAction_t func);
 };
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -160,7 +161,7 @@ protected:
 
     virtual bool startQueue();
 
-    static bool processScript(LLHandle<LLFloaterCompileQueue> hfloater, const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump);
+    static LL::Task<bool> processScript(LLHandle<LLFloaterCompileQueue> hfloater, LLPointer<LLViewerObject> object, LLInventoryObject* inventory, LLEventPump* pump);
 
     //bool checkAssetId(const LLUUID &assetId);
     static void handleHTTPResponse(std::string pumpName, const LLSD &expresult);
@@ -188,7 +189,7 @@ protected:
     LLFloaterResetQueue(const LLSD& key);
     virtual ~LLFloaterResetQueue();
 
-    static bool resetObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump);
+    static LL::Task<bool> resetObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, LLPointer<LLViewerObject> object, LLInventoryObject* inventory, LLEventPump* pump);
 
     virtual bool startQueue();
 };
@@ -206,7 +207,7 @@ protected:
     LLFloaterRunQueue(const LLSD& key);
     virtual ~LLFloaterRunQueue();
 
-    static bool runObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump);
+    static LL::Task<bool> runObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, LLPointer<LLViewerObject> object, LLInventoryObject* inventory, LLEventPump* pump);
 
     virtual bool startQueue();
 };
@@ -224,7 +225,7 @@ protected:
     LLFloaterNotRunQueue(const LLSD& key);
     virtual ~LLFloaterNotRunQueue();
 
-    static bool stopObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump);
+    static LL::Task<bool> stopObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, LLPointer<LLViewerObject> object, LLInventoryObject* inventory, LLEventPump* pump);
 
     virtual bool startQueue();
 };
@@ -243,7 +244,7 @@ protected:
     LLFloaterDeleteQueue(const LLSD& key);
     virtual ~LLFloaterDeleteQueue();
 
-    static bool deleteObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump);
+    static LL::Task<bool> deleteObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater, LLPointer<LLViewerObject> object, LLInventoryObject* inventory, LLEventPump* pump);
 
     virtual bool startQueue();
 };

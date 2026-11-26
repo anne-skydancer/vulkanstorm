@@ -2449,14 +2449,14 @@ void LLIMProcessing::requestOfflineMessages()
     }
 }
 
-void LLIMProcessing::requestOfflineMessagesCoro(std::string url)
+LL::Task<void> LLIMProcessing::requestOfflineMessagesCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("requestOfflineMessagesCoro", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -2466,7 +2466,7 @@ void LLIMProcessing::requestOfflineMessagesCoro(std::string url)
         LL_WARNS("Messaging") << "Error requesting offline messages via capability " << url << ", Status: " << status.toString() << "\nFalling back to legacy method." << LL_ENDL;
 
         requestOfflineMessagesLegacy();
-        return;
+        co_return;
     }
 
     LLSD contents = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_CONTENT];
@@ -2474,7 +2474,7 @@ void LLIMProcessing::requestOfflineMessagesCoro(std::string url)
     if (!contents.size())
     {
         LL_WARNS("Messaging") << "No contents received for offline messages via capability " << url << LL_ENDL;
-        return;
+        co_return;
     }
 
     // Todo: once dirtsim-369 releases, remove one of the map/array options
@@ -2490,25 +2490,25 @@ void LLIMProcessing::requestOfflineMessagesCoro(std::string url)
     else
     {
         LL_WARNS("Messaging") << "Invalid offline message content received via capability " << url << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (!messages.isArray())
     {
         LL_WARNS("Messaging") << "Invalid offline message content received via capability " << url << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (messages.size() == 0)
     {
         // Nothing to process
-        return;
+        co_return;
     }
 
     if (!gAgent.getRegion())
     {
         LL_WARNS("Messaging") << "Region null while attempting to load messages." << LL_ENDL;
-        return;
+        co_return;
     }
 
     LL_INFOS("Messaging") << "Processing offline messages." << LL_ENDL;

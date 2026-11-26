@@ -32,6 +32,7 @@ class LLMessageSystem;
 #include "llsingleton.h"
 #include "llcoros.h"
 #include "lleventcoro.h"
+#include "lltask.h"
 
 /**
  * Contains estate info, notifies interested parties of its changes.
@@ -105,7 +106,7 @@ private:
     update_signal_t mUpdateSignal; /// emitted when we receive update from sim
     update_signal_t mCommitSignal; /// emitted when our update gets applied to sim
 
-    void commitEstateInfoCapsCoro(std::string url);
+    LL::Task<void> commitEstateInfoCapsCoro(std::string url);
 };
 
 inline bool LLEstateInfoModel::getFlag(U64 flag) const

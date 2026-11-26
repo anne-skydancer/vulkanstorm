@@ -32,6 +32,7 @@
 #include "llimage.h"
 #include "llcoros.h"
 #include "lleventcoro.h"
+#include "lltask.h"
 
 class LLEventPump;
 
@@ -98,12 +99,12 @@ private:
     static std::unique_ptr<LLEventPump> sInfoWatcher;
 
     bool testShareStatus(LLSD &result);
-    void flickrConnectCoro(std::string requestToken, std::string oauthVerifier);
-    void flickrShareCoro(LLSD share);
-    void flickrShareImageCoro(LLPointer<LLImageFormatted> image, std::string title, std::string description, std::string tags, int safetyLevel);
-    void flickrDisconnectCoro();
-    void flickrConnectedCoro(bool autoConnect);
-    void flickrInfoCoro();
+    LL::Task<void> flickrConnectCoro(std::string requestToken, std::string oauthVerifier);
+    LL::Task<void> flickrShareCoro(LLSD share);
+    LL::Task<void> flickrShareImageCoro(LLPointer<LLImageFormatted> image, std::string title, std::string description, std::string tags, int safetyLevel);
+    LL::Task<void> flickrDisconnectCoro();
+    LL::Task<void> flickrConnectedCoro(bool autoConnect);
+    LL::Task<void> flickrInfoCoro();
 
 };
 

@@ -106,7 +106,7 @@ public:
     static const std::string sCheckUpdateListenerName;
 
     static void startFetchServerReleaseNotes();
-    static void fetchServerReleaseNotesCoro(const std::string cap_url);
+    static LL::Task<void> fetchServerReleaseNotesCoro(const std::string cap_url);
     static void handleServerReleaseNotes(LLSD results);
 };
 
@@ -230,7 +230,7 @@ void LLFloaterAbout::startFetchServerReleaseNotes()
 }
 
 /*static*/
-void LLFloaterAbout::fetchServerReleaseNotesCoro(const std::string cap_url)
+LL::Task<void> LLFloaterAbout::fetchServerReleaseNotesCoro(const std::string cap_url)
 {
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("fetchServerReleaseNotesCoro", LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -241,7 +241,7 @@ void LLFloaterAbout::fetchServerReleaseNotesCoro(const std::string cap_url)
     httpOpts->setFollowRedirects(false);
     httpOpts->setSSLVerifyPeer(false); // We want this data even if SSL verification fails
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, cap_url, httpOpts);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, cap_url, httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

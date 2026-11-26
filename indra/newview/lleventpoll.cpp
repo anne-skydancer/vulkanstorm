@@ -58,7 +58,7 @@ namespace Details
         void stop();
 
     private:
-        void                            eventPollCoro(std::string url);
+        LL::Task<void> eventPollCoro(std::string url);
 
         void                            handleMessage(const std::string& msg_name, const LLSD& body);
         void                            handleMessage(const LLSD &content);
@@ -155,7 +155,7 @@ namespace Details
         }
     }
 
-    void LLEventPollImpl::eventPollCoro(std::string url)
+    LL::Task<void> LLEventPollImpl::eventPollCoro(std::string url)
     {
         LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("EventPoller", mHttpPolicy);
         LLSD acknowledge;
@@ -209,7 +209,7 @@ namespace Details
 //              << LLSDXMLStreamer(request) << LL_ENDL;
 
             LL_DEBUGS("LLEventPollImpl") << " <" << counter << "> posting and yielding." << LL_ENDL;
-            LLSD result = httpAdapter->postAndSuspend(mHttpRequest, url, request, httpOpts);
+            LLSD result = co_await httpAdapter->postAndSuspend(mHttpRequest, url, request, httpOpts);
 
 //          LL_DEBUGS("LLEventPollImpl::eventPollCoro") << "<" << counter << "> result = "
 //              << LLSDXMLStreamer(result) << LL_ENDL;
@@ -315,7 +315,7 @@ namespace Details
                         << ", sender: " << mSenderIp << LL_ENDL;
                         // </FS:Beq>
 
-                    llcoro::suspendUntilTimeout(waitToRetry);
+                    co_await llcoro::co::suspendUntilTimeout(waitToRetry);
 
                     if (mDone || gDisconnected)
                         break;
