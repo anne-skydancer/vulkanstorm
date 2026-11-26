@@ -107,7 +107,7 @@ static const std::string PROFILE_IMAGE_UPLOAD_CAP = "UploadAgentProfileImage";
 
 //////////////////////////////////////////////////////////////////////////
 
-LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::string path_to_image, LLHandle<LLPanel> *handle)
+LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::string path_to_image, LLHandle<LLPanel> handle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -251,8 +251,16 @@ enum EProfileImageType
     PROFILE_IMAGE_FL,
 };
 
-void post_profile_image_coro(std::string cap_url, EProfileImageType type, std::string path_to_image, LLHandle<LLPanel> *handle)
+void post_profile_image_coro(std::string cap_url, EProfileImageType type, std::string path_to_image, LLHandle<LLPanel> handle)
 {
+    // The temporary upload file is removed on every exit, including an LLCoros::Stop
+    // unwinding the coroutine while it waits.
+    struct TempFileGuard
+    {
+        const std::string& mPath;
+        ~TempFileGuard() { LLFile::remove(mPath); }
+    } temp_file_guard{ path_to_image };
+
     LLSD data;
     switch (type)
     {
@@ -267,13 +275,13 @@ void post_profile_image_coro(std::string cap_url, EProfileImageType type, std::s
     LLUUID result = post_profile_image(cap_url, data, path_to_image, handle);
 
     // reset loading indicator
-    if (!handle->isDead())
+    if (!handle.isDead())
     {
         switch (type)
         {
         case PROFILE_IMAGE_SL:
             {
-                LLPanelProfileSecondLife* panel = static_cast<LLPanelProfileSecondLife*>(handle->get());
+                LLPanelProfileSecondLife* panel = static_cast<LLPanelProfileSecondLife*>(handle.get());
                 if (result.notNull())
                 {
                     panel->setProfileImageUploaded(result);
@@ -287,7 +295,7 @@ void post_profile_image_coro(std::string cap_url, EProfileImageType type, std::s
             }
         case PROFILE_IMAGE_FL:
             {
-                LLPanelProfileFirstLife* panel = static_cast<LLPanelProfileFirstLife*>(handle->get());
+                LLPanelProfileFirstLife* panel = static_cast<LLPanelProfileFirstLife*>(handle.get());
                 if (result.notNull())
                 {
                     panel->setProfileImageUploaded(result);
@@ -308,10 +316,6 @@ void post_profile_image_coro(std::string cap_url, EProfileImageType type, std::s
         // Should trigger callbacks in icon controls
         LLAvatarPropertiesProcessor::getInstance()->sendAvatarPropertiesRequest(gAgentID);
     }
-
-    // Cleanup
-    LLFile::remove(path_to_image);
-    delete handle;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -2055,6 +2059,7 @@ void LLProfileImagePicker::notify(const std::vector<std::string>& filenames)
         args["CAPABILITY"] = PROFILE_IMAGE_UPLOAD_CAP;
         LLNotificationsUtil::add("RegionCapabilityRequestError", args);
         LL_WARNS("AvatarProperties") << "Failed to upload profile image of type " << (S32)mType << ", no cap found" << LL_ENDL;
+        LLFile::remove(temp_file);
         return;
     }
 
@@ -2075,9 +2080,7 @@ void LLProfileImagePicker::notify(const std::vector<std::string>& filenames)
     }
 
     LLCoros::instance().launch("postAgentUserImageCoro",
-        boost::bind(post_profile_image_coro, cap_url, mType, temp_file, mHandle));
-
-    mHandle = nullptr; // transferred to post_profile_image_coro
+        boost::bind(post_profile_image_coro, cap_url, mType, temp_file, *mHandle));
 }
 
 void LLPanelProfileSecondLife::onCommitMenu(const LLSD& userdata)
