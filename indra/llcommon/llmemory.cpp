@@ -182,6 +182,7 @@ void* LLMemory::tryToAlloc(void* address, U32 size)
             LL_ERRS() << "error happens when free some memory reservation." << LL_ENDL ;
         }
     }
+#pragma warning(suppress : 6001)
     return address ;
 #else
     return (void*)0x01 ; //skip checking

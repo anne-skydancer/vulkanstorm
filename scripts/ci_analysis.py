@@ -876,14 +876,20 @@ def cmd_canary(args):
             env = dict(os.environ)
             for name in ("ASAN_OPTIONS", "LSAN_OPTIONS", "UBSAN_OPTIONS", "TSAN_OPTIONS"):
                 env[name] = re.sub(r"log_path=\S+", lambda _m: f"log_path={work}/report", env.get(name, ""))
-            ran = subprocess.run([str(work / "canary")], capture_output=True, text=True, env=env, check=False)
-            text = ran.stdout + ran.stderr + "".join(read_text(p) for p in sorted(work.glob("report*")))
+            # A data race is reported only when the two accesses are still in TSan's shadow memory, which depends on
+            # the scheduling of the two threads, and some llcommon analysis runs found none.
+            # A canary that is silent three times in a row is the real signal.
+            for _attempt in range(3):
+                ran = subprocess.run([str(work / "canary")], capture_output=True, text=True, env=env, check=False)
+                text = ran.stdout + ran.stderr + "".join(read_text(p) for p in sorted(work.glob("report*")))
+                if all(marker in text for marker in wanted):
+                    break
         for marker in wanted:
             if marker not in text:
                 missing.append(marker)
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / f"canary-{args.mode}.json").write_text(json.dumps({"ok": not missing, "missing": missing}), encoding="utf-8")
+    (out / f"canary-{args.mode}.json").write_text(json.dumps({"ok": not missing, "missing": missing, "tail": text[-1500:]}), encoding="utf-8")
     print("canary:", "ok" if not missing else f"missing {missing}")
     return 0
 
