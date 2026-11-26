@@ -319,7 +319,7 @@ LLOSInfo::LLOSInfo() :
 
 #elif LL_LINUX
 
-    struct utsname un;
+    struct utsname un{};
     if(uname(&un) != -1)
     {
         mOSStringSimple.append(un.sysname);

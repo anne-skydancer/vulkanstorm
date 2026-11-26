@@ -603,8 +603,8 @@ S32 LLUUID::getNodeID(unsigned char* node_id)
 S32 LLUUID::getNodeID(unsigned char* node_id)
 {
     int         sd;
-    struct ifreq    ifr, * ifrp;
-    struct ifconf   ifc;
+    struct ifreq    ifr{}, * ifrp;
+    struct ifconf   ifc{};
     char buf[1024];
     int     n, i;
     unsigned char* a;
@@ -701,7 +701,7 @@ void LLUUID::getSystemTime(uuid_time_t* timestamp)
     timestamp->high = time.HighPart;
     timestamp->low = time.LowPart;
 #else
-    struct timeval tp;
+    struct timeval tp{};
     gettimeofday(&tp, nullptr);
 
     // Offset between UUID formatted times and Unix formatted times.

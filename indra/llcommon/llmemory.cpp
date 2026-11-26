@@ -147,7 +147,7 @@ void LLMemory::updateMemoryInfo()
     }
 #elif defined(LL_LINUX)
     // Use sysinfo() to get the total physical memory.
-    struct sysinfo info;
+    struct sysinfo info{};
     sysinfo(&info);
     sAllocatedMemInKB = U32Kilobytes::convert(U64Bytes(LLMemory::getCurrentRSS())); // represents the RAM allocated by this process only (in line with the windows implementation)
 #else
@@ -369,7 +369,7 @@ U64 LLMemory::getCurrentRSS()
 
 U64 LLMemory::getCurrentRSS()
 {
-    struct rusage usage;
+    struct rusage usage{};
 
     if (getrusage(RUSAGE_SELF, &usage) != 0) {
         // Error handling code could be here

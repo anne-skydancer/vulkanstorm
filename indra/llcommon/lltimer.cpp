@@ -118,7 +118,7 @@ void ms_sleep(U32 ms)
 #elif LL_LINUX || LL_DARWIN
 static void _sleep_loop(struct timespec& thiswait)
 {
-    struct timespec nextwait;
+    struct timespec nextwait{};
     bool sleep_more = false;
 
     do {
@@ -173,7 +173,7 @@ U32 micro_sleep(U64 us, U32 max_yields)
     if (num_sleep_intervals > 0)
     {
         U64 sleep_time = (num_sleep_intervals * KERNEL_SLEEP_INTERVAL_US) - (KERNEL_SLEEP_INTERVAL_US >> 1);
-        struct timespec thiswait;
+        struct timespec thiswait{};
         thiswait.tv_sec = sleep_time / 1000000;
         thiswait.tv_nsec = (sleep_time % 1000000) * 1000l;
         _sleep_loop(thiswait);
@@ -194,7 +194,7 @@ U32 micro_sleep(U64 us, U32 max_yields)
 void ms_sleep(U32 ms)
 {
     long mslong = ms; // tv_nsec is a long
-    struct timespec thiswait;
+    struct timespec thiswait{};
     thiswait.tv_sec = ms / 1000;
     thiswait.tv_nsec = (mslong % 1000) * 1000000l;
     _sleep_loop(thiswait);
@@ -243,7 +243,7 @@ F64 calc_clock_frequency()
 U64 get_clock_count()
 {
     // Linux clocks are in microseconds
-    struct timeval tv;
+    struct timeval tv{};
     gettimeofday(&tv, nullptr);
     return tv.tv_sec*SEC_TO_MICROSEC_U64 + tv.tv_usec;
 }

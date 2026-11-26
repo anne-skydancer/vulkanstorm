@@ -515,7 +515,7 @@ void setup_signals()
     //
     // Set up signal handlers that may result in program termination
     //
-    struct sigaction act;
+    struct sigaction act{};
     act.sa_sigaction = default_unix_signal_handler;
     sigemptyset( &act.sa_mask );
     act.sa_flags = SA_SIGINFO;
@@ -554,7 +554,7 @@ void setup_signals()
 
 void clear_signals()
 {
-    struct sigaction act;
+    struct sigaction act{};
     act.sa_handler = SIG_DFL;
     sigemptyset( &act.sa_mask );
     act.sa_flags = SA_SIGINFO;

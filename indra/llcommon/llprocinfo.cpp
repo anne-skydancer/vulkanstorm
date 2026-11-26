@@ -78,7 +78,7 @@ void LLProcInfo::getCPUUsage(time_type & user_time, time_type & system_time)
 
 #else // Linux
 
-    struct rusage usage;
+    struct rusage usage{};
 
     if (getrusage(RUSAGE_SELF, &usage))
     {
