@@ -29,8 +29,15 @@
 #if ! defined(LL_LLEVENTCORO_H)
 #define LL_LLEVENTCORO_H
 
+#include <chrono>
+#include <coroutine>
+#include <exception>
+#include <memory>
+#include <optional>
 #include <string>
+#include "llcoros.h"
 #include "llevents.h"
+#include "llexecutor.h"
 
 /**
  * Like LLListenerOrPumpName, this is a class intended for parameter lists:
@@ -171,6 +178,187 @@ LLSD suspendUntilEventOnWithTimeout(const LLEventPumpOrPumpName& suspendPumpOrNa
                                      timeoutResult);
 }
 
+} // namespace llcoro
+
+/**
+ * The co_await forms of the primitives above (doc/clean/plan.md, "Coroutines"): the same names and semantics, for a
+ * coroutine that returns an LL::Task. Each checks LLCoros::checkStop() first, sets the coroutine's status while it
+ * waits, lets the first event win (a later event is not delivered and not consumed), and turns a status other than
+ * "running" on "LLApp" into LLCoros::Stopping. An awaiter is not movable and unlinks every listener, timer and queue
+ * entry in its destructor, so a destroyed frame is never resumed.
+ *
+ * A task must use these forms, never the blocking ones above: a blocking form blocks the hosting fibre, and a task is
+ * not a fibre but runs on the main loop. The blocking forms abort when a task calls one.
+ *
+ * <tt>llcoro::co</tt> is the back end LL_CORO_NATIVE picks (llcoros.h): llcoro::native really suspends the task on
+ * the executor, llcoro::bridge blocks the hosting fibre with the function above (nothing suspends at the C++20
+ * level). Both are always built and tested. The change that removes the fibres makes llcoro::native the only one and
+ * deletes the blocking functions above; callers then lose no more than the "co::".
+ */
+namespace llcoro::native
+{
+
+/// Waits for one event on a pump (optionally after posting a request, optionally with a timeout), or for a timeout
+/// alone. Not movable: a coroutine obtains it as a temporary in a co_await expression.
+class LL_COMMON_API EventAwaiter
+{
+public:
+    /// postAndSuspend() and, with @a timeout, postAndSuspendWithTimeout()
+    EventAwaiter(std::string callerName, LLSD event, LLEventPumpOrPumpName requestPump,
+                 LLEventPumpOrPumpName replyPump, LLSD replyPumpNamePath,
+                 std::optional<std::chrono::milliseconds> timeout, LLSD timeoutResult);
+    /// suspendUntilTimeout(): wait on a pump nobody posts on
+    EventAwaiter(std::unique_ptr<LLEventStream> bogusPump, std::chrono::milliseconds timeout);
+    EventAwaiter(const EventAwaiter&) = delete;
+    EventAwaiter& operator=(const EventAwaiter&) = delete;
+    ~EventAwaiter();
+
+    bool await_ready();
+    void await_suspend(std::coroutine_handle<> handle);
+    LLSD await_resume();
+
+private:
+    void completed();
+
+    std::string mCallerName;
+    // for suspendUntilTimeout(): the pump that mReplyPump names. Declared before the connections, so that they are
+    // disconnected first.
+    std::unique_ptr<LLEventStream> mOwnedPump;
+    LLEventPumpOrPumpName mRequestPump, mReplyPump;
+    LLSD mEvent, mReplyPumpNamePath, mTimeoutResult;
+    std::optional<std::chrono::milliseconds> mTimeout;
+
+    LL::Executor* mExecutor{nullptr};
+    LL::CoroData* mRecord{nullptr};
+    std::coroutine_handle<> mHandle;
+    std::string mListenerName;
+    LL::WaitClaim mClaim;
+    LLSD mValue;
+    std::exception_ptr mError;
+    std::optional<LL::Executor::TimerKey> mTimer;
+    std::optional<LLCoros::TempStatus> mStatus;
+    bool mResumed{false};
+    LLTempBoundListener mReplyConnection, mStopConnection;
+};
+
+/// Yield for one "mainloop" tick: the task runs again at the next pump.
+class LL_COMMON_API SuspendAwaiter
+{
+public:
+    SuspendAwaiter() = default;
+    SuspendAwaiter(const SuspendAwaiter&) = delete;
+    SuspendAwaiter& operator=(const SuspendAwaiter&) = delete;
+    ~SuspendAwaiter();
+
+    bool await_ready();
+    void await_suspend(std::coroutine_handle<> handle);
+    void await_resume();
+
+private:
+    LL::Executor* mExecutor{nullptr};
+    std::coroutine_handle<> mHandle;
+    std::optional<LLCoros::TempStatus> mStatus;
+    bool mResumed{false};
+};
+
+/// co_await llcoro::native::suspend(); yields for one tick
+[[nodiscard]] inline SuspendAwaiter suspend() { return {}; }
+
+/// Wait for at least @a seconds
+[[nodiscard]] LL_COMMON_API EventAwaiter suspendUntilTimeout(float seconds);
+
+/// Wait for the next "mainloop" event, once per frame
+[[nodiscard]] LL_COMMON_API EventAwaiter suspendUntilNextFrame();
+
+/// LLSD reply = co_await llcoro::native::postAndSuspend(...)
+[[nodiscard]] LL_COMMON_API EventAwaiter postAndSuspend(const LLSD& event, const LLEventPumpOrPumpName& requestPump,
+                                                        const LLEventPumpOrPumpName& replyPump,
+                                                        const LLSD& replyPumpNamePath = LLSD());
+
+[[nodiscard]] LL_COMMON_API EventAwaiter suspendUntilEventOn(const LLEventPumpOrPumpName& pump);
+
+[[nodiscard]] LL_COMMON_API EventAwaiter postAndSuspendWithTimeout(const LLSD& event,
+                                                                   const LLEventPumpOrPumpName& requestPump,
+                                                                   const LLEventPumpOrPumpName& replyPump,
+                                                                   const LLSD& replyPumpNamePath, F32 timeout,
+                                                                   const LLSD& timeoutResult);
+
+[[nodiscard]] LL_COMMON_API EventAwaiter suspendUntilEventOnWithTimeout(const LLEventPumpOrPumpName& pump,
+                                                                        F32 timeout, const LLSD& timeoutResult);
+
+} // namespace llcoro::native
+
+namespace llcoro::bridge
+{
+
+/// The fibre bridge: already "ready", and await_resume() calls the blocking function on the hosting fibre.
+template<typename F>
+class BridgeAwaiter
+{
+public:
+    explicit BridgeAwaiter(F fn): mFn(std::move(fn)) {}
+    bool await_ready() const noexcept { return true; }
+    void await_suspend(std::coroutine_handle<>) const noexcept {}
+    decltype(auto) await_resume() { return mFn(); }
+
+private:
+    F mFn;
+};
+
+[[nodiscard]] inline auto suspend()
+{
+    return BridgeAwaiter([] { llcoro::suspend(); });
+}
+
+[[nodiscard]] inline auto suspendUntilTimeout(float seconds)
+{
+    return BridgeAwaiter([seconds] { llcoro::suspendUntilTimeout(seconds); });
+}
+
+[[nodiscard]] inline auto suspendUntilNextFrame()
+{
+    return BridgeAwaiter([] { llcoro::suspendUntilNextFrame(); });
+}
+
+[[nodiscard]] inline auto postAndSuspend(const LLSD& event, const LLEventPumpOrPumpName& requestPump,
+                                         const LLEventPumpOrPumpName& replyPump,
+                                         const LLSD& replyPumpNamePath = LLSD())
+{
+    return BridgeAwaiter([=] { return llcoro::postAndSuspend(event, requestPump, replyPump, replyPumpNamePath); });
+}
+
+[[nodiscard]] inline auto suspendUntilEventOn(const LLEventPumpOrPumpName& pump)
+{
+    return BridgeAwaiter([=] { return llcoro::suspendUntilEventOn(pump); });
+}
+
+[[nodiscard]] inline auto postAndSuspendWithTimeout(const LLSD& event, const LLEventPumpOrPumpName& requestPump,
+                                                    const LLEventPumpOrPumpName& replyPump,
+                                                    const LLSD& replyPumpNamePath, F32 timeout,
+                                                    const LLSD& timeoutResult)
+{
+    return BridgeAwaiter([=]
+    {
+        return llcoro::postAndSuspendWithTimeout(event, requestPump, replyPump, replyPumpNamePath, timeout,
+                                                 timeoutResult);
+    });
+}
+
+[[nodiscard]] inline auto suspendUntilEventOnWithTimeout(const LLEventPumpOrPumpName& pump, F32 timeout,
+                                                         const LLSD& timeoutResult)
+{
+    return BridgeAwaiter([=] { return llcoro::suspendUntilEventOnWithTimeout(pump, timeout, timeoutResult); });
+}
+
+} // namespace llcoro::bridge
+
+namespace llcoro
+{
+#if LL_CORO_NATIVE
+namespace co = native;
+#else
+namespace co = bridge;
+#endif
 } // namespace llcoro
 
 /**

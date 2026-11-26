@@ -30,6 +30,8 @@
 #define LL_LLCOROS_H
 
 #include "llexception.h"
+#include "llexecutor.h"
+#include "lltask.h"
 #include <boost/fiber/fss.hpp>
 #include <boost/fiber/future/future.hpp>
 #include <boost/fiber/future/promise.hpp>
@@ -38,10 +40,24 @@
 #include "llsingleton.h"
 #include "llinstancetracker.h"
 #include <functional>
+#include <memory>
 #include <string>
+#include <type_traits>
 #include <exception>
 #include <queue>
 #include <utility>
+
+/**
+ * The build switch of the coroutine migration (doc/clean/plan.md, "Coroutines"), which back end the co_await forms of
+ * the llcoro:: primitives (llcoro::co in lleventcoro.h) and LLCoros::launch() of a Task callable use:
+ * - 0, the fibre bridge: a Task is launched in a fibre as before and every co_await blocks that fibre. Nothing
+ *   suspends at the C++20 level, so the run order is today's whichever code is converted.
+ * - 1, the native executor: a Task is a coroutine on LL::Executor and co_await really suspends.
+ * Both back ends are always compiled and tested; the switch only picks what the viewer calls.
+ */
+#ifndef LL_CORO_NATIVE
+#define LL_CORO_NATIVE 0
+#endif
 
 // e.g. #include LLCOROS_MUTEX_HEADER
 // NOLINTNEXTLINE(bugprone-macro-parentheses): the replacement is a header name, which cannot be parenthesised
@@ -120,6 +136,59 @@ public:
      * point it returns the tweaked name.
      */
     std::string launch(const std::string& prefix, const callable_t& callable);
+
+    /**
+     * Launch a coroutine that is an LL::Task: @a callable returns the Task. Everything said above applies, and so
+     * does the rule for parameters: the callable should be a plain function (or a lambda that is NOT itself the
+     * coroutine) that returns the Task of a coroutine taking its parameters by value, for example
+     * <tt>[this, url] { return fooCoro(url); }</tt>. A lambda that is itself a coroutine and captures is safe only
+     * here, because the launch keeps it alive for the life of the task (see lltask.h).
+     *
+     * With LL_CORO_NATIVE the task runs on the executor (launchNative), without it in a fibre that blocks at every
+     * co_await (launchBridged). Both are always compiled and tested; the macro only picks which one this calls.
+     */
+    template<typename F>
+        requires LL::TaskFactory<std::decay_t<F>>
+    std::string launch(const std::string& prefix, F&& callable)
+    {
+        if constexpr (LL_CORO_NATIVE)
+        {
+            return launchNative(prefix, std::forward<F>(callable));
+        }
+        else
+        {
+            return launchBridged(prefix, std::forward<F>(callable));
+        }
+    }
+
+    /// launch() of a Task callable on the executor
+    template<typename F>
+        requires LL::TaskFactory<std::decay_t<F>>
+    std::string launchNative(const std::string& prefix, F&& callable)
+    {
+        const std::string name(generateDistinctName(prefix));
+        mExecutor.launch(name, std::decay_t<F>(std::forward<F>(callable)));
+        return name;
+    }
+
+    /// launch() of a Task callable in a fibre: every co_await of llcoro::bridge blocks the fibre, so the task has
+    /// run to its end when the callable returns
+    template<typename F>
+        requires LL::TaskFactory<std::decay_t<F>>
+    std::string launchBridged(const std::string& prefix, F&& callable)
+    {
+        const std::string name(generateDistinctName(prefix));
+        auto shared = std::make_shared<std::decay_t<F>>(std::forward<F>(callable));
+        launchFiber(name, [shared]()
+        {
+            LL::Task<void> task = (*shared)();
+            finishBridged(task);
+        });
+        return name;
+    }
+
+    /// the executor that runs this process's tasks; the main loop pumps it once per frame
+    LL::Executor& executor() { return mExecutor; }
 
     /**
      * Abort a running coroutine by name. Normally, when a coroutine either
@@ -288,12 +357,14 @@ public:
 
     /// for data local to each running coroutine
     template <typename T>
-    using local_ptr = boost::fibers::fiber_specific_ptr<T>;
+    using local_ptr = LL::LocalPtr<T>;
 
 private:
     std::string generateDistinctName(const std::string& prefix) const;
+    std::string launchFiber(const std::string& name, const callable_t& callable);
+    static void finishBridged(LL::Task<void>& task);
     void toplevel(std::string name, callable_t callable);
-    struct CoroData;
+    using CoroData = LL::CoroData;
     static CoroData& get_CoroData(const std::string& caller);
     void saveException(const std::string& name, const std::exception_ptr& exc);
 
@@ -316,25 +387,13 @@ private:
     // empirically this is insufficient.
     S32 mStackSize{1024*1024};
 
-    // coroutine-local storage, as it were: one per coro we track
-    struct CoroData: public LLInstanceTracker<CoroData, std::string>
-    {
-        CoroData(const std::string& name);
-        CoroData(int n);
-
-        // tweaked name of the current coroutine
-        const std::string mName;
-        // set_consuming() state
-        bool mConsuming;
-        // setStatus() state
-        std::string mStatus;
-        F64 mCreationTime; // since epoch
-    };
-
-    // Identify the current coroutine's CoroData. This local_ptr isn't static
+    // Identify the current fibre's CoroData (a task's is Executor::currentRecord()). This pointer isn't static
     // because it's a member of an LLSingleton, and we rely on it being
     // cleaned up in proper dependency order.
-    local_ptr<CoroData> mCurrent;
+    boost::fibers::fiber_specific_ptr<CoroData> mCurrent;
+
+    // Runs the tasks. Declared after mCurrent so that it is destroyed first.
+    LL::Executor mExecutor;
 };
 
 namespace llcoro

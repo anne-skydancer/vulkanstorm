@@ -32,7 +32,7 @@
 #if ! defined(LL_LLEVENTDISPATCHER_H)
 #define LL_LLEVENTDISPATCHER_H
 
-#include <boost/fiber/fss.hpp>
+#include "llexecutor.h"
 #include <boost/function_types/is_nonmember_callable_builtin.hpp>
 #include <boost/iterator/transform_iterator.hpp>
 #include <functional>               // std::function
@@ -599,7 +599,7 @@ private:
     // transient state: must be fiber_specific since multiple threads and/or
     // multiple fibers may be calling concurrently. Make it mutable so we can
     // use SetState even within const methods.
-    mutable boost::fibers::fiber_specific_ptr<std::string> mState;
+    mutable LL::LocalPtr<std::string> mState;
 
     std::string getState() const;
     // setState() requires SetState& because only the SetState class should

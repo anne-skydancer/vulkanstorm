@@ -45,6 +45,7 @@ set(llcommon_SOURCE_FILES
     llevents.cpp
     lleventtimer.cpp
     llexception.cpp
+    llexecutor.cpp
     llfasttimer.cpp
     llfile.cpp
     llfindlocale.cpp
@@ -137,6 +138,7 @@ set(llcommon_HEADER_FILES
     llbitpack.h
     llboost.h
     llcallbacklist.h
+    llchannel.h
     llcleanup.h
     llcommon.h
     llcommonutils.h
@@ -162,6 +164,7 @@ set(llcommon_HEADER_FILES
     llevents.h
     lleventemitter.h
     llexception.h
+    llexecutor.h
     llfasttimer.h
     llfile.h
     llfindlocale.h
@@ -229,6 +232,7 @@ set(llcommon_HEADER_FILES
     llstatsaccumulator.h
     llsys.h
     lltempredirect.h
+    lltask.h
     llthread.h
     llthreadlocalstorage.h
     llthreadsafequeue.h
@@ -347,6 +351,7 @@ if (LL_TESTS)
   LL_ADD_INTEGRATION_TEST(lazyeventapi "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llbase64 "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llcond "" "${test_libs}")
+  LL_ADD_INTEGRATION_TEST(llcoros_order "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(lldate "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(lldeadmantimer "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(lldependencies "" "${test_libs}")
@@ -373,6 +378,7 @@ if (LL_TESTS)
   LL_ADD_INTEGRATION_TEST(llstreamqueue "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llstring "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llsys "" "${test_libs}")
+  LL_ADD_INTEGRATION_TEST(lltask "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(lltrace "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(lltreeiterators "" "${test_libs}")
   LL_ADD_INTEGRATION_TEST(llunits "" "${test_libs}")

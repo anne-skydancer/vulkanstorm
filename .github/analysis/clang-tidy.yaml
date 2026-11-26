@@ -25,7 +25,14 @@ Checks: >-
   -modernize-use-nodiscard,
   cppcoreguidelines-pro-type-member-init,
   cppcoreguidelines-slicing,
-  cppcoreguidelines-missing-std-forward
+  cppcoreguidelines-missing-std-forward,
+  cppcoreguidelines-avoid-reference-coroutine-parameters,
+  cppcoreguidelines-avoid-capturing-lambda-coroutines
+# The two coroutine checks guard the C++20 task core (doc/clean/plan.md, "Coroutines"): a coroutine takes its
+# parameters by value, because a reference dangles once the caller returns, and a lambda that is itself a coroutine
+# must not capture, because its captures are read after the first suspension. A capturing coroutine lambda is safe only
+# through LLCoros::launch() and Executor::launch(), which keep it alive in the task's root frame (lltask.h); anywhere
+# else write a plain function that returns the Task of a by-value coroutine.
 # cppcoreguidelines-virtual-class-destructor is left out on purpose: the intrusive reference-counted and singleton
 # classes (LLRefCount, LLSingletonBase, LLEvent, the LLSD parsers and formatters, ...) have a protected virtual
 # destructor so that only the owner can delete them. Making it public would let any holder delete a shared object;

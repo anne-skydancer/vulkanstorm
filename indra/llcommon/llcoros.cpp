@@ -81,6 +81,11 @@ bool LLCoros::on_main_thread_main_coro()
 // static
 LLCoros::CoroData& LLCoros::get_CoroData(const std::string& caller)
 {
+    // a task of the executor has its own record
+    if (CoroData* task = LL::Executor::currentRecord())
+    {
+        return *task;
+    }
     CoroData* current{ nullptr };
     // be careful about attempted accesses in the final throes of app shutdown
     if (! wasDeleted())
@@ -150,6 +155,9 @@ void LLCoros::cleanupSingleton()
     // origin singletons, so clean coros before deleting those
 
     printActiveCoroutines("at entry to ~LLCoros()");
+    // Tasks of the executor: let them run out and destroy what is left. (The coroutine switch moves this call to just
+    // before LLSingletonBase::deleteAll(); until then nothing but tests starts a task.)
+    mExecutor.shutdown();
     // Other LLApp status-change listeners do things like close
     // work queues and inject the Stop exception into pending
     // promises, to force coroutines waiting on those things to
@@ -235,6 +243,7 @@ void LLCoros::rethrow()
         LL_WARNS("LLCoros") << "Rethrowing exception from coroutine " << front.name << LL_ENDL;
         std::rethrow_exception(front.exception);
     }
+    mExecutor.rethrow();
 }
 
 void LLCoros::setStackSize(S32 stacksize)
@@ -264,7 +273,20 @@ void LLCoros::printActiveCoroutines(const std::string& when)
 
 std::string LLCoros::launch(const std::string& prefix, const callable_t& callable)
 {
-    std::string name(generateDistinctName(prefix));
+    return launchFiber(generateDistinctName(prefix), callable);
+}
+
+// static
+void LLCoros::finishBridged(LL::Task<void>& task)
+{
+    // With the fibre bridge every co_await blocks the fibre, so the task has run to its end by now. A task that is
+    // not done awaited something native from a fibre, which cannot work: nothing would ever resume it.
+    llassert_always_msg(task.done(), "a Task launched in a fibre suspended: native awaiter used with the bridge");
+    task.get();
+}
+
+std::string LLCoros::launchFiber(const std::string& name, const callable_t& callable)
+{
     // 'dispatch' means: enter the new fiber immediately, returning here only
     // when the fiber yields for whatever reason.
     // std::allocator_arg is a flag to indicate that the following argument is
@@ -290,7 +312,7 @@ std::string LLCoros::launch(const std::string& prefix, const callable_t& callabl
         // Out of memory on stack allocation?
         LLError::LLUserWarningMsg::showOutOfMemory();
         printActiveCoroutines();
-        LL_ERRS("LLCoros") << "Bad memory allocation in LLCoros::launch(" << prefix << ")!" << LL_ENDL;
+        LL_ERRS("LLCoros") << "Bad memory allocation in LLCoros::launch(" << name << ")!" << LL_ENDL;
     }
 
     return name;
@@ -431,26 +453,4 @@ void LLCoros::checkStop()
     {
         LLTHROW(Stopping("viewer is stopping"));
     }
-}
-
-LLCoros::CoroData::CoroData(const std::string& name):
-    LLInstanceTracker<CoroData, std::string>(name),
-    mName(name),
-    // don't consume events unless specifically directed
-    mConsuming(false),
-    mCreationTime(LLTimer::getTotalSeconds())
-{
-}
-
-LLCoros::CoroData::CoroData(int n):
-    // This constructor is used for the thread_local instance belonging to the
-    // default coroutine on each thread. We must give each one a different
-    // LLInstanceTracker key because LLInstanceTracker's map spans all
-    // threads, but we want the default coroutine on each thread to have the
-    // empty string as its visible name because some consumers test for that.
-    LLInstanceTracker<CoroData, std::string>("main" + stringize(n)),
-    mName(),
-    mConsuming(false),
-    mCreationTime(LLTimer::getTotalSeconds())
-{
 }

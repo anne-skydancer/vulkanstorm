@@ -9,3 +9,4 @@ llleap
 llprocess
 llprocessstdin
 llsdserialize
+llcoros_order
