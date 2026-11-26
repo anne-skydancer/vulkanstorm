@@ -42,7 +42,9 @@ Boost.Fiber and Boost.Context leave the C++: an in-house C++20 task type and mai
 fibers, every caller is converted, and the fiber-aware locks become `std::` ones. The work has its own branch,
 `clean/coroutines`, cut after `clean/llcommon` lands: the new core sits beside the fibers, the callers move library by
 library (`llmessage`, login, `newview`) in commits that each build and pass CI, and the fibers go at the end. The run
-order stays exactly as it is today, and `HttpCoroutineAdapter` stays with `co_await` calls.
+order stays as it is today with one deliberate change (decision 1 of the survey plan): a coroutine that launches
+another no longer waits behind it in Boost's queue, so the run-order oracle's scenarios 3 and 4 differ on the new
+executor. `HttpCoroutineAdapter` stays with `co_await` calls.
 
 ## Order (bottom-up)
 
