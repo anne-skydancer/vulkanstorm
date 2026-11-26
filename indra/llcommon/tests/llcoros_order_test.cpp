@@ -25,6 +25,8 @@
 #include "../test/lltestapp.h"
 
 #include <chrono>
+#include <cstddef>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -36,6 +38,46 @@ struct OrderTestApp: public LLTestApp
 {
     static void status(EAppStatus s) { setStatus(s); }
 };
+
+#if defined(__SANITIZE_ADDRESS__)
+#define LL_TEST_ASAN 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define LL_TEST_ASAN 1
+#endif
+#endif
+#ifdef LL_TEST_ASAN
+#include <sanitizer/asan_interface.h>
+#endif
+
+// Boost.Fiber is prebuilt without ASan annotations. A fibre's entry frames never return (the fibre ends by switching
+// away), so their redzones stay poisoned in the shadow memory after the stack is unmapped, and a later fibre whose
+// stack is mapped at the same place trips over them: "stack-use-after-scope" and "stack-buffer-overflow" on variables
+// that are fine. Every fibre of this test starts by unpoisoning the part of its own stack below this frame.
+void cleanFiberStack()
+{
+#ifdef LL_TEST_ASAN
+    char marker = 0;
+    constexpr std::size_t span = 128 * 1024;
+    __asan_unpoison_memory_region(&marker - span, span);
+#endif
+}
+
+// LLCoros::launch() of a void callable, or of one that returns an LL::Task, that first cleans its stack
+std::string launchFibre(const std::string& name, std::function<void()> fn)
+{
+    return LLCoros::instance().launch(name, [fn = std::move(fn)]() { cleanFiberStack(); fn(); });
+}
+
+template<LL::TaskFactory F>
+std::string launchFibre(const std::string& name, F fn)
+{
+    return LLCoros::instance().launch(name, [fn = std::move(fn)]() mutable -> LL::Task<void>
+        {
+            cleanFiberStack();
+            return fn();
+        });
+}
 
 std::string sTrace;
 void mark(const std::string& what)
@@ -80,15 +122,15 @@ void object::test<1>()
     set_test_name("wake order and frame boundary");
     settle();
     LLEventStream pa("order_pa", true), pb("order_pb", true), pc("order_pc", true);
-    LLCoros::instance().launch("order_A", [&pa]()
+    launchFibre("order_A", [&pa]()
         {
             mark("A0"); llcoro::suspendUntilEventOn(pa); mark("A1"); llcoro::suspend(); mark("A2");
         });
-    LLCoros::instance().launch("order_B", [&pb, &pc]()
+    launchFibre("order_B", [&pb, &pc]()
         {
             mark("B0"); llcoro::suspendUntilEventOn(pb); mark("B1"); pc.post(LLSD()); mark("B2");
         });
-    LLCoros::instance().launch("order_C", [&pc]()
+    launchFibre("order_C", [&pc]()
         {
             mark("C0"); llcoro::suspendUntilEventOn(pc); mark("C1");
         });
@@ -107,7 +149,7 @@ void object::test<2>()
 {
     set_test_name("timer runs the frame after it is noticed");
     settle();
-    LLCoros::instance().launch("order_T", []()
+    launchFibre("order_T", []()
         {
             mark("T0"); llcoro::suspendUntilTimeout(0.001f); mark("T1");
         });
@@ -128,9 +170,9 @@ void object::test<3>()
     set_test_name("launch from the main fibre drains the ready queue");
     settle();
     LLEventStream pp("order_pp", true), pl("order_pl", true);
-    LLCoros::instance().launch("order_P", [&pp]() { mark("P0"); llcoro::suspendUntilEventOn(pp); mark("P1"); });
+    launchFibre("order_P", [&pp]() { mark("P0"); llcoro::suspendUntilEventOn(pp); mark("P1"); });
     pp.post(LLSD());
-    LLCoros::instance().launch("order_L", [&pl]() { mark("L0"); llcoro::suspendUntilEventOn(pl); mark("L1"); });
+    launchFibre("order_L", [&pl]() { mark("L0"); llcoro::suspendUntilEventOn(pl); mark("L1"); });
     mark("M:afterL");
     mark("f1"); frame();
     ensure_equals(sTrace, "P0 L0 P1 M:afterL f1");
@@ -145,12 +187,12 @@ void object::test<4>()
     set_test_name("launch from a coroutine defers the launcher");
     settle();
     LLEventStream pq("order_pq", true), pr("order_pr", true);
-    LLCoros::instance().launch("order_Q", [&pq, &pr]()
+    launchFibre("order_Q", [&pq, &pr]()
         {
             mark("Q0");
             llcoro::suspendUntilEventOn(pq);
             mark("Q1");
-            LLCoros::instance().launch("order_R", [&pr]() { mark("R0"); llcoro::suspendUntilEventOn(pr); });
+            launchFibre("order_R", [&pr]() { mark("R0"); llcoro::suspendUntilEventOn(pr); });
             mark("Q2");
         });
     pq.post(LLSD());
@@ -171,11 +213,11 @@ void object::test<5>()
     set_test_name("first event wins, consuming");
     settle();
     LLEventStream pe("order_pe", true);
-    LLCoros::instance().launch("order_E", [&pe]()
+    launchFibre("order_E", [&pe]()
         {
             LLSD v = llcoro::suspendUntilEventOn(pe); mark("E:" + v.asString());
         });
-    LLCoros::instance().launch("order_K", [&pe]()
+    launchFibre("order_K", [&pe]()
         {
             LLCoros::OverrideConsuming consuming(true);
             LLSD v = llcoro::suspendUntilEventOn(pe); mark("K:" + v.asString());
@@ -197,11 +239,11 @@ void object::test<6>()
     set_test_name("event or timeout");
     settle();
     LLEventStream pw("order_pw", true);
-    LLCoros::instance().launch("order_W1", [&pw]()
+    launchFibre("order_W1", [&pw]()
         {
             LLSD v = llcoro::suspendUntilEventOnWithTimeout(pw, 10.f, "timeout"); mark("W1:" + v.asString());
         });
-    LLCoros::instance().launch("order_W2", []()
+    launchFibre("order_W2", []()
         {
             LLEventStream never("order_never", true);
             LLSD v = llcoro::suspendUntilEventOnWithTimeout(never, 0.001f, "timeout"); mark("W2:" + v.asString());
@@ -220,7 +262,7 @@ void object::test<7>()
     set_test_name("LLApp status stops waiters");
     settle();
     LLEventStream ps("order_ps", true);
-    LLCoros::instance().launch("order_S", [&ps]()
+    launchFibre("order_S", [&ps]()
         {
             try { llcoro::suspendUntilEventOn(ps); mark("S:event"); }
             catch (const LLCoros::Stopping&) { mark("S:stopping"); throw; }
@@ -240,7 +282,7 @@ void object::test<8>()
     set_test_name("uncaught exception is rethrown after the pump");
     settle();
     LLEventStream px("order_px", true);
-    LLCoros::instance().launch("order_X", [&px]()
+    launchFibre("order_X", [&px]()
         {
             llcoro::suspendUntilEventOn(px); throw std::runtime_error("order_X");
         });
@@ -260,16 +302,16 @@ void object::test<9>()
     set_test_name("bridge: wake order and frame boundary");
     settle();
     LLEventStream pa("order_pa", true), pb("order_pb", true), pc("order_pc", true);
-    LLCoros::instance().launch("order_A", [&pa]() -> LL::Task<void>
+    launchFibre("order_A", [&pa]() -> LL::Task<void>
         {
             mark("A0"); co_await llcoro::co::suspendUntilEventOn(pa); mark("A1"); co_await llcoro::co::suspend();
             mark("A2");
         });
-    LLCoros::instance().launch("order_B", [&pb, &pc]() -> LL::Task<void>
+    launchFibre("order_B", [&pb, &pc]() -> LL::Task<void>
         {
             mark("B0"); co_await llcoro::co::suspendUntilEventOn(pb); mark("B1"); pc.post(LLSD()); mark("B2");
         });
-    LLCoros::instance().launch("order_C", [&pc]() -> LL::Task<void>
+    launchFibre("order_C", [&pc]() -> LL::Task<void>
         {
             mark("C0"); co_await llcoro::co::suspendUntilEventOn(pc); mark("C1");
         });
@@ -288,16 +330,16 @@ void object::test<10>()
     set_test_name("bridge: first event wins, consuming, timeout result");
     settle();
     LLEventStream pe("order_pe", true), pw("order_pw", true);
-    LLCoros::instance().launch("order_E", [&pe]() -> LL::Task<void>
+    launchFibre("order_E", [&pe]() -> LL::Task<void>
         {
             LLSD v = co_await llcoro::co::suspendUntilEventOn(pe); mark("E:" + v.asString());
         });
-    LLCoros::instance().launch("order_K", [&pe]() -> LL::Task<void>
+    launchFibre("order_K", [&pe]() -> LL::Task<void>
         {
             LLCoros::OverrideConsuming consuming(true);
             LLSD v = co_await llcoro::co::suspendUntilEventOn(pe); mark("K:" + v.asString());
         });
-    LLCoros::instance().launch("order_W", [&pw]() -> LL::Task<void>
+    launchFibre("order_W", [&pw]() -> LL::Task<void>
         {
             LLSD v = co_await llcoro::co::suspendUntilEventOnWithTimeout(pw, 0.001f, "timeout");
             mark("W:" + v.asString());
@@ -319,7 +361,7 @@ void object::test<11>()
     set_test_name("bridge: LLApp status stops a task, an uncaught exception is rethrown");
     settle();
     LLEventStream ps("order_ps", true);
-    LLCoros::instance().launch("order_S", [&ps]() -> LL::Task<void>
+    launchFibre("order_S", [&ps]() -> LL::Task<void>
         {
             try { co_await llcoro::co::suspendUntilEventOn(ps); mark("S:event"); }
             catch (const LLCoros::Stopping&) { mark("S:stopping"); throw; }
@@ -330,7 +372,7 @@ void object::test<11>()
     ensure_equals(sTrace, "S:stopping");
 #if ! LL_WINDOWS
     LLEventStream px("order_px", true);
-    LLCoros::instance().launch("order_X", [&px]() -> LL::Task<void>
+    launchFibre("order_X", [&px]() -> LL::Task<void>
         {
             co_await llcoro::co::suspendUntilEventOn(px); throw std::runtime_error("order_X");
         });

@@ -60,7 +60,7 @@ public:
     explicit CoroData(const std::string& name);
     /// for the thread_local record of the default coroutine on each thread
     explicit CoroData(int n);
-    ~CoroData();
+    ~CoroData() override;
     CoroData(const CoroData&) = delete;
     CoroData& operator=(const CoroData&) = delete;
 
@@ -216,15 +216,15 @@ private:
     struct Entry
     {
         enum class Kind: unsigned char { Task, Timers, Main };
-        Kind kind;
+        Kind kind{Kind::Task};
         std::coroutine_handle<> handle;
-        CoroData* record;
+        CoroData* record{nullptr};
     };
     struct Timer
     {
         std::coroutine_handle<> handle;
-        CoroData* record;
-        WaitClaim* claim;
+        CoroData* record{nullptr};
+        WaitClaim* claim{nullptr};
     };
     struct RootTask
     {
