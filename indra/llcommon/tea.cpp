@@ -41,7 +41,7 @@ std::string Tea::sActiveCurrency="L$";
 Tea::Tea() = default;
 
 
-Tea::~Tea() = default;
+
 
 void Tea::setCurrency(const std::string& currency)
 {
