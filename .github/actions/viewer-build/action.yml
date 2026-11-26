@@ -271,7 +271,7 @@ runs:
       shell: bash
       run: |
         cmake -S indra -B ${{ inputs.directory }} -DVS_CI_TRACE_COMPILE_CHECK:BOOL=ON
-        cmake --build ${{ inputs.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 3
+        cmake --build ${{ inputs.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --target lltrace_compile_check --parallel 4
 
     # The GCC LTO link of vulkanstorm-bin writes its temporary objects to
     # $TMPDIR. On a 26.04 host /tmp is an 8 GiB tmpfs, which overran
@@ -305,9 +305,10 @@ runs:
         free -h
         echo "TMPDIR for the build: $base/vkstorm-tmp"
 
+    # --parallel 4: the GitHub-hosted runners have 4 vCPUs (was 3, which left one mostly idle; 2026-11-26).
     - name: Build viewer and stage runtime
       shell: bash
-      run: cmake --build ${{ inputs.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 3
+      run: cmake --build ${{ inputs.directory }} --config ${{ env.VIEWER_BUILD_TYPE }} --parallel 4
 
     # The exe's entry point (llcpucheck_win.cpp) must run on any x86-64 processor.
     - name: Check the CPU-check object holds no AVX2 code
@@ -414,7 +415,7 @@ runs:
       run: |
         set -euo pipefail
         cmake -S indra -B "${{ inputs.directory }}" -DLL_TESTS:BOOL=ON
-        cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
+        cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 4 \
           --target INTEGRATION_TEST_lltrace INTEGRATION_TEST_llinventory_runtime INTEGRATION_TEST_jsonrpcws INTEGRATION_TEST_wsserver \
           llprimitive_tests INTEGRATION_TEST_llnightsky INTEGRATION_TEST_llmodel_decomposition \
           INTEGRATION_TEST_llcorehttp \
@@ -426,7 +427,7 @@ runs:
         # the J2K-only decoder) against neo-j2k itself, through its OpenJPEG-compatible headers
         # (indra/llimagej2cneo/CMakeLists.txt).
         if [ "${{ inputs.neoj2k }}" = true ]; then
-          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
+          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 4 \
             --target llj2c_reduce_neoj2k_test llj2c_decodeguard_neoj2k_test llj2c_decoderlimits_neoj2k_test \
             llj2c_jp2_file_neoj2k_test llj2c_reduce_rule_test llimagej2c_corpus_tool
           for test in llj2c_reduce_neoj2k_test llj2c_decodeguard_neoj2k_test llj2c_decoderlimits_neoj2k_test llj2c_jp2_file_neoj2k_test llj2c_reduce_rule_test; do
@@ -438,7 +439,7 @@ runs:
         # The credential-store tests stub LLControlGroup and link llui,
         # which only MSVC's linker resolves; they have never linked on Linux.
         if [ "$RUNNER_OS" = Windows ]; then
-          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 3 \
+          cmake --build "${{ inputs.directory }}" --config "$VIEWER_BUILD_TYPE" --parallel 4 \
             --target INTEGRATION_TEST_llsechandler_basic INTEGRATION_TEST_llsecapi
         fi
 
