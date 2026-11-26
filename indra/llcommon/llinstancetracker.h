@@ -208,7 +208,7 @@ public:
     {
     private:
         using super = snapshot_of<SUBCLASS>;
-        static T& instance_getter(typename super::iterator::reference pair)
+        static T& instance_getter(const typename super::iterator::reference& pair)
         {
             return *pair.second;
         }

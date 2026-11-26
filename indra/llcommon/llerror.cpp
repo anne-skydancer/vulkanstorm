@@ -1453,7 +1453,7 @@ namespace LLError
         return Globals::getInstance()->saveAndResetSettingsConfig();
     }
 
-    void restoreSettings(SettingsStoragePtr pSettingsStorage)
+    void restoreSettings(const SettingsStoragePtr& pSettingsStorage)
     {
         return Globals::getInstance()->restore(pSettingsStorage);
     }

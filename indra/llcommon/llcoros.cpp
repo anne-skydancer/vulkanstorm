@@ -368,6 +368,7 @@ void sehandle(const LLCoros::callable_t& callable, const std::string& name)
 // Top-level wrapper around caller's coroutine callable.
 // Normally we like to pass strings and such by const reference -- but in this
 // case, we WANT to copy both the name and the callable to our local stack!
+// NOLINTNEXTLINE(performance-unnecessary-value-param): the copies are the point (see above); the coroutine outlives its launcher's stack
 void LLCoros::toplevel(std::string name, callable_t callable)
 {
     // keep the CoroData on this top-level function's stack frame
