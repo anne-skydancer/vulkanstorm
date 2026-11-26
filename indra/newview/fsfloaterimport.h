@@ -29,6 +29,7 @@
 #define FS_FSFLOATERIMPORT_H
 
 #include "llfloater.h"
+#include <memory>
 #include "llhttpsdhandler.h"
 #include "llinventorymodel.h"
 #include "llresourcedata.h"
@@ -143,11 +144,14 @@ class FSCreateItemCallback : public LLInventoryCallback
 {
     LOG_CLASS(FSCreateItemCallback);
 public:
-    FSCreateItemCallback(FSResourceData* data);
+    // data is the struct the callback reads; owner keeps it (and whatever else must live as
+    // long as the callback) alive until the callback is destroyed, fired or not.
+    FSCreateItemCallback(FSResourceData* data, std::shared_ptr<void> owner);
 
     void fire(const LLUUID& inv_item);
 
     FSResourceData* mData;
+    std::shared_ptr<void> mOwner;
 };
 
 #endif // FS_FSFLOATERIMPORT_H

@@ -116,7 +116,7 @@ namespace
         //HandleScriptUserData(const std::string &pumpname) :
         //    mPumpname(pumpname)
         //{ }
-        HandleScriptUserData(const std::string &pumpname, LLScriptQueueData* data) :
+        HandleScriptUserData(const std::string &pumpname, std::shared_ptr<LLScriptQueueData> data) :
             mPumpname(pumpname),
             mData(data)
         { }
@@ -127,13 +127,15 @@ namespace
         const std::string &getPumpName() const { return mPumpname; }
 
         // <FS:Ansariel> [LSL PreProc]
-        LLScriptQueueData* getData() const { return mData; }
+        LLScriptQueueData* getData() const { return mData.get(); }
+        // shared with the preprocessor, which keeps it until it has finished
+        const std::shared_ptr<LLScriptQueueData>& getSharedData() const { return mData; }
 
     private:
         std::string mPumpname;
 
         // <FS:Ansariel> [LSL PreProc]
-        LLScriptQueueData* mData;
+        std::shared_ptr<LLScriptQueueData> mData;
     };
 
     // Owner of the user data handed to the asset request. Main thread only, like the
@@ -412,8 +414,7 @@ void LLFloaterCompileQueue::handleScriptRetrieval(const LLUUID& assetId,
         }
 
         // <FS:Ansariel> [LSL PreProc]
-        // LSL PreProc error case
-        delete ((HandleScriptUserData *)userData)->getData();
+        // LSL PreProc error case: the user data (and its LLScriptQueueData) is freed on release below
     }
     // <FS:KC> [LSL PreProc]
     else if (((HandleScriptUserData *)userData)->getData())
@@ -431,7 +432,7 @@ void LLFloaterCompileQueue::handleScriptRetrieval(const LLUUID& assetId,
             script_data[file_length] = 0;
 
             queue->addProcessingMessage("CompileQueuePreprocessing", LLSD().with("SCRIPT", data->mItem->getName()));
-            queue->mLSLProc->preprocess_script(assetId, data, type, LLStringExplicit(&script_data[0]));
+            queue->mLSLProc->preprocess_script(assetId, ((HandleScriptUserData *)userData)->getSharedData(), type, LLStringExplicit(&script_data[0]));
         }
         result["preproc"] = true;
     }
@@ -594,12 +595,12 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
             item->getInventorySubType() != SST_LUA && requested_target != "luau")
         {
             // Need to dump some stuff into an LLScriptQueueData struct for the LSL PreProc.
-            LLScriptQueueData* datap = new LLScriptQueueData(hfloater.get()->getKey().asUUID(), object->getID(), experienceId, item, compile_target);
+            auto datap = std::make_shared<LLScriptQueueData>(hfloater.get()->getKey().asUUID(), object->getID(), experienceId, item, compile_target);
             userData = addPendingRetrieval(new HandleScriptUserData(pump.getName(), datap));
         }
         else
         {
-            userData = addPendingRetrieval(new HandleScriptUserData(pump.getName(), NULL));
+            userData = addPendingRetrieval(new HandleScriptUserData(pump.getName(), nullptr));
         }
         // </FS:Ansariel>
 
@@ -1221,7 +1222,7 @@ void LLFloaterCompileQueue::scriptPreprocComplete(LLScriptQueueData* data, LLAss
             }
         }
     }
-    delete data;
+    // data is owned by the callers' shared_ptrs (HandleScriptUserData and the preprocessor)
 }
 
 // static

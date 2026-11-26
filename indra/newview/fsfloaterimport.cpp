@@ -1301,7 +1301,7 @@ void FSFloaterImport::uploadAsset(LLUUID asset_id, LLUUID inventory_item)
             ci_data->mFloater = getHandle();
             ci_data->asset_type = asset_type;
             ci_data->post_asset_upload = false;
-            LLPointer<LLInventoryCallback> cb = new FSCreateItemCallback(ci_data);
+            LLPointer<LLInventoryCallback> cb = new FSCreateItemCallback(ci_data, std::shared_ptr<FSResourceData>(ci_data));
             create_inventory_item(gAgentID, gAgentSessionID,
                           folder_id, LLTransactionID::tnull, name, description, asset_type, inventory_type,
                           NO_INV_SUBTYPE, PERM_ALL, cb);
@@ -1325,7 +1325,7 @@ void FSFloaterImport::uploadAsset(LLUUID asset_id, LLUUID inventory_item)
             ci_data->mFloater = getHandle();
             ci_data->asset_type = asset_type;
             ci_data->post_asset_upload = false;
-            LLPointer<LLInventoryCallback> cb = new FSCreateItemCallback(ci_data);
+            LLPointer<LLInventoryCallback> cb = new FSCreateItemCallback(ci_data, std::shared_ptr<FSResourceData>(ci_data));
             create_inventory_item(gAgentID, gAgentSessionID,
                           folder_id, LLTransactionID::tnull, name, description, asset_type, inventory_type,
                           NO_INV_SUBTYPE, PERM_MOVE | PERM_TRANSFER, cb);
@@ -1375,7 +1375,7 @@ void FSFloaterImport::uploadAsset(LLUUID asset_id, LLUUID inventory_item)
             ci_data->mFloater = getHandle();
             ci_data->asset_type = asset_type;
             ci_data->post_asset_upload = false;
-            LLPointer<LLInventoryCallback> cb = new FSCreateItemCallback(ci_data);
+            LLPointer<LLInventoryCallback> cb = new FSCreateItemCallback(ci_data, std::shared_ptr<FSResourceData>(ci_data));
             create_inventory_item(gAgentID, gAgentSessionID,
                           folder_id, LLTransactionID::tnull, name, description, asset_type, inventory_type,
                           NO_INV_SUBTYPE, PERM_ALL, cb);
@@ -1613,13 +1613,14 @@ void FSFloaterImport::onAssetUploadComplete(const LLUUID& uuid, void* userdata, 
                     }
                     fs_data->post_asset_upload = true;
                     fs_data->post_asset_upload_id = asset_id;
-                    LLPointer<LLInventoryCallback> cb = new FSCreateItemCallback(fs_data);
+                    // The callback now owns fs_data and data (resourceDeleter frees both), so they
+                    // live until the inventory item is created or the callback is dropped.
+                    LLPointer<LLInventoryCallback> cb = new FSCreateItemCallback(fs_data, std::shared_ptr<LLResourceData>(data, resourceDeleter));
                     create_inventory_item(gAgentID, gAgentSessionID,
                                   folder_id, data->mAssetInfo.mTransactionID, data->mAssetInfo.getName(),
                                   data->mAssetInfo.getDescription(), data->mAssetInfo.mType,
                                   data->mInventoryType, fs_data->wearable_type, next_owner_perms,
                                   cb);
-                    // delete data; // can this be done without deleting fs_data that still is in use?
                     return;
                 }
                 else
@@ -1824,8 +1825,9 @@ void FSFloaterImport::popNextAsset()
     importPrims();
 }
 
-FSCreateItemCallback::FSCreateItemCallback(FSResourceData* data) :
-    mData(data)
+FSCreateItemCallback::FSCreateItemCallback(FSResourceData* data, std::shared_ptr<void> owner) :
+    mData(data),
+    mOwner(std::move(owner))
 {
 }
 
