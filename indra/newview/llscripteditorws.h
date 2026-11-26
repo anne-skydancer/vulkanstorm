@@ -282,12 +282,12 @@ protected:
     LLSD handleScriptUnsubscribe(U32 connection_id, const LLSD& params);
     LLSD handleFileWatcherFileListRequest() const;
     LLSD handleObjectRequest(U32 connection_id, const LLSD& params);
-    LLSD handleObjectContentGet(const std::string& method, const LLSD& id, const LLSD& params);
-    LLSD handleObjectContentSave(const std::string& method, const LLSD& id, const LLSD& params);
-    LLSD saveScript(LLViewerObject* prim, LLInventoryItem* item, const std::string& content, const LLSD& params);
-    LLSD saveNotecard(LLViewerObject* prim, LLInventoryItem* item, const std::string& content);
+    LL::Task<LLSD> handleObjectContentGet(std::string method, LLSD id, LLSD params);
+    LL::Task<LLSD> handleObjectContentSave(std::string method, LLSD id, LLSD params);
+    LL::Task<LLSD> saveScript(LLViewerObject* prim, LLInventoryItem* item, std::string content, LLSD params);
+    LL::Task<LLSD> saveNotecard(LLViewerObject* prim, LLInventoryItem* item, std::string content);
     LLSD handleObjectItemDelete(U32 connection_id, const LLSD& params);
-    LLSD handleObjectItemCreate(const std::string& method, const LLSD& id, const LLSD& params);
+    LL::Task<LLSD> handleObjectItemCreate(std::string method, LLSD id, LLSD params);
     LLSD handleObjectUnpublish(U32 connection_id, const LLSD& params);
     LLSD handleObjectList() const;
     LLSD handleObjectScriptSetRunning(U32 connection_id, const LLSD& params);
@@ -341,6 +341,50 @@ protected:
             }
             return fn(*server, method, id, params);
         };
+    }
+
+    /// Like bindHandler(), for registerAsyncMethod(): `fn` returns an LLSD (a handler that never waits) or an
+    /// LL::Task<LLSD> (one that does). The server stays alive for as long as the task runs, as the fibre's stack
+    /// kept it alive before.
+    template <typename Fn>
+    LLJSONRPCConnection::AsyncMethodHandler bindAsyncHandler(Fn fn)
+    {
+        std::weak_ptr<LLWebsocketMgr::WSServer> weak_base = weak_from_this();
+        return [weak_base, fn = std::move(fn)]
+               (std::string method, LLSD id, LLSD params) -> LL::Task<LLSD>
+        {
+            auto base = weak_base.lock();
+            if (!base)
+            {
+                return finishedHandler(LLSD());
+            }
+            auto server = std::static_pointer_cast<LLScriptEditorWSServer>(base);
+            if (!server->isRunning() || !isEnabled())
+            {
+                return finishedHandler(LLSD());
+            }
+            return runAsyncHandler(std::move(server), fn, std::move(method), std::move(id), std::move(params));
+        };
+    }
+
+    static LL::Task<LLSD> finishedHandler(LLSD result)
+    {
+        co_return result;
+    }
+
+    template <typename Fn>
+    static LL::Task<LLSD> runAsyncHandler(std::shared_ptr<LLScriptEditorWSServer> server, Fn fn, std::string method,
+                                          LLSD id, LLSD params)
+    {
+        if constexpr (std::is_same_v<std::invoke_result_t<Fn&, LLScriptEditorWSServer&, const std::string&,
+                                                          const LLSD&, const LLSD&>, LLSD>)
+        {
+            co_return fn(*server, method, id, params);
+        }
+        else
+        {
+            co_return co_await fn(*server, method, id, params);
+        }
     }
 
 private:

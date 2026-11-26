@@ -131,21 +131,21 @@ namespace
     // suspends the current coroutine up to 	imeout seconds for the result.
     // Throws RequestTimeoutError(timeout_msg) if the deadline elapses.
     template <typename Kickoff>
-    LLSD await_async_result(const std::string& pump_prefix,
+    LL::Task<LLSD> await_async_result(std::string pump_prefix,
                             F32 timeout,
-                            const std::string& timeout_msg,
+                            std::string timeout_msg,
                             Kickoff&& kickoff)
     {
         LLEventMailDrop pump(pump_prefix + "." + LLUUID::generateNewID().asString(), true);
         std::string pump_name = pump.getName();
         std::forward<Kickoff>(kickoff)(pump_name);
-        LLSD result = llcoro::suspendUntilEventOnWithTimeout(
+        LLSD result = co_await llcoro::co::suspendUntilEventOnWithTimeout(
             pump, timeout, LLSD().with("timeout", true));
         if (result.has("timeout"))
         {
             throw LLJSONRPCConnection::RequestTimeoutError(timeout_msg);
         }
-        return result;
+        co_return result;
     }
 
     // Builds the (success, failure) callback pair used by LLResourceUploadInfo-
@@ -673,115 +673,115 @@ void LLScriptEditorWSServer::setupConnectionMethods(LLJSONRPCConnection::ptr_t c
         // All per-connection methods dispatch to the main thread inside a
         // coroutine (see LLJSONRPCConnection::processRequest).
         script_connection->registerAsyncMethod("language.syntax.id",
-            bindHandler([](LLScriptEditorWSServer& s, auto&, auto&, auto&)
+            bindAsyncHandler([](LLScriptEditorWSServer& s, auto&, auto&, auto&)
             {
                 return s.handleLanguageIdRequest();
             }));
 
         script_connection->registerAsyncMethod("language.syntax",
-            bindHandler([](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleSyntaxRequest(params);
             }));
 
         script_connection->registerAsyncMethod("language.syntax.cache",
-            bindHandler([](LLScriptEditorWSServer& s, auto&, auto&, auto&)
+            bindAsyncHandler([](LLScriptEditorWSServer& s, auto&, auto&, auto&)
             {
                 return s.handleSyntaxCacheRequest();
             }));
 
         script_connection->registerAsyncMethod("language.syntax.get",
-            bindHandler([](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleSyntaxCacheFileRequest(params);
             }));
 
         script_connection->registerAsyncMethod("script.subscribe",
-            bindHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleScriptSubscribe(connection_id, params);
             }));
 
         script_connection->registerAsyncMethod("script.list",
-            bindHandler([](LLScriptEditorWSServer& s, auto&, auto&, auto&)
+            bindAsyncHandler([](LLScriptEditorWSServer& s, auto&, auto&, auto&)
             {
                 return s.handleFileWatcherFileListRequest();
             }));
 
         script_connection->registerAsyncMethod("object.unpublish",
-            bindHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleObjectUnpublish(connection_id, params);
             }));
 
         script_connection->registerAsyncMethod("script.unsubscribe",
-            bindHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleScriptUnsubscribe(connection_id, params);
             }));
 
         script_connection->registerAsyncMethod("object.request",
-            bindHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleObjectRequest(connection_id, params);
             }));
 
         script_connection->registerAsyncMethod("object.content.get",
-            bindHandler([](LLScriptEditorWSServer& s, const std::string& method, const LLSD& id, const LLSD& params)
+            bindAsyncHandler([](LLScriptEditorWSServer& s, const std::string& method, const LLSD& id, const LLSD& params)
             {
                 return s.handleObjectContentGet(method, id, params);
             }));
 
         script_connection->registerAsyncMethod("object.content.save",
-            bindHandler([](LLScriptEditorWSServer& s, const std::string& method, const LLSD& id, const LLSD& params)
+            bindAsyncHandler([](LLScriptEditorWSServer& s, const std::string& method, const LLSD& id, const LLSD& params)
             {
                 return s.handleObjectContentSave(method, id, params);
             }));
 
         script_connection->registerAsyncMethod("object.item.delete",
-            bindHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleObjectItemDelete(connection_id, params);
             }));
 
         script_connection->registerAsyncMethod("object.item.create",
-            bindHandler([](LLScriptEditorWSServer& s, const std::string& method, const LLSD& id, const LLSD& params)
+            bindAsyncHandler([](LLScriptEditorWSServer& s, const std::string& method, const LLSD& id, const LLSD& params)
             {
                 return s.handleObjectItemCreate(method, id, params);
             }));
 
         script_connection->registerAsyncMethod("object.list",
-            bindHandler([](LLScriptEditorWSServer& s, auto&, auto&, auto&)
+            bindAsyncHandler([](LLScriptEditorWSServer& s, auto&, auto&, auto&)
             {
                 return s.handleObjectList();
             }));
 
         script_connection->registerAsyncMethod("object.script.set_running",
-            bindHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleObjectScriptSetRunning(connection_id, params);
             }));
 
         script_connection->registerAsyncMethod("object.script.reset",
-            bindHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleObjectScriptReset(connection_id, params);
             }));
 
         script_connection->registerAsyncMethod("object.modify",
-            bindHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleObjectModify(connection_id, params);
             }));
 
         script_connection->registerAsyncMethod("object.item.modify",
-            bindHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleObjectItemModify(connection_id, params);
             }));
 
         script_connection->registerAsyncMethod("command.execute",
-            bindHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
+            bindAsyncHandler([connection_id](LLScriptEditorWSServer& s, auto&, auto&, const LLSD& params)
             {
                 return s.handleCommandExecute(connection_id, params);
             }));
@@ -1618,7 +1618,7 @@ LLScriptEditorWSServer::ValidatedItem LLScriptEditorWSServer::validatePublishedI
     return { prim, root, item, type };
 }
 
-LLSD LLScriptEditorWSServer::handleObjectContentGet(const std::string& method, const LLSD& id, const LLSD& params)
+LL::Task<LLSD> LLScriptEditorWSServer::handleObjectContentGet(std::string method, LLSD id, LLSD params)
 {
     // Permission policy for reading item contents:
     //   - Scripts:   require both PERM_COPY and PERM_MODIFY. No-copy or
@@ -1645,7 +1645,7 @@ LLSD LLScriptEditorWSServer::handleObjectContentGet(const std::string& method, c
     LLUUID prim_id = params["prim_id"].asUUID();
     LLUUID item_id = params["item_id"].asUUID();
 
-    LLSD cb_result = await_async_result(
+    LLSD cb_result = co_await await_async_result(
         "objectContentGet", ASSET_FETCH_TIMEOUT, "Asset fetch timed out",
         [&](const std::string& pump_name)
         {
@@ -1724,10 +1724,10 @@ LLSD LLScriptEditorWSServer::handleObjectContentGet(const std::string& method, c
     response["item_id"] = item_id;
     response["content"] = text_content;
     response["encoding"] = "utf-8";
-    return response;
+    co_return response;
 }
 
-LLSD LLScriptEditorWSServer::handleObjectContentSave(const std::string& method, const LLSD& id, const LLSD& params)
+LL::Task<LLSD> LLScriptEditorWSServer::handleObjectContentSave(std::string method, LLSD id, LLSD params)
 {
     std::string content = params["content"].asString();
     if (content.empty())
@@ -1737,16 +1737,16 @@ LLSD LLScriptEditorWSServer::handleObjectContentSave(const std::string& method, 
 
     if (v.type == LLAssetType::AT_LSL_TEXT)
     {
-        return saveScript(v.prim, v.item, content, params);
+        co_return co_await saveScript(v.prim, v.item, content, params);
     }
     else
     {
-        return saveNotecard(v.prim, v.item, content);
+        co_return co_await saveNotecard(v.prim, v.item, content);
     }
 }
 
-LLSD LLScriptEditorWSServer::saveScript(LLViewerObject* prim, LLInventoryItem* item,
-                                         const std::string& content, const LLSD& params)
+LL::Task<LLSD> LLScriptEditorWSServer::saveScript(LLViewerObject* prim, LLInventoryItem* item,
+                                         std::string content, LLSD params)
 {
     // Determine compile target
     std::string compile_target;
@@ -1786,7 +1786,7 @@ LLSD LLScriptEditorWSServer::saveScript(LLViewerObject* prim, LLInventoryItem* i
     if (url.empty())
         throw LLJSONRPCConnection::InternalError("UpdateScriptTask capability not available");
 
-    LLSD cb_result = await_async_result(
+    LLSD cb_result = co_await await_async_result(
         "objectContentSave", SCRIPT_UPLOAD_TIMEOUT, "Script upload/compile timed out",
         [&, prim_id, item_id](const std::string& pump_name)
         {
@@ -1882,11 +1882,11 @@ LLSD LLScriptEditorWSServer::saveScript(LLViewerObject* prim, LLInventoryItem* i
         }
     }
 
-    return response;
+    co_return response;
 }
 
-LLSD LLScriptEditorWSServer::saveNotecard(LLViewerObject* prim, LLInventoryItem* item,
-                                           const std::string& content)
+LL::Task<LLSD> LLScriptEditorWSServer::saveNotecard(LLViewerObject* prim, LLInventoryItem* item,
+                                           std::string content)
 {
     // The task inventory can be refreshed while the upload is in flight,
     // invalidating the raw item pointer returned by validatePublishedItem().
@@ -1905,7 +1905,7 @@ LLSD LLScriptEditorWSServer::saveNotecard(LLViewerObject* prim, LLInventoryItem*
     std::ostringstream ostr;
     notecard.exportStream(ostr);
 
-    LLSD cb_result = await_async_result(
+    LLSD cb_result = co_await await_async_result(
         "objectContentSaveNotecard", NOTECARD_UPLOAD_TIMEOUT, "Notecard upload timed out",
         [&, prim_id, item_id](const std::string& pump_name)
         {
@@ -1940,7 +1940,7 @@ LLSD LLScriptEditorWSServer::saveNotecard(LLViewerObject* prim, LLInventoryItem*
         }
     }
 
-    return response;
+    co_return response;
 }
 
 LLSD LLScriptEditorWSServer::handleObjectItemDelete(U32 connection_id, const LLSD& params)
@@ -1993,7 +1993,7 @@ LLSD LLScriptEditorWSServer::handleObjectUnpublish(U32 connection_id, const LLSD
     return response;
 }
 
-LLSD LLScriptEditorWSServer::handleObjectItemCreate(const std::string& method, const LLSD& id, const LLSD& params)
+LL::Task<LLSD> LLScriptEditorWSServer::handleObjectItemCreate(std::string method, LLSD id, LLSD params)
 {
     std::string type = params["type"].asString();
     if (type != "script" && type != "notecard")
@@ -2137,7 +2137,7 @@ LLSD LLScriptEditorWSServer::handleObjectItemCreate(const std::string& method, c
     }
 
     // Wait for inventory change callback
-    LLSD event = llcoro::suspendUntilEventOnWithTimeout(result_pump, ITEM_CREATE_TIMEOUT, LLSD().with("timeout", true));
+    LLSD event = co_await llcoro::co::suspendUntilEventOnWithTimeout(result_pump, ITEM_CREATE_TIMEOUT, LLSD().with("timeout", true));
 
     if (event.has("timeout"))
     {
@@ -2218,7 +2218,7 @@ LLSD LLScriptEditorWSServer::handleObjectItemCreate(const std::string& method, c
         throw LLJSONRPCConnection::InternalError("Item was not found in updated inventory");
     }
 
-    return response;
+    co_return response;
 }
 
 

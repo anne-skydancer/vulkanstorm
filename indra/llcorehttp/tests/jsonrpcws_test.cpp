@@ -401,9 +401,9 @@ namespace tut
                 return LLSD();
             });
         conn.registerAsyncMethod("async.method",
-            [](const std::string&, const LLSD&, const LLSD&) -> LLSD
+            [](std::string, LLSD, LLSD) -> LL::Task<LLSD>
             {
-                return LLSD();
+                co_return LLSD();
             });
 
         ensure_equals("sync method registered", conn.getMethods().count("sync.method"), (size_t)1);
