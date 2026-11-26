@@ -154,9 +154,15 @@ LLCoros::~LLCoros()
 void LLCoros::cleanupSingleton()
 {
     // Some of the coroutines (like voice) will depend onto
-    // origin singletons, so clean coros before deleting those
+    // origin singletons, so clean coros before deleting those.
+    // LLAppViewer::cleanup() already drained them before tearing anything
+    // down; this is the backstop for any that remain.
+    drain("at entry to ~LLCoros()");
+}
 
-    printActiveCoroutines("at entry to ~LLCoros()");
+void LLCoros::drain(const std::string& when)
+{
+    printActiveCoroutines(when);
     // Other LLApp status-change listeners do things like close
     // work queues and inject the Stop exception into pending
     // promises, to force coroutines waiting on those things to

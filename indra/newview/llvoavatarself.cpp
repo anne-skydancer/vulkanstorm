@@ -2804,6 +2804,10 @@ const std::string LLVOAvatarSelf::debugDumpAllLocalTextureDataInfo() const
 
 void LLVOAvatarSelf::appearanceChangeMetricsCoro(std::string url)
 {
+    // Keep this avatar alive across the HTTP wait: it is destroyed on relog and the
+    // coroutine writes mInitialMetric after the reply.
+    LLPointer<LLVOAvatarSelf> keep_alive(this);
+
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("appearanceChangeMetrics", httpPolicy);
@@ -2862,13 +2866,16 @@ void LLVOAvatarSelf::appearanceChangeMetricsCoro(std::string url)
     LL_DEBUGS("Avatar") << avString() << "message: " << ll_pretty_print_sd(msg) << LL_ENDL;
 
     gPendingMetricsUploads++;
+    // Undone on every exit, including an LLCoros::Stop unwinding the wait.
+    struct PendingUploadGuard
+    {
+        ~PendingUploadGuard() { gPendingMetricsUploads--; }
+    } pending_upload_guard;
 
     LLSD result = httpAdapter->postAndSuspend(httpRequest, url, msg);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
-
-    gPendingMetricsUploads--;
 
     if (!status)
     {

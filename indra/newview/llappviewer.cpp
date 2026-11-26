@@ -2053,6 +2053,16 @@ bool LLAppViewer::cleanup()
     velopack_cleanup();
 #endif
 
+    // Quitting has been set (frame() returned) and every waiting coroutine has
+    // Stopping queued. Let the stopped coroutines unwind now, while the UI, inventory,
+    // LLWorld, the object list and the singletons they use still exist, not inside
+    // LLSingletonBase::deleteAll() after all of those are gone. Nothing may be torn
+    // down before this point; LLCoros::cleanupSingleton remains as a backstop.
+    if (LLCoros::instanceExists())
+    {
+        LLCoros::instance().drain("at start of LLAppViewer::cleanup()");
+    }
+
     //ditch LLVOAvatarSelf instance
     gAgentAvatarp = NULL;
 
