@@ -564,7 +564,7 @@ public:
             // and we're certain that the associated int values are distinct
             // indexes. The fact that they're not in order is irrelevant.
             KeyList vkeys(vmap.size());
-            for (typename VertexMap::const_iterator vmi = vmap.begin(), vmend = vmap.end();
+            for (auto vmi = vmap.begin(), vmend = vmap.end();
                  vmi != vmend; ++vmi)
             {
                 vkeys[vmi->second] = vmi->first;
@@ -572,7 +572,7 @@ public:
             // Walk the sorted output list, building the result into mCache so
             // we'll have it next time someone asks.
             mCache.clear();
-            for (VertexList::const_iterator svi = sorted.begin(), svend = sorted.end();
+            for (auto svi = sorted.begin(), svend = sorted.end();
                  svi != svend; ++svi)
             {
                 // We're certain that vkeys[*svi] exists. However, there might not

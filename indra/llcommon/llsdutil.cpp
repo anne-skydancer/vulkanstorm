@@ -998,7 +998,7 @@ LLSD llsd_clone(LLSD value, LLSD filter)
     {
     case LLSD::TypeMap:
         clone = LLSD::emptyMap();
-        for (LLSD::map_const_iterator itm = value.beginMap(); itm != value.endMap(); ++itm)
+        for (auto itm = value.beginMap(); itm != value.endMap(); ++itm)
         {
             if (has_filter)
             {
@@ -1022,7 +1022,7 @@ LLSD llsd_clone(LLSD value, LLSD filter)
         break;
     case LLSD::TypeArray:
         clone = LLSD::emptyArray();
-        for (LLSD::array_const_iterator ita = value.beginArray(); ita != value.endArray(); ++ita)
+        for (auto ita = value.beginArray(); ita != value.endArray(); ++ita)
         {
             clone.append(llsd_clone(*ita, filter));
         }
@@ -1047,7 +1047,7 @@ LLSD llsd_shallow(LLSD value, LLSD filter)
     if (value.isMap())
     {
         shallow = LLSD::emptyMap();
-        for (LLSD::map_const_iterator itm = value.beginMap(); itm != value.endMap(); ++itm)
+        for (auto itm = value.beginMap(); itm != value.endMap(); ++itm)
         {
             if (has_filter)
             {
@@ -1072,7 +1072,7 @@ LLSD llsd_shallow(LLSD value, LLSD filter)
     else if (value.isArray())
     {
         shallow = LLSD::emptyArray();
-        for (LLSD::array_const_iterator ita = value.beginArray(); ita != value.endArray(); ++ita)
+        for (auto ita = value.beginArray(); ita != value.endArray(); ++ita)
         {
             shallow.append(*ita);
         }

@@ -318,7 +318,7 @@ public:
 
         // Iterate through the dictionary of configuration options.
         LLSD configs = mProcessorInfo["config"];
-        for(LLSD::map_const_iterator cfgItr = configs.beginMap(); cfgItr != configs.endMap(); ++cfgItr)
+        for(auto cfgItr = configs.beginMap(); cfgItr != configs.endMap(); ++cfgItr)
         {
             out << cfgItr->first << " = " << cfgItr->second << '\n';
         }
