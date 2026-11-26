@@ -375,6 +375,12 @@ class CoverageRulesTest(unittest.TestCase):
         self.assertIn(8, chains)       # and so does its #endif
         self.assertNotIn(2, chains)
 
+    def test_the_if_not_defined_guard(self):
+        body = "%s\n#define GUARD_H\nint a;\n#endif\n"
+        for first in ("#if ! defined(GUARD_H)", "#if !defined GUARD_H", "#if !defined( GUARD_H )"):
+            self.assertNotIn(3, cg.conditional_chains(body % first), first)
+        self.assertIn(3, cg.conditional_chains(body % "#if !defined(OTHER)"))
+
     def test_a_conditional_around_a_file_that_is_not_a_guard_counts(self):
         chains = cg.conditional_chains("#if LL_WINDOWS\nint a;\n#endif\n")
         self.assertEqual(chains[2], ["1: #if LL_WINDOWS"])

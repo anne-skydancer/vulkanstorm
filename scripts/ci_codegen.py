@@ -284,6 +284,9 @@ def conditional_chains(text):
         elif kind in ("if", "ifdef", "ifndef"):
             if directives == 1 and kind == "ifndef":
                 guard_name = rest
+            elif directives == 1 and kind == "if":  # #if !defined(NAME), the other way to write a guard
+                named = re.fullmatch(r"!\s*defined\s*\(?\s*(\w+)\s*\)?", rest)
+                guard_name = named.group(1) if named else None
             stack.append([number, f"#{kind} {rest}".strip(), False])
         elif kind in ("elif", "else") and stack:
             stack[-1][1] = f"#{kind} {rest} (of {stack[-1][1]})".replace("  ", " ")
