@@ -2802,9 +2802,8 @@ void LLViewerMediaImpl::mimeDiscoveryCoro(std::string url)
     LLCore::HttpOptions::ptr_t httpOpts = std::make_shared<LLCore::HttpOptions>();
     LLCore::HttpHeaders::ptr_t httpHeaders = std::make_shared<LLCore::HttpHeaders>();
 
-    // Hold a reference so that we do not go away while the coroutine is active; the
-    // LLPointer releases it on every exit, including an LLCoros::Stop unwinding the wait.
-    LLPointer<LLViewerMediaImpl> keep_alive(this);
+    // Increment our refcount so that we do not go away while the coroutine is active.
+    this->ref();
 
     mMimeProbe = httpAdapter;
 
@@ -2871,6 +2870,8 @@ void LLViewerMediaImpl::mimeDiscoveryCoro(std::string url)
     {
         LL_WARNS() << "LLViewerMediaImpl to be released." << LL_ENDL;
     }
+
+    this->unref();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
