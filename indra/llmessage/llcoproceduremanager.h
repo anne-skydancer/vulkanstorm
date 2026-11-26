@@ -31,6 +31,7 @@
 #include "lleventcoro.h"
 #include "llcoros.h"
 #include "llcorehttputil.h"
+#include "lltask.h"
 #include "lluuid.h"
 
 class LLCoprocedurePool;
@@ -44,7 +45,7 @@ public:
     typedef std::function<U32(const std::string &)> SettingQuery_t;
     typedef std::function<void(const std::string &, U32, const std::string &)> SettingUpdate_t;
 
-    typedef std::function<void(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &, const LLUUID &id)> CoProcedure_t;
+    typedef std::function<LL::Task<void>(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID)> CoProcedure_t;
 
     /// Places the coprocedure on the queue for processing.
     ///

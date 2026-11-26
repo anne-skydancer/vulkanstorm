@@ -251,17 +251,17 @@ const LLExperienceCache::cache_t& LLExperienceCache::getCached()
 }
 
 // static because used by coroutine and can outlive the instance
-void LLExperienceCache::requestExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, std::string url, RequestQueue_t requests)
+LL::Task<void> LLExperienceCache::requestExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, std::string url, RequestQueue_t requests)
 {
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
     //LL_INFOS("requestExperiencesCoro") << "url: " << url << LL_ENDL;
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     if (sShutdown)
     {
-        return;
+        co_return;
     }
 
     LLExperienceCache* self = LLExperienceCache::getInstance();
@@ -292,7 +292,7 @@ void LLExperienceCache::requestExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdap
 
             self->processExperience(*it, exp);
         }
-        return;
+        co_return;
     }
 
     LLSD experiences = result["experience_keys"];
@@ -418,7 +418,7 @@ void LLExperienceCache::setCapabilityQuery(LLExperienceCache::CapabilityQuery_t 
 }
 
 // static, because coro can outlive the instance
-void LLExperienceCache::idleCoro()
+LL::Task<void> LLExperienceCache::idleCoro()
 {
     const F32 SECS_BETWEEN_REQUESTS = 0.5f;
     const F32 ERASE_EXPIRED_TIMEOUT = 60.f; // seconds
@@ -437,7 +437,7 @@ void LLExperienceCache::idleCoro()
             self->requestExperiences();
         }
 
-        llcoro::suspendUntilTimeout(SECS_BETWEEN_REQUESTS);
+        co_await llcoro::co::suspendUntilTimeout(SECS_BETWEEN_REQUESTS);
 
     } while (!sShutdown);
 
@@ -584,7 +584,7 @@ void LLExperienceCache::fetchAssociatedExperience(const LLUUID& objectId, const 
         boost::bind(&LLExperienceCache::fetchAssociatedExperienceCoro, this, _1, objectId, itemId, url, fn));
 }
 
-void LLExperienceCache::fetchAssociatedExperienceCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, LLUUID objectId, LLUUID itemId, std::string url, ExperienceGetFn_t fn)
+LL::Task<void> LLExperienceCache::fetchAssociatedExperienceCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, LLUUID objectId, LLUUID itemId, std::string url, ExperienceGetFn_t fn)
 {
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
@@ -595,7 +595,7 @@ void LLExperienceCache::fetchAssociatedExperienceCoro(LLCoreHttpUtil::HttpCorout
         if (url.empty())
         {
             LL_WARNS("ExperienceCache") << "No Metadata capability." << LL_ENDL;
-            return;
+            co_return;
         }
     }
 
@@ -606,7 +606,7 @@ void LLExperienceCache::fetchAssociatedExperienceCoro(LLCoreHttpUtil::HttpCorout
     data["item-id"] = itemId;
     data["fields"] = fields;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, data);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, data);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -628,7 +628,7 @@ void LLExperienceCache::fetchAssociatedExperienceCoro(LLCoreHttpUtil::HttpCorout
         {
             fn(failure);
         }
-        return;
+        co_return;
     }
 
     LLUUID expId = result["experience"].asUUID();
@@ -648,7 +648,7 @@ void LLExperienceCache::findExperienceByName(const std::string text, int page, E
         boost::bind(&LLExperienceCache::findExperienceByNameCoro, this, _1, text, page, fn));
 }
 
-void LLExperienceCache::findExperienceByNameCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, std::string text, int page, ExperienceGetFn_t fn)
+LL::Task<void> LLExperienceCache::findExperienceByNameCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, std::string text, int page, ExperienceGetFn_t fn)
 {
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
     std::ostringstream url;
@@ -656,7 +656,7 @@ void LLExperienceCache::findExperienceByNameCoro(LLCoreHttpUtil::HttpCoroutineAd
 
     url << mCapability("FindExperienceByName")  << "?page=" << page << "&page_size=" << SEARCH_PAGE_SIZE << "&query=" << LLURI::escape(text);
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url.str());
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url.str());
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -664,7 +664,7 @@ void LLExperienceCache::findExperienceByNameCoro(LLCoreHttpUtil::HttpCoroutineAd
     if (!status)
     {
         fn(LLSD());
-        return;
+        co_return;
     }
 
     result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
@@ -691,7 +691,7 @@ void LLExperienceCache::getGroupExperiences(const LLUUID &groupId, ExperienceGet
         boost::bind(&LLExperienceCache::getGroupExperiencesCoro, this, _1, groupId, fn));
 }
 
-void LLExperienceCache::getGroupExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, LLUUID groupId, ExperienceGetFn_t fn)
+LL::Task<void> LLExperienceCache::getGroupExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, LLUUID groupId, ExperienceGetFn_t fn)
 {
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
@@ -700,12 +700,12 @@ void LLExperienceCache::getGroupExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAda
     if (url.empty())
     {
         LL_WARNS("ExperienceCache") << "No Group Experiences capability" << LL_ENDL;
-        return;
+        co_return;
     }
 
     url += "?" + groupId.asString();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -713,7 +713,7 @@ void LLExperienceCache::getGroupExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAda
     if (!status)
     {
         fn(LLSD());
-        return;
+        co_return;
     }
 
     const LLSD& experienceIds = result["experience_ids"];
@@ -733,7 +733,7 @@ void LLExperienceCache::setRegionExperiences(CapabilityQuery_t regioncaps, const
         boost::bind(&LLExperienceCache::regionExperiencesCoro, this, _1, regioncaps, true, experiences, fn));
 }
 
-void LLExperienceCache::regionExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter,
+LL::Task<void> LLExperienceCache::regionExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter,
     CapabilityQuery_t regioncaps, bool update, LLSD experiences, ExperienceGetFn_t fn)
 {
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
@@ -743,14 +743,14 @@ void LLExperienceCache::regionExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapt
     if (url.empty())
     {
         LL_WARNS("ExperienceCache") << "No Region Experiences capability" << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLSD result;
     if (update)
-        result = httpAdapter->postAndSuspend(httpRequest, url, experiences);
+        result = co_await httpAdapter->postAndSuspend(httpRequest, url, experiences);
     else
-        result = httpAdapter->getAndSuspend(httpRequest, url);
+        result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -758,7 +758,7 @@ void LLExperienceCache::regionExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapt
     if (!status)
     {
 //      fn(LLSD());
-        return;
+        co_return;
     }
 
     result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
@@ -779,7 +779,7 @@ void LLExperienceCache::getExperiencePermission(const LLUUID &experienceId, Expe
 
     permissionInvoker_fn invoker(boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -809,7 +809,7 @@ void LLExperienceCache::setExperiencePermission(const LLUUID &experienceId, cons
 
     permissionInvoker_fn invoker(boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, const LLSD &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLSD, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -834,7 +834,7 @@ void LLExperienceCache::forgetExperiencePermission(const LLUUID &experienceId, E
 
     permissionInvoker_fn invoker(boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -846,13 +846,13 @@ void LLExperienceCache::forgetExperiencePermission(const LLUUID &experienceId, E
         boost::bind(&LLExperienceCache::experiencePermissionCoro, this, _1, invoker, url, fn));
 }
 
-void LLExperienceCache::experiencePermissionCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, permissionInvoker_fn invokerfn, std::string url, ExperienceGetFn_t fn)
+LL::Task<void> LLExperienceCache::experiencePermissionCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, permissionInvoker_fn invokerfn, std::string url, ExperienceGetFn_t fn)
 {
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
     // search for experiences owned by the current group
 
-    LLSD result = invokerfn(httpAdapter, httpRequest, url);
+    LLSD result = co_await invokerfn(httpAdapter, httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -877,7 +877,7 @@ void LLExperienceCache::getExperienceAdmin(const LLUUID &experienceId, Experienc
         boost::bind(&LLExperienceCache::getExperienceAdminCoro, this, _1, experienceId, fn));
 }
 
-void LLExperienceCache::getExperienceAdminCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, LLUUID experienceId, ExperienceGetFn_t fn)
+LL::Task<void> LLExperienceCache::getExperienceAdminCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, LLUUID experienceId, ExperienceGetFn_t fn)
 {
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
@@ -885,11 +885,11 @@ void LLExperienceCache::getExperienceAdminCoro(LLCoreHttpUtil::HttpCoroutineAdap
     if (url.empty())
     {
         LL_WARNS("ExperienceCache") << "No Region Experiences capability" << LL_ENDL;
-        return;
+        co_return;
     }
     url += "?experience_id=" + experienceId.asString();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 //     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
 //     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -909,7 +909,7 @@ void LLExperienceCache::updateExperience(LLSD updateData, ExperienceGetFn_t fn)
         boost::bind(&LLExperienceCache::updateExperienceCoro, this, _1, updateData, fn));
 }
 
-void LLExperienceCache::updateExperienceCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, LLSD updateData, ExperienceGetFn_t fn)
+LL::Task<void> LLExperienceCache::updateExperienceCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, LLSD updateData, ExperienceGetFn_t fn)
 {
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
@@ -917,14 +917,14 @@ void LLExperienceCache::updateExperienceCoro(LLCoreHttpUtil::HttpCoroutineAdapte
     if (url.empty())
     {
         LL_WARNS("ExperienceCache") << "No Region Experiences capability" << LL_ENDL;
-        return;
+        co_return;
     }
 
     updateData.erase(LLExperienceCache::QUOTA);
     updateData.erase(LLExperienceCache::EXPIRES);
     updateData.erase(LLExperienceCache::AGENT_ID);
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, updateData);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, updateData);
 
     fn(result);
 }

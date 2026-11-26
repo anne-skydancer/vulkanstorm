@@ -110,7 +110,7 @@ private:
 
     virtual void initSingleton() override;
 
-    typedef std::function<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &, LLCore::HttpRequest::ptr_t, std::string)> permissionInvoker_fn;
+    typedef std::function<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLCore::HttpRequest::ptr_t, std::string)> permissionInvoker_fn;
 
     // Callback types for get()
     typedef boost::signals2::signal < void(const LLSD &) > callback_signal_t;
@@ -149,18 +149,18 @@ private:
     static std::string sCurrentGridId; // <FS:Ansariel> Log getting spammed with experience requests from other grids
     static bool        sIsInOpenSim; // <FS:Beq> FIRE-33046 reduce logging of warning in OS grids with no experiences capability
 
-    static void idleCoro();
+    static LL::Task<void> idleCoro();
     void eraseExpired();
-    static void requestExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &, std::string, RequestQueue_t);
+    static LL::Task<void> requestExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, std::string, RequestQueue_t);
     void requestExperiences();
 
-    void fetchAssociatedExperienceCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &, LLUUID, LLUUID, std::string, ExperienceGetFn_t);
-    void findExperienceByNameCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &, std::string, int, ExperienceGetFn_t);
-    void getGroupExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &, LLUUID , ExperienceGetFn_t);
-    void regionExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, CapabilityQuery_t regioncaps, bool update, LLSD experiences, ExperienceGetFn_t fn);
-    void experiencePermissionCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, permissionInvoker_fn invokerfn, std::string url, ExperienceGetFn_t fn);
-    void getExperienceAdminCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, LLUUID experienceId, ExperienceGetFn_t fn);
-    void updateExperienceCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter, LLSD updateData, ExperienceGetFn_t fn);
+    LL::Task<void> fetchAssociatedExperienceCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID, LLUUID, std::string, ExperienceGetFn_t);
+    LL::Task<void> findExperienceByNameCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, std::string, int, ExperienceGetFn_t);
+    LL::Task<void> getGroupExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID , ExperienceGetFn_t);
+    LL::Task<void> regionExperiencesCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, CapabilityQuery_t regioncaps, bool update, LLSD experiences, ExperienceGetFn_t fn);
+    LL::Task<void> experiencePermissionCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, permissionInvoker_fn invokerfn, std::string url, ExperienceGetFn_t fn);
+    LL::Task<void> getExperienceAdminCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, LLUUID experienceId, ExperienceGetFn_t fn);
+    LL::Task<void> updateExperienceCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter, LLSD updateData, ExperienceGetFn_t fn);
 
     void bootstrap(const LLSD& legacyKeys, int initialExpiration);
     void exportFile(std::ostream& ostr) const;

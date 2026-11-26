@@ -68,6 +68,16 @@ LLCore::HttpRequest::~HttpRequest()
 {
 }
 
+namespace
+{
+// A coprocedure is a coroutine that returns an LL::Task; this one has nothing to wait for. The test lambda is not
+// itself the coroutine (its captures would dangle after a suspension, lltask.h).
+LL::Task<void> finished()
+{
+    co_return;
+}
+} // namespace
+
 namespace tut
 {
     struct coproceduremanager_test
@@ -93,9 +103,10 @@ namespace tut
         int foo = 0;
         LLCoprocedureManager::instance().initializePool("PoolName");
         LLCoprocedureManager::instance().enqueueCoprocedure("PoolName", "ProcName",
-            [&foo, &sync] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t & ptr, const LLUUID & id) {
+            [&foo, &sync] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ptr, LLUUID id) {
                 sync.bump();
                 foo = 1;
+                return finished();
             });
 
         sync.yield();

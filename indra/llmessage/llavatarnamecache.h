@@ -34,6 +34,7 @@
 #include <boost/signals2.hpp>
 #include <set>
 #include <unordered_map>
+#include "lltask.h"
 
 class LLSD;
 class LLUUID;
@@ -160,7 +161,7 @@ private:
     bool expirationFromCacheControl(const LLSD& headers, F64 *expires);
 
     // This is a coroutine.
-    static void requestAvatarNameCache_(std::string url, std::vector<LLUUID> agentIds);
+    static LL::Task<void> requestAvatarNameCache_(std::string url, std::vector<LLUUID> agentIds);
 
     void handleAvNameCacheSuccess(const LLSD &data, const LLSD &httpResult);
 

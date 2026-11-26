@@ -29,7 +29,7 @@
 
 namespace FSCoreHttpUtil
 {
-void trivialPostCoroRaw(std::string                   url,
+LL::Task<void> trivialPostCoroRaw(std::string                   url,
                         LLCore::HttpRequest::policy_t policyId,
                         LLCore::BufferArray::ptr_t    postData,
                         LLCore::HttpHeaders::ptr_t    aHeader,
@@ -49,7 +49,7 @@ void trivialPostCoroRaw(std::string                   url,
 
     LL_INFOS("HttpCoroutineAdapter", "genericPostCoroRaw") << "Generic POST for " << url << LL_ENDL;
 
-    LLSD result = httpAdapter->postRawAndSuspend(httpRequest, url, postData, options, aHeader);
+    LLSD result = co_await httpAdapter->postRawAndSuspend(httpRequest, url, postData, options, aHeader);
 
     LLSD               httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status      = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -87,7 +87,7 @@ void callbackHttpPostRaw(const std::string&         url,
         boost::bind(trivialPostCoroRaw, url, LLCore::HttpRequest::DEFAULT_POLICY_ID, postDataBuffer, aHeader, options, success, failure));
 }
 
-void trivialGetCoroRaw(std::string                   url,
+LL::Task<void> trivialGetCoroRaw(std::string                   url,
                        LLCore::HttpRequest::policy_t policyId,
                        LLCore::HttpHeaders::ptr_t    aHeader,
                        LLCore::HttpOptions::ptr_t    options,
@@ -106,7 +106,7 @@ void trivialGetCoroRaw(std::string                   url,
 
     LL_INFOS("HttpCoroutineAdapter", "genericGetCoroRaw") << "Generic GET for " << url << LL_ENDL;
 
-    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, options, aHeader);
+    LLSD result = co_await httpAdapter->getRawAndSuspend(httpRequest, url, options, aHeader);
 
     LLSD               httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status      = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -138,7 +138,7 @@ void callbackHttpGetRaw(const std::string&         url,
         boost::bind(trivialGetCoroRaw, url, LLCore::HttpRequest::DEFAULT_POLICY_ID, aHeader, options, success, failure));
 }
 
-void trivialGetCoro(std::string url, time_t last_modified, completionCallback_t success, completionCallback_t failure,
+LL::Task<void> trivialGetCoro(std::string url, time_t last_modified, completionCallback_t success, completionCallback_t failure,
                     LLCore::HttpOptions::ptr_t httpOpts)
 {
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter =
@@ -152,7 +152,7 @@ void trivialGetCoro(std::string url, time_t last_modified, completionCallback_t 
     httpOpts->setWantHeaders(true);
     httpOpts->setLastModified((long)last_modified);
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
 
     LLSD               httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status      = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

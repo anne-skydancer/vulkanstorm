@@ -344,51 +344,51 @@ public:
     ///
     /// @Note: the request's smart pointer is passed by value so that it will
     /// not be deallocated during the yield.
-    LLSD postAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, const LLSD & body,
+    LL::Task<LLSD> postAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLSD body,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
-    LLSD postAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, LLCore::BufferArray::ptr_t rawbody,
+    LL::Task<LLSD> postAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLCore::BufferArray::ptr_t rawbody,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
 
-    LLSD postAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, const LLSD & body,
+    LL::Task<LLSD> postAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, LLSD body,
         LLCore::HttpHeaders::ptr_t &headers)
     {
         return postAndSuspend(request, url, body,
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
-    LLSD postAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, LLCore::BufferArray::ptr_t &rawbody,
+    LL::Task<LLSD> postAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, LLCore::BufferArray::ptr_t &rawbody,
         LLCore::HttpHeaders::ptr_t &headers)
     {
         return postAndSuspend(request, url, rawbody,
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
-    LLSD postRawAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, LLCore::BufferArray::ptr_t rawbody,
+    LL::Task<LLSD> postRawAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLCore::BufferArray::ptr_t rawbody,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
 
-    LLSD postRawAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, LLCore::BufferArray::ptr_t &rawbody,
+    LL::Task<LLSD> postRawAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, LLCore::BufferArray::ptr_t &rawbody,
         LLCore::HttpHeaders::ptr_t &headers)
     {
         return postRawAndSuspend(request, url, rawbody,
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
-    LLSD postFileAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, std::string fileName,
+    LL::Task<LLSD> postFileAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, std::string fileName,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
 
-    LLSD postFileAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, std::string fileName,
+    LL::Task<LLSD> postFileAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, std::string fileName,
         LLCore::HttpHeaders::ptr_t &headers)
     {
         return postFileAndSuspend(request, url, fileName,
@@ -396,25 +396,25 @@ public:
     }
 
 
-    LLSD postFileAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, LLUUID assetId, LLAssetType::EType assetType,
+    LL::Task<LLSD> postFileAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLUUID assetId, LLAssetType::EType assetType,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
 
-    LLSD postFileAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, LLUUID assetId, LLAssetType::EType assetType,
+    LL::Task<LLSD> postFileAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLUUID assetId, LLAssetType::EType assetType,
         LLCore::HttpHeaders::ptr_t &headers)
     {
         return postFileAndSuspend(request, url, assetId, assetType,
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
-    LLSD postJsonAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, const LLSD & body,
+    LL::Task<LLSD> postJsonAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLSD body,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
-    LLSD postJsonAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, const LLSD & body,
+    LL::Task<LLSD> postJsonAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, LLSD body,
         LLCore::HttpHeaders::ptr_t &headers)
     {
         return postJsonAndSuspend(request, url, body,
@@ -428,25 +428,25 @@ public:
     ///
     /// @Note: the request's smart pointer is passed by value so that it will
     /// not be deallocated during the yield.
-    LLSD putAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, const LLSD & body,
+    LL::Task<LLSD> putAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLSD body,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
 
-    LLSD putAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, const LLSD & body,
+    LL::Task<LLSD> putAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLSD body,
         LLCore::HttpHeaders::ptr_t headers)
     {
         return putAndSuspend(request, url, body,
             std::make_shared<LLCore::HttpOptions>(), headers);
     }
 
-    LLSD putJsonAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, const LLSD & body,
+    LL::Task<LLSD> putJsonAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLSD body,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
-    LLSD putJsonAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, const LLSD & body,
+    LL::Task<LLSD> putJsonAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, LLSD body,
         LLCore::HttpHeaders::ptr_t &headers)
     {
         return putJsonAndSuspend(request, url, body,
@@ -459,24 +459,24 @@ public:
     /// @Note: the request's smart pointer is passed by value so that it will
     /// not be deallocated during the yield.
     ///
-    LLSD getAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url,
+    LL::Task<LLSD> getAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
-    LLSD getAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, LLCore::HttpHeaders::ptr_t &headers)
+    LL::Task<LLSD> getAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, LLCore::HttpHeaders::ptr_t &headers)
     {
         return getAndSuspend(request, url,
             std::make_shared<LLCore::HttpOptions>(),
             headers);
     }
 
-    LLSD getRawAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url,
+    LL::Task<LLSD> getRawAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
-    LLSD getRawAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, LLCore::HttpHeaders::ptr_t &headers)
+    LL::Task<LLSD> getRawAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, LLCore::HttpHeaders::ptr_t &headers)
     {
         return getRawAndSuspend(request, url,
             std::make_shared<LLCore::HttpOptions>(),
@@ -487,12 +487,12 @@ public:
     /// expecting the server to return the results formatted in a JSON string.
     /// On a successful GET call the JSON results will be converted into LLSD
     /// before being returned to the caller.
-    LLSD getJsonAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url,
+    LL::Task<LLSD> getJsonAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
-    LLSD getJsonAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, LLCore::HttpHeaders::ptr_t &headers)
+    LL::Task<LLSD> getJsonAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, LLCore::HttpHeaders::ptr_t &headers)
     {
         return getJsonAndSuspend(request, url,
             std::make_shared<LLCore::HttpOptions>(),
@@ -505,12 +505,12 @@ public:
     ///
     /// @Note: the request's smart pointer is passed by value so that it will
     /// not be deallocated during the yield.
-    LLSD deleteAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url,
+    LL::Task<LLSD> deleteAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
-    LLSD deleteAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, LLCore::HttpHeaders::ptr_t headers)
+    LL::Task<LLSD> deleteAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLCore::HttpHeaders::ptr_t headers)
     {
         return deleteAndSuspend(request, url,
             std::make_shared<LLCore::HttpOptions>(),
@@ -521,12 +521,12 @@ public:
     /// expecting the server to return any results formatted in a JSON string.
     /// On a successful DELETE call the JSON results will be converted into LLSD
     /// before being returned to the caller.
-    LLSD deleteJsonAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url,
+    LL::Task<LLSD> deleteJsonAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
-    LLSD deleteJsonAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, LLCore::HttpHeaders::ptr_t headers)
+    LL::Task<LLSD> deleteJsonAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLCore::HttpHeaders::ptr_t headers)
     {
         return deleteJsonAndSuspend(request, url,
             std::make_shared<LLCore::HttpOptions>(),
@@ -539,12 +539,12 @@ public:
     ///
     /// @Note: the request's smart pointer is passed by value so that it will
     /// not be deallocated during the yield.
-    LLSD patchAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, const LLSD & body,
+    LL::Task<LLSD> patchAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLSD body,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
-    LLSD patchAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, const LLSD & body,
+    LL::Task<LLSD> patchAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, LLSD body,
         LLCore::HttpHeaders::ptr_t &headers)
     {
         return patchAndSuspend(request, url, body,
@@ -559,12 +559,12 @@ public:
     ///
     /// @Note: the request's smart pointer is passed by value so that it will
     /// not be deallocated during the yield.
-    LLSD copyAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, const std::string dest,
+    LL::Task<LLSD> copyAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, std::string dest,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
-    LLSD copyAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, const std::string & dest,
+    LL::Task<LLSD> copyAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, std::string dest,
         LLCore::HttpHeaders::ptr_t &headers)
     {
         return copyAndSuspend(request, url, dest,
@@ -579,12 +579,12 @@ public:
     ///
     /// @Note: the request's smart pointer is passed by value so that it will
     /// not be deallocated during the yield.
-    LLSD moveAndSuspend(LLCore::HttpRequest::ptr_t request,
-        const std::string & url, const std::string dest,
+    LL::Task<LLSD> moveAndSuspend(LLCore::HttpRequest::ptr_t request,
+        std::string url, std::string dest,
         LLCore::HttpOptions::ptr_t options = std::make_shared<LLCore::HttpOptions>(),
         LLCore::HttpHeaders::ptr_t headers = std::make_shared<LLCore::HttpHeaders>());
-    LLSD moveAndSuspend(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, const std::string & dest,
+    LL::Task<LLSD> moveAndSuspend(LLCore::HttpRequest::ptr_t &request,
+        std::string url, std::string dest,
         LLCore::HttpHeaders::ptr_t &headers)
     {
         return moveAndSuspend(request, url, dest,
@@ -633,52 +633,52 @@ private:
             HttpCoroHandler::ptr_t &handler);
     void cleanState();
 
-    LLSD postAndSuspend_(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, const LLSD & body,
-        LLCore::HttpOptions::ptr_t &options, LLCore::HttpHeaders::ptr_t &headers,
-        HttpCoroHandler::ptr_t &handler);
+    LL::Task<LLSD> postAndSuspend_(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLSD body,
+        LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers,
+        HttpCoroHandler::ptr_t handler);
 
-    LLSD postAndSuspend_(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, LLCore::BufferArray::ptr_t &rawbody,
-        LLCore::HttpOptions::ptr_t &options, LLCore::HttpHeaders::ptr_t &headers,
-        HttpCoroHandler::ptr_t &handler);
+    LL::Task<LLSD> postAndSuspend_(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLCore::BufferArray::ptr_t rawbody,
+        LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers,
+        HttpCoroHandler::ptr_t handler);
 
-    LLSD putAndSuspend_(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, const LLSD & body,
-        LLCore::HttpOptions::ptr_t &options, LLCore::HttpHeaders::ptr_t &headers,
-        HttpCoroHandler::ptr_t &handler);
+    LL::Task<LLSD> putAndSuspend_(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLSD body,
+        LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers,
+        HttpCoroHandler::ptr_t handler);
 
-    LLSD putAndSuspend_(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, const LLCore::BufferArray::ptr_t & rawbody,
-        LLCore::HttpOptions::ptr_t &options, LLCore::HttpHeaders::ptr_t &headers,
-        HttpCoroHandler::ptr_t &handler);
+    LL::Task<LLSD> putAndSuspend_(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLCore::BufferArray::ptr_t rawbody,
+        LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers,
+        HttpCoroHandler::ptr_t handler);
 
-    LLSD getAndSuspend_(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, LLCore::HttpOptions::ptr_t &options,
-        LLCore::HttpHeaders::ptr_t &headers, HttpCoroHandler::ptr_t &handler);
+    LL::Task<LLSD> getAndSuspend_(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLCore::HttpOptions::ptr_t options,
+        LLCore::HttpHeaders::ptr_t headers, HttpCoroHandler::ptr_t handler);
 
-    LLSD deleteAndSuspend_(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, LLCore::HttpOptions::ptr_t &options,
-        LLCore::HttpHeaders::ptr_t &headers, HttpCoroHandler::ptr_t &handler);
+    LL::Task<LLSD> deleteAndSuspend_(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLCore::HttpOptions::ptr_t options,
+        LLCore::HttpHeaders::ptr_t headers, HttpCoroHandler::ptr_t handler);
 
-    LLSD patchAndSuspend_(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url, const LLSD & body,
-        LLCore::HttpOptions::ptr_t &options, LLCore::HttpHeaders::ptr_t &headers,
-        HttpCoroHandler::ptr_t &handler);
+    LL::Task<LLSD> patchAndSuspend_(LLCore::HttpRequest::ptr_t request,
+        std::string url, LLSD body,
+        LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers,
+        HttpCoroHandler::ptr_t handler);
 
-    LLSD copyAndSuspend_(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url,
-        LLCore::HttpOptions::ptr_t &options, LLCore::HttpHeaders::ptr_t &headers,
-        HttpCoroHandler::ptr_t &handler);
+    LL::Task<LLSD> copyAndSuspend_(LLCore::HttpRequest::ptr_t request,
+        std::string url,
+        LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers,
+        HttpCoroHandler::ptr_t handler);
 
-    LLSD moveAndSuspend_(LLCore::HttpRequest::ptr_t &request,
-        const std::string & url,
-        LLCore::HttpOptions::ptr_t &options, LLCore::HttpHeaders::ptr_t &headers,
-        HttpCoroHandler::ptr_t &handler);
+    LL::Task<LLSD> moveAndSuspend_(LLCore::HttpRequest::ptr_t request,
+        std::string url,
+        LLCore::HttpOptions::ptr_t options, LLCore::HttpHeaders::ptr_t headers,
+        HttpCoroHandler::ptr_t handler);
 
-    static void trivialGetCoro(std::string url, LLCore::HttpRequest::policy_t policyId, completionCallback_t success, completionCallback_t failure);
-    static void trivialPostCoro(std::string url, LLCore::HttpRequest::policy_t policyId, LLSD postData, completionCallback_t success, completionCallback_t failure);
-    static void trivialDelCoro(std::string url, LLCore::HttpRequest::policy_t policyId, completionCallback_t success, completionCallback_t failure);
+    static LL::Task<void> trivialGetCoro(std::string url, LLCore::HttpRequest::policy_t policyId, completionCallback_t success, completionCallback_t failure);
+    static LL::Task<void> trivialPostCoro(std::string url, LLCore::HttpRequest::policy_t policyId, LLSD postData, completionCallback_t success, completionCallback_t failure);
+    static LL::Task<void> trivialDelCoro(std::string url, LLCore::HttpRequest::policy_t policyId, completionCallback_t success, completionCallback_t failure);
 
     void checkDefaultHeaders(LLCore::HttpHeaders::ptr_t &headers);
 
