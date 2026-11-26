@@ -428,6 +428,7 @@ using _LL_CLASS_TO_LOG = LLError::NoClassInfo;
 //Such computation is done iff the message will be logged.
 #define LL_CONT _out
 
+// NOLINTNEXTLINE(modernize-macro-to-enum): a char literal used by the LL_* logging macros in every library, not an enumerator
 #define LL_NEWLINE '\n'
 
 // Use this only in LL_ERRS or in a place that LL_ERRS may not be used

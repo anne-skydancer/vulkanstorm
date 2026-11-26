@@ -96,11 +96,13 @@ using TPACKETID = U32;
 #define F64_MAX     (DBL_MAX)
 
 #define S8_MIN      (SCHAR_MIN)
+// NOLINTBEGIN(modernize-macro-to-enum): the MIN/MAX macros are used in every library, some in #if; an enum constant would be an int, not the unsigned type of the name
 #define U8_MIN      (0)
 #define S16_MIN     (SHRT_MIN)
 #define U16_MIN     (0)
 #define S32_MIN     (INT_MIN)
 #define U32_MIN     (0)
+// NOLINTEND(modernize-macro-to-enum)
 #define F32_MIN     (FLT_MIN)
 #define F64_MIN     (DBL_MIN)
 
