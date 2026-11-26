@@ -12,7 +12,7 @@ names, so that an agent reads code only after the tools have had their say.
 | push to `clean/<lib>` | `indra/<lib>` and its own tests |
 | push to `clean/newview-<area>` | clang-tidy over the newview translation units the branch's changed files affect |
 | pull request into `release-clean` | the library named by the head branch, the same way; the `codegen` job also checks the pull request's `(style)` commits |
-| pull request from any other branch | `llcommon` as a self-test, **only** when the pull request changes `.github/workflows/analysis.yaml`, `.github/actions/analysis-setup/**`, `.github/analysis/**`, `scripts/ci_analysis.py`, `scripts/ci_triage.py`, `scripts/tests/ci_analysis_test.py`, `scripts/tests/ci_triage_test.py` or `scripts/tests/ci_analysis_setup_test.py` (the test fixtures are under `.github/analysis/fixtures/`); otherwise nothing runs |
+| pull request from any other branch | `llcommon` as a self-test, **only** when the pull request changes `.github/workflows/analysis.yaml`, `.github/actions/analysis-setup/**`, `.github/analysis/**`, `scripts/ci_analysis.py`, `scripts/ci_triage.py`, `scripts/tests/ci_analysis_test.py`, `scripts/tests/ci_triage_test.py`, `scripts/tests/ci_analysis_setup_test.py`, `.github/actions/codegen-check/**`, `scripts/ci_codegen.py` or `scripts/tests/ci_codegen_test.py` (the test fixtures are under `.github/analysis/fixtures/`); otherwise nothing runs |
 | a `clean/...` branch that names no library | the **plan job fails** with `::error::` and the reason; nothing else runs |
 | `workflow_dispatch` (input `lib`) | the named library; only possible once the file is on the default branch |
 
@@ -35,7 +35,7 @@ documentation-only changes (`doc/**`, `**/*.md`); a push always runs.
 | `tsan` (Linux) | the library's tests built with TSan, all of them except the deny list `.github/analysis/tsan/<lib>-deny.txt` (the tests that use coroutines or child processes), after a canary | same |
 | `msvc` (Windows) | `/analyze` on the library target's **sources** (PREfast, `C6xxx`), logs as SARIF; build errors are findings | same, per rule |
 | `triage` (Linux, report only) | explains the real bug findings of the run, see [Triage](#triage) | `analysis-triage-<lib>` artifact, job summary |
-| `codegen` (Linux) | the **identical compiled code** check of the pull request's `(style)` commits, see [Identical compiled code](#identical-compiled-code); red when a style commit changes the machine code | `analysis-codegen-<lib>` artifact, job summary |
+| `codegen` (Linux) | the **identical compiled code** check of the pull request's `(style)` commits, see [Identical compiled code](#identical-compiled-code); red when a style commit is not proven identical. It is its own check: it is not part of `report`'s verdict or of the triage | `analysis-codegen-<lib>` artifact, job summary |
 | `report` | merges the jobs, compares them with the committed baseline, decides red or green, writes the baseline proposal | job summary, `analysis-report-<lib>` artifact |
 
 Every job uploads its artifact (`analysis-<job>`: `findings-<job>.json`, `summary-<job>.md`, the raw logs, the sanitizer
@@ -120,16 +120,21 @@ listed as skipped and not checked; the job summary lists both. A style commit th
 the bugs-and-safety pull request.
 
 It runs on a pull request into `release-clean` whose head names a library (`clean/<lib>`, or the `llcommon` self-test),
-over the commits of `base..head`, and does nothing when none has the tag. `workflow_dispatch` takes `codegen_range` (a range
+over the commits of `base..head`, and does nothing when none has the tag (the plan then prints a `::warning::` if there
+were commits but none was tagged). A `clean/newview-<area>` pull request has no `codegen` job: it runs for a library
+only (`scope == lib`). `workflow_dispatch` takes `codegen_range` (a range
 `A..B` or a list of commits) and `codegen_all_style` (check every commit of it, tagged or not; this is how the check is
 proven on history), and runs the job for the library of the `lib` input.
 
-**How.** The job configures once (`analysis-setup`, mode `codegen`: the shipped options, RelWithDebInfo with `-O2 -DNDEBUG`
-and no debug info), then for each style commit checks out its parent and the commit and builds the library target
+**How.** The job configures once (`analysis-setup`, mode `codegen`: the shipped options, RelWithDebInfo with `-O2 -g0 -DNDEBUG`:
+the viewer's own flags add `-g` and the shipped build is `-O3` with LTO, so a pass is a proof at `-O2` without LTO, not of
+the shipped output; `-g0` only saves build time), then for each style commit checks out its parent and the commit and builds the library target
 (`cmake --build --target <lib>`). Only the translation units whose sources changed recompile, so a commit that edits two
 files costs two compiles; a changed header recompiles what includes it. `scripts/ci_codegen.py` then reads the library's
 object files (those its link line names) and compares each with the same object at the parent. A commit's parent that is the
-previous checked commit is not built twice.
+previous checked commit is not built twice. `-ffile-prefix-map` and `-frandom-seed` are belt and braces: the objects carry
+no debug info and no per-build names. The `extra_targets` input of the action adds other CMake targets (for instance a
+library that consumes a changed header) to the build and the comparison.
 
 **What the comparison covers.** The objects are ELF files, read by the script itself (no `objdump`): per section the type,
 flags, alignment, entry size, size, bytes and relocations (offset, type, target symbol name, addend), and per symbol its
@@ -137,6 +142,24 @@ binding, type, visibility, section and size. The build puts every function and v
 (`-ffunction-sections -fdata-sections`), so a section is a symbol, its name is its mangled name and its offsets do not move
 when a neighbour changes. A changed, added or removed section or symbol, or an added or removed object, is a difference; the
 summary names the symbols (demangled) per object.
+
+**What the build compiles, and what it does not.** Equal objects prove nothing about code the build never compiled, so
+the verdict has more states than the objects alone:
+
+| Verdict | Meaning |
+|---|---|
+| `identical` | the objects are equal, no changed line is inside a preprocessor conditional, and every changed code file is compiled into them. Worded "identical in the compiled configuration (Linux, GCC, `LL_RELEASE_FOR_DOWNLOAD`)" |
+| `differs` | an object, section or symbol differs; the symbols are listed |
+| `unproven` | a changed line lies inside an `#if`/`#ifdef`/`#ifndef`/`#elif`/`#else` region that is not an include guard (found by a conservative scan of the old and the new text of every changed file the objects depend on): this build may not compile it (Windows, macOS, debug-only or `LL_RELEASE_FOR_DOWNLOAD` branches). The summary lists `file:line` and the directive chain |
+| `not-covered` | a changed `.c .cc .cpp .cxx .h .hpp .inl .mm` file is not in the union of the objects' depfiles (`CMakeFiles/<target>.dir/*.o.d`): tests (`LL_TESTS=OFF`), Windows-only sources, files of another library. Listed |
+| `build-failed` | the library did not build at the commit or at its parent |
+| `error` | the script itself failed on that commit (no link line, no depfile, an LTO or REL object, ...); the message is shown and the other commits still run |
+
+Every state but `identical` turns the job red. When a header changed, the summary adds "headers changed: other libraries'
+objects are not compared". Results are written to the job summary and to `codegen.json` after each commit, so a timeout
+still leaves the earlier ones. `parse_elf` refuses what it cannot read soundly: `.gnu.lto*` sections (LTO objects hold
+intermediate code), `SHT_REL` relocations, machines other than x86-64 and aarch64, and a set of objects with no `.text`
+at all. The link line must name object files (a `@response` file is read); a build whose depfiles are missing fails.
 
 **What it ignores, and why that is safe.**
 

@@ -118,13 +118,14 @@ runs:
               -DGCC_DISABLE_FATAL_WARNINGS:BOOL=ON)
             ;;
           codegen)
-            # The identical-code check (scripts/ci_codegen.py): -O2 without debug info like the shipped build, one section per
+            # The identical-code check (scripts/ci_codegen.py): -O2 -g0 (the viewer's flags add -g and the shipped build is -O3 with LTO; this is a proof at -O2, and -g0 saves time), one section per
             # function and variable (stable names and positions), no build path in __FILE__, a fixed random seed. The script
             # also replaces __LINE__ by 0 in the project's own files at each commit it builds, because a style edit shifts
             # lines and every logging and assert call site bakes __LINE__ into the code.
+            # The prefix map and the seed are belt and braces: the objects carry no debug info and no per-build names.
             flags="-ffunction-sections -fdata-sections -frandom-seed=vkstorm-codegen -ffile-prefix-map=$GITHUB_WORKSPACE=."
             options+=("-DCMAKE_C_FLAGS=$flags" "-DCMAKE_CXX_FLAGS=$flags"
-              "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O2 -DNDEBUG" "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O2 -DNDEBUG"
+              "-DCMAKE_C_FLAGS_RELWITHDEBINFO=-O2 -g0 -DNDEBUG" "-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=-O2 -g0 -DNDEBUG"
               -DGCC_DISABLE_FATAL_WARNINGS:BOOL=ON)
             ;;
           tidy)

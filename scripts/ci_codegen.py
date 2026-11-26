@@ -33,8 +33,14 @@ import sys
 STYLE_TAG = re.compile(r"\(style\)\s*$")
 SHT_NULL, SHT_SYMTAB, SHT_STRTAB, SHT_RELA, SHT_NOBITS, SHT_REL, SHT_GROUP, SHT_SYMTAB_SHNDX = 0, 2, 3, 4, 8, 9, 17, 18
 SKIP_TYPES = {SHT_NULL, SHT_SYMTAB, SHT_STRTAB, SHT_RELA, SHT_REL, SHT_GROUP, SHT_SYMTAB_SHNDX}
-SKIP_PREFIXES = (".debug", ".note", ".comment", ".eh_frame", ".rela", ".rel.", ".llvm", ".stab", ".gnu_debuglink",
-                 ".gnu.lto")
+SKIP_PREFIXES = (".debug", ".note", ".comment", ".eh_frame", ".rela", ".rel.", ".llvm", ".stab", ".gnu_debuglink")
+MACHINES = {62: "x86-64", 183: "aarch64"}
+CODE_SUFFIXES = (".c", ".cc", ".cpp", ".cxx", ".h", ".hpp", ".inl", ".mm")
+HEADER_SUFFIXES = (".h", ".hpp", ".inl")
+DIRECTIVE = re.compile(r"^\s*#\s*(if|ifdef|ifndef|elif|else|endif|define)\b\s*(.*)$")
+HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+CONFIGURATION = "Linux, GCC, LL_RELEASE_FOR_DOWNLOAD"
+MAX_FINDINGS = 15
 LINE_TOKEN = re.compile(rb"\b__LINE__\b")
 STT_SECTION, STT_FILE = 3, 4
 SPECIAL_SECTIONS = {0: "UND", 0xFFF1: "ABS", 0xFFF2: "COM"}
@@ -70,11 +76,11 @@ def commits_of(spec, cwd=None):
     a whitespace separated list of commits, ordered by their history."""
     spec = spec.strip()
     if ".." in spec:
-        shas = git("rev-list", "--reverse", "--no-merges", spec, cwd=cwd).split()
+        shas = git("rev-list", "--reverse", "--no-merges", "--end-of-options", spec, cwd=cwd).split()
     else:
-        wanted = [git("rev-parse", "--verify", f"{name}^{{commit}}", cwd=cwd) for name in spec.split()]
-        shas = sorted(dict.fromkeys(wanted), key=lambda sha: int(git("rev-list", "--count", sha, cwd=cwd)))
-    return [(sha, git("log", "-1", "--format=%s", sha, cwd=cwd)) for sha in shas]
+        wanted = [git("rev-parse", "--verify", "--end-of-options", f"{name}^{{commit}}", cwd=cwd) for name in spec.split()]
+        shas = sorted(dict.fromkeys(wanted), key=lambda sha: int(git("rev-list", "--count", "--end-of-options", sha, cwd=cwd)))
+    return [(sha, git("log", "-1", "--format=%s", "--end-of-options", sha, cwd=cwd)) for sha in shas]
 
 
 def cmd_select(args):
@@ -89,6 +95,8 @@ def cmd_select(args):
     lines += [f"- checked `{sha[:11]}` {subject}" for sha, subject in checked]
     lines += [f"- skipped `{sha[:11]}` {subject}" for sha, subject in skipped]
     summary("\n".join(lines))
+    if not checked and skipped:
+        print(f"::warning::none of the {len(skipped)} commits ends with (style): nothing is checked")
     write_output("count", str(len(checked)))
     return 0
 
@@ -112,6 +120,9 @@ def parse_elf(data):
     """{"sections": {name: digest}, "symbols": {name: digest}} of an ELF64 little-endian relocatable object."""
     if data[:4] != b"\x7fELF" or data[4] != 2 or data[5] != 1:
         raise ValueError("not an ELF64 little-endian file")
+    machine, = struct.unpack_from("<H", data, 0x12)
+    if machine not in MACHINES:
+        raise ValueError(f"unsupported machine {machine}: only x86-64 and aarch64 objects are read")
     shoff, = struct.unpack_from("<Q", data, 0x28)
     shentsize, shnum, shstrndx = struct.unpack_from("<HHH", data, 0x3A)
     if shoff == 0 or shnum == 0:
@@ -155,9 +166,15 @@ def parse_elf(data):
             entries.append(f"{r_offset}:{r_info & 0xFFFFFFFF}:{target_name.get(r_info >> 32, '')}:{r_addend}")
         relocs.setdefault(section["info"], []).extend(entries)
 
-    out_sections, seen = {}, {}
+    out_sections, seen, text_bytes = {}, {}, 0
     for index, section in enumerate(sections):
         name = section["name"]
+        if name.startswith(".gnu.lto"):
+            raise ValueError(f"{name}: an LTO object holds intermediate code, not machine code")
+        if section["type"] == SHT_REL:
+            raise ValueError(f"{name}: SHT_REL relocations (implicit addends) are not read")
+        if (name == ".text" or name.startswith(".text.")) and section["type"] != SHT_NOBITS:
+            text_bytes += section["size"]
         if section["type"] in SKIP_TYPES or name.startswith(SKIP_PREFIXES):
             continue
         seen[name] = seen.get(name, 0) + 1
@@ -171,7 +188,8 @@ def parse_elf(data):
             continue
         where = SPECIAL_SECTIONS.get(shndx) or (sections[shndx]["name"] if shndx < len(sections) else str(shndx))
         grouped.setdefault(name, []).append(f"{bind}:{kind}:{vis}:{where}:{value}:{size}")
-    return {"sections": out_sections, "symbols": {n: digest(*sorted(items)) for n, items in grouped.items()}}
+    return {"sections": out_sections, "symbols": {n: digest(*sorted(items)) for n, items in grouped.items()},
+            "text": text_bytes}
 
 
 # ---------------------------------------------------------------- the comparison
@@ -216,8 +234,9 @@ def render_commit(result):
     """The markdown lines of one commit's result."""
     sha, subject, status = result["sha"][:11], result["subject"], result["status"]
     if status == "identical":
-        return [f"- `{sha}` {subject}: **identical** ({result['objects']} objects)"]
-    if status == "differs":
+        lines = [f"- `{sha}` {subject}: **identical in the compiled configuration** ({CONFIGURATION}; "
+                 f"{result['objects']} objects)"]
+    elif status == "differs":
         lines = [f"- `{sha}` {subject}: **differs** in {len(result['differences'])} of {result['objects']} objects"]
         shown_items = list(result["differences"].items())[:MAX_LABELS]
         shown = demangle(sorted({n for _, names in shown_items for n in names[:MAX_LABELS]}))
@@ -227,8 +246,128 @@ def render_commit(result):
             lines.append(f"  - `{obj}`: {listed}{more}")
         if len(result["differences"]) > MAX_LABELS:
             lines.append(f"  - and {len(result['differences']) - MAX_LABELS} more objects (codegen.json has them all)")
-        return lines
-    return [f"- `{sha}` {subject}: **{status}** {result.get('note', '')}".rstrip()]
+    else:
+        lines = [f"- `{sha}` {subject}: **{status}** {result.get('note', '')}".rstrip()]
+    for key, text in (("unproven", "changed lines inside a preprocessor conditional (not proven: another configuration "
+                                   "may compile them)"),
+                      ("not_covered", "changed code files the compiled objects do not depend on (not compared)")):
+        items = result.get(key) or []
+        if items:
+            lines.append(f"  - **{key.replace('_', '-')}**: {len(items)} {text}")
+            lines += [f"    - `{item}`" for item in items[:MAX_FINDINGS]]
+            if len(items) > MAX_FINDINGS:
+                lines.append(f"    - and {len(items) - MAX_FINDINGS} more (codegen.json has them all)")
+    if result.get("headers"):
+        lines.append(f"  - headers changed ({', '.join(result['headers'][:5])}): other libraries' objects are not compared")
+    return lines
+
+
+# ---------------------------------------------------------------- what the build does not compile
+
+def conditional_chains(text):
+    """{line number: [directive, ...]} for every line inside a preprocessor conditional that is not the include
+    guard. A conservative scan: block comments and continuation lines are not understood, and #elif and #else keep
+    the chain of their #if. A directive that opens, continues or closes a conditional belongs to its chain."""
+    chains, stack, directives, guard_name = {}, [], 0, None  # stack entries: [line, text, is_guard]
+    for number, line in enumerate(text.splitlines(), 1):
+        match = DIRECTIVE.match(line)
+        if not match:
+            if stack and any(not entry[2] for entry in stack):
+                chains[number] = [f"{n}: {t}" for n, t, guard in stack if not guard]
+            continue
+        kind, rest = match.groups()
+        rest = re.split(r"//|/\*", rest)[0].strip()
+        directives += 1
+        if kind == "define":
+            if directives == 2 and guard_name and rest.split()[:1] == [guard_name] and stack:
+                stack[-1][2] = True
+        elif kind in ("if", "ifdef", "ifndef"):
+            if directives == 1 and kind == "ifndef":
+                guard_name = rest
+            stack.append([number, f"#{kind} {rest}".strip(), False])
+        elif kind in ("elif", "else") and stack:
+            stack[-1][1] = f"#{kind} {rest} (of {stack[-1][1]})".replace("  ", " ")
+        if any(not entry[2] for entry in stack):
+            chains[number] = [f"{n}: {t}" for n, t, guard in stack if not guard]
+        if kind == "endif" and stack:
+            stack.pop()
+    return chains
+
+
+def changed_line_numbers(diff_text):
+    """(old line numbers, new line numbers) of the lines a `git diff -U0` of one file changes."""
+    old, new = [], []
+    for line in diff_text.splitlines():
+        match = HUNK.match(line)
+        if match:
+            a, b, c, d = match.groups()
+            old += range(int(a), int(a) + int(1 if b is None else b))
+            new += range(int(c), int(c) + int(1 if d is None else d))
+    return old, new
+
+
+def conditional_findings(parent, sha, files, cwd=None):
+    """["file:line (old|new text): directive chain"] for each changed line of the files that sits inside a
+    preprocessor conditional: it is compiled only in another configuration (Windows, macOS, debug, tests), so the
+    objects of this build say nothing about it."""
+    found = []
+    for path in files:
+        diff = git("diff", "-U0", "--no-renames", parent, sha, "--", path, cwd=cwd, check=False)
+        old_lines, new_lines = changed_line_numbers(diff)
+        for side, rev, lines in (("old", parent, old_lines), ("new", sha, new_lines)):
+            if not lines:
+                continue
+            chains = conditional_chains(git("show", f"{rev}:{path}", cwd=cwd, check=False))
+            for number in lines:
+                if number in chains:
+                    found.append(f"{path}:{number} ({side} text): {' > '.join(chains[number])}")
+    return found
+
+
+def parse_depfile(text):
+    """The prerequisites of a compiler's -MD file (Makefile syntax: a backslash continues the line or escapes a space)."""
+    text = text.replace("\\\r\n", " ").replace("\\\n", " ")
+    _, _, deps = text.partition(": ")
+    return [d.replace("\\ ", " ") for d in re.findall(r"(?:\\ |\S)+", deps)]
+
+
+def covered_files(build_dir, targets, root):
+    """The repository files (relative, posix) the targets' objects were compiled from: the union of the depfiles
+    (CMakeFiles/<target>.dir/*.o.d). Fails when there is none: nothing would say what the build covers."""
+    root = pathlib.Path(root).resolve()
+    covered, count = set(), 0
+    for target in targets:
+        for dep in sorted(pathlib.Path(build_dir).glob(f"**/CMakeFiles/{target}.dir/**/*.o.d")):
+            count += 1
+            base = next(parent.parent for parent in dep.parents if parent.name == "CMakeFiles")
+            for item in parse_depfile(dep.read_text(encoding="utf-8", errors="replace")):
+                try:
+                    covered.add((base / item).resolve().relative_to(root).as_posix())
+                except ValueError:
+                    continue  # outside the repository: packages, the toolchain
+    if not count:
+        raise RuntimeError(f"no depfile (CMakeFiles/<target>.dir/*.o.d) for {', '.join(targets)}: the build covers an unknown set")
+    return covered
+
+
+def assess(parent, sha, covered, cwd=None):
+    """(findings in conditionals, code files changed but not compiled, headers changed) of one commit."""
+    changed = git("diff", "--no-renames", "--name-only", parent, sha, cwd=cwd).splitlines()
+    code = [name for name in changed if name.lower().endswith(CODE_SUFFIXES)]
+    inside = [name for name in code if name in covered]
+    not_covered = sorted(name for name in code if name not in covered)
+    headers = sorted(name for name in inside if name.lower().endswith(HEADER_SUFFIXES))
+    return conditional_findings(parent, sha, inside, cwd), not_covered, headers
+
+
+def verdict(differences, unproven, not_covered):
+    """differs, unproven (changed lines in a conditional), not-covered (changed code the build does not compile), or
+    identical, in this order of importance."""
+    if differences:
+        return "differs"
+    if unproven:
+        return "unproven"
+    return "not-covered" if not_covered else "identical"
 
 
 # ---------------------------------------------------------------- the build
@@ -249,32 +388,51 @@ def write_output(key, value):
     print(f"{key}={value}")
 
 
-def target_objects(build_dir, lib):
-    """The object files the library target links: {name relative to the target's build directory: path}."""
-    build_dir = pathlib.Path(build_dir)
+def link_tokens(link, base):
+    """The words of a link.txt, with @response files read."""
+    tokens = []
+    for token in shlex.split(link.read_text(encoding="utf-8", errors="replace")):
+        if token.startswith("@") and (base / token[1:]).is_file():
+            tokens += shlex.split((base / token[1:]).read_text(encoding="utf-8", errors="replace"))
+        else:
+            tokens.append(token)
+    return tokens
+
+
+def target_objects(build_dir, target):
+    """The object files the target links: {name relative to the target's build directory: path}. Fails when the link
+    line names none (a glob of whatever is on disk could include stale objects)."""
     found = {}
-    for link in sorted(build_dir.glob(f"**/CMakeFiles/{lib}.dir/link.txt")):
+    for link in sorted(pathlib.Path(build_dir).glob(f"**/CMakeFiles/{target}.dir/link.txt")):
         base = link.parents[2]
-        for token in shlex.split(link.read_text(encoding="utf-8", errors="replace")):
+        for token in link_tokens(link, base):
             if token.endswith(".o"):
                 path = (base / token).resolve()
-                if path.is_file():
-                    found[pathlib.PurePosixPath(token).as_posix()] = path
-    if not found:  # a link line that names no objects: every object the target compiled
-        for path in sorted(build_dir.glob(f"**/CMakeFiles/{lib}.dir/**/*.o")):
-            found[path.relative_to(build_dir).as_posix()] = path
+                if not path.is_file():
+                    raise RuntimeError(f"{target}: the link line names {token}, which is not built")
+                found[pathlib.PurePosixPath(token).as_posix()] = path
+    if not found:
+        raise RuntimeError(f"{target}: the link line (CMakeFiles/{target}.dir/link.txt) names no object file")
     return found
 
 
-def fingerprints(build_dir, lib, cache):
-    """{object: fingerprint} of the library's objects; cache maps a file's sha256 to its fingerprint."""
+def check_has_code(prints):
+    """Fails when the objects hold no code at all: the build compiled nothing the comparison could say anything about."""
+    if not any(fp.get("text") for fp in prints.values()):
+        raise RuntimeError("the objects have no .text bytes at all")
+
+
+def fingerprints(build_dir, targets, cache):
+    """{object: fingerprint} of the targets' objects (keyed target:object); cache maps a file's sha256 to its fingerprint."""
     result = {}
-    for name, path in target_objects(build_dir, lib).items():
-        data = path.read_bytes()
-        key = hashlib.sha256(data).hexdigest()
-        if key not in cache:
-            cache[key] = parse_elf(data)
-        result[name] = cache[key]
+    for target in targets:
+        for name, path in target_objects(build_dir, target).items():
+            data = path.read_bytes()
+            key = hashlib.sha256(data).hexdigest()
+            if key not in cache:
+                cache[key] = parse_elf(data)
+            result[f"{target}:{name}"] = cache[key]
+    check_has_code(result)
     return result
 
 
@@ -305,7 +463,7 @@ class Tree:
             self.neutralised -= set(moved)
             self.git("checkout", "--detach", "--quiet", sha)
             self.current = sha
-        for name in self.git("grep", "-lw", "__LINE__", "--", "indra", check=False).splitlines():
+        for name in self.git("grep", "-Ilw", "__LINE__", "--", "indra", check=False).splitlines():
             path = self.root / name
             if path.is_file():
                 path.write_bytes(neutralise(path.read_bytes()))
@@ -315,64 +473,81 @@ class Tree:
         self.git("checkout", "--force", "--detach", "--quiet", self.original, check=False)
 
 
-def build(build_dir, lib, log_path):
+def build(build_dir, targets, log_path):
+    command = ["cmake", "--build", str(build_dir), "--parallel", str(os.cpu_count() or 2), "--target", *targets]
     with open(log_path, "w", encoding="utf-8") as log:
-        done = subprocess.run(["cmake", "--build", str(build_dir), "--target", lib, "--parallel", str(os.cpu_count() or 2)],
-                              stdout=log, stderr=subprocess.STDOUT, check=False)
+        done = subprocess.run(command, stdout=log, stderr=subprocess.STDOUT, check=False)
     return done.returncode == 0
 
 
-def state_of(tree, build_dir, lib, sha, out, cache):
-    """Check the commit out, build it and fingerprint the objects: (fingerprints or None, note)."""
+def state_of(tree, targets, build_dir, sha, out, cache):
+    """Check the commit out, build it and read the objects: (fingerprints, covered files, note); the first two are
+    None when the build failed."""
     tree.goto(sha)
     log = pathlib.Path(out) / f"build-{sha[:11]}.log"
-    if not build(build_dir, lib, log):
+    if not build(build_dir, targets, log):
         print("\n".join(log.read_text(encoding="utf-8", errors="replace").splitlines()[-15:]))
-        return None, f"the build at {sha[:11]} failed (see {log.name})"
-    prints = fingerprints(build_dir, lib, cache)
-    if not prints:
-        return None, f"no object file of {lib} at {sha[:11]}"
-    return prints, ""
+        return None, None, f"the build at {sha[:11]} failed (see {log.name})"
+    return fingerprints(build_dir, targets, cache), covered_files(build_dir, targets, tree.root), ""
+
+
+def write_results(out, results, skipped, final=False):
+    lines = ["### Identical compiled code: result", ""]
+    for result in results:
+        lines += render_commit(result)
+    bad = [r for r in results if r["status"] != "identical"]
+    lines += ["", (f"{len(bad)} of {len(results)} checked commits are not proven identical: move them to the bugs "
+                   f"and safety pull request") if bad else
+              f"All {len(results)} checked commits compile identically in the compiled configuration ({CONFIGURATION})."]
+    (pathlib.Path(out) / "codegen.json").write_text(json.dumps({"results": results, "skipped": skipped}, indent=1),
+                                                    encoding="utf-8")
+    (pathlib.Path(out) / "codegen.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return lines, bad
+
+
+def check_commit(tree, targets, build_dir, sha, subject, state, out, cache):
+    """(result, new state): state is (commit, fingerprints, covered files) of the last build, or ("", None, None)."""
+    result = {"sha": sha, "subject": subject, "status": "", "objects": 0, "differences": {}, "unproven": [],
+              "not_covered": [], "headers": []}
+    parent = git("rev-parse", "--verify", "--end-of-options", f"{sha}^", cwd=tree.root)
+    if state[0] != parent:
+        prints, covered, note = state_of(tree, targets, build_dir, parent, out, cache)
+        if prints is None:
+            result.update(status="build-failed", note=note)
+            return result, ("", None, None)
+        state = (parent, prints, covered)
+    prints, covered, note = state_of(tree, targets, build_dir, sha, out, cache)
+    if prints is None:
+        result.update(status="build-failed", note=note)
+        return result, ("", None, None)
+    diffs = compare(state[1], prints)
+    unproven, not_covered, headers = assess(parent, sha, state[2] | covered, cwd=tree.root)
+    result.update(status=verdict(diffs, unproven, not_covered), objects=len(prints), differences=diffs,
+                  unproven=unproven, not_covered=not_covered, headers=headers)
+    return result, (sha, prints, covered)
 
 
 def cmd_check(args):
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     selection = json.loads(pathlib.Path(args.selection).read_text(encoding="utf-8"))
+    targets = [args.lib, *args.extra_target]
     tree = Tree()
-    cache, state, results = {}, ("", None), []
+    cache, state, results = {}, ("", None, None), []
     try:
         for sha, subject in selection["checked"]:
-            result = {"sha": sha, "subject": subject, "status": "", "objects": 0, "differences": {}}
+            try:
+                result, state = check_commit(tree, targets, args.dir, sha, subject, state, out, cache)
+            except Exception as error:  # a timeout of the step cannot be caught, but its earlier results are written
+                result = {"sha": sha, "subject": subject, "status": "error", "note": f"{type(error).__name__}: {error}"}
+                state = ("", None, None)
             results.append(result)
-            parent = git("rev-parse", f"{sha}^")
-            if state[0] != parent:
-                prints, note = state_of(tree, args.dir, args.lib, parent, out, cache)
-                if prints is None:
-                    state = ("", None)
-                    result.update(status="build-failed", note=note)
-                    continue
-                state = (parent, prints)
-            prints, note = state_of(tree, args.dir, args.lib, sha, out, cache)
-            if prints is None:
-                state = ("", None)
-                result.update(status="build-failed", note=note)
-                continue
-            diffs = compare(state[1], prints)
-            result.update(status="differs" if diffs else "identical", objects=len(prints), differences=diffs)
-            state = (sha, prints)
+            summary("\n".join(render_commit(result)))
+            write_results(out, results, selection["skipped"])
     finally:
         tree.restore()
-    lines = ["### Identical compiled code: result", ""]
-    for result in results:
-        lines += render_commit(result)
-    bad = [r for r in results if r["status"] != "identical"]
-    lines += ["", (f"{len(bad)} of {len(results)} checked commits are not proven identical: move them to the bugs "
-                   "and safety pull request") if bad else f"All {len(results)} checked commits compile identically."]
-    summary("\n".join(lines))
-    (out / "codegen.json").write_text(json.dumps({"results": results, "skipped": selection["skipped"]}, indent=1),
-                                      encoding="utf-8")
-    (out / "codegen.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    lines, bad = write_results(out, results, selection["skipped"])
+    summary("\n".join(lines[-1:]))
     return 1 if bad else 0
 
 
@@ -387,6 +562,7 @@ def main(argv=None):
     p = sub.add_parser("check")
     p.add_argument("--lib", required=True)
     p.add_argument("--dir", required=True, help="the CMake build directory, configured in mode codegen")
+    p.add_argument("--extra-target", action="append", default=[], help="another CMake target to build and compare")
     p.add_argument("--selection", required=True)
     p.add_argument("--out", required=True)
     p.set_defaults(func=cmd_check)
