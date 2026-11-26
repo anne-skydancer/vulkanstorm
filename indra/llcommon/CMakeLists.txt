@@ -45,6 +45,7 @@ set(llcommon_SOURCE_FILES
     llevents.cpp
     lleventtimer.cpp
     llexception.cpp
+    llexecutor.cpp
     llfasttimer.cpp
     llfile.cpp
     llfindlocale.cpp
@@ -162,6 +163,7 @@ set(llcommon_HEADER_FILES
     llevents.h
     lleventemitter.h
     llexception.h
+    llexecutor.h
     llfasttimer.h
     llfile.h
     llfindlocale.h
@@ -229,6 +231,7 @@ set(llcommon_HEADER_FILES
     llstatsaccumulator.h
     llsys.h
     lltempredirect.h
+    lltask.h
     llthread.h
     llthreadlocalstorage.h
     llthreadsafequeue.h
