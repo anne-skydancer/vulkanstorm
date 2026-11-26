@@ -355,7 +355,7 @@ class LinkAndDepfileTest(unittest.TestCase):
         folder = self.target("x", "")
         (folder / "a.cpp.o.d").write_text(f"a.o: {self.root}/indra/lib/a.cpp ../../indra/lib/a.h /usr/include/x.h\n")
         (folder / "b.cpp.o.d").write_text(f"b.o: {self.root}/indra/lib/b.cpp\n")
-        # the second line of the first test is relative to the directory that holds CMakeFiles (build/lib)
+        # the second prerequisite of a.cpp.o.d (../../indra/lib/a.h) is relative to the directory that holds CMakeFiles (build/lib)
         covered = cg.covered_files(self.build, ["x"], self.root)
         self.assertEqual(covered, {"indra/lib/a.cpp", "indra/lib/a.h", "indra/lib/b.cpp"})
         with self.assertRaisesRegex(RuntimeError, "no depfile"):

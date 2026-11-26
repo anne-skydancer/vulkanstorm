@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
-"""Identical compiled code for the style commits of a cleanup pull request (doc/clean/analysis.md, "Identical code").
+"""Identical compiled code for the style commits of a cleanup pull request (doc/clean/analysis.md, "Identical compiled code").
 
 doc/clean/plan.md splits each subsystem's cleanup into a bugs-and-safety pull request and a style pull request. A style
 commit (its subject ends with the tag "(style)") must not change what the compiler emits. This script proves it:
@@ -9,8 +9,8 @@ commit (its subject ends with the tag "(style)") must not change what the compil
   select   which commits of a range are style commits (checked) and which are not (skipped)
   check    build the library at the parent of each style commit and at the commit, and compare the object files
 
-The comparison reads the ELF relocatable objects directly (no objdump): per section, the type, flags, alignment, size,
-bytes and relocations (offset, type, target symbol name, addend), and per symbol its binding, type, visibility, section
+The comparison reads the ELF relocatable objects directly (no objdump): per section, the type, flags, alignment, entry size,
+size, bytes and relocations (offset, type, target symbol name, addend), and per symbol its binding, type, visibility, section
 and size. It ignores debug info, notes, the comment section, the unwind tables (derived from the code), the symbol
 table's order and the build path. The build (analysis-setup mode "codegen") uses -ffunction-sections -fdata-sections so
 that every function and variable is its own section with a stable name and position, -ffile-prefix-map so that __FILE__
@@ -400,7 +400,7 @@ def surviving_probes(side, rev_files, wanted, tus, commands, root, build_rel, cw
 
 def probe_findings(parent, sha, files, old, new, root, build_rel, cwd=None):
     """["file:line (old|new text): reason"] for each changed line of the files that no translation unit of this build
-    compiles: an inactive branch (Windows, macOS, debug, tests), or a line that cannot be probed. A changed line
+    compiles: an inactive branch (Windows, macOS, debug-only, LL_RELEASE_FOR_DOWNLOAD), or a line that cannot be probed. A changed line
     that the preprocessor keeps in at least one translation unit is compiled, and the object comparison covers it."""
     root_path = pathlib.Path(root).resolve()
     build_rel = os.path.relpath(pathlib.Path(build_rel).resolve(), root_path).replace(chr(92), "/")
