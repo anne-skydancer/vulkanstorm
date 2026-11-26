@@ -30,6 +30,7 @@
 #include <mutex>
 #include <optional>
 #include <utility>
+#include <vector>
 
 namespace LL
 {
@@ -71,8 +72,10 @@ public:
             {
                 waiter->mValue.emplace(std::move(value));
                 waiter->mStatus = ChannelStatus::success;
+                const Wakeup wakeup = waiter->wakeup();
                 lock.unlock();
-                waiter->wake();
+                // the task resumes only through this wake: the waiter is not touched after the unlock
+                wakeup.wake();
                 return ChannelStatus::success;
             }
         }
@@ -87,24 +90,27 @@ public:
     /// No more pushes; every waiting consumer wakes with closed. Queued values stay poppable. Any thread.
     void close()
     {
-        std::deque<Waiter*> waiters;
+        std::vector<Wakeup> wakeups;
         {
-            std::lock_guard lock(mMutex);
+            // Claim under the lock, as try_push does: a waiter still in the list cannot be destroyed (its destructor
+            // and await_resume take this lock to unlink), even when its timer wins the claim and its task resumes.
+            std::scoped_lock lock(mMutex);
             mClosed = true;
-            waiters.swap(mWaiters);
-            for (Waiter* waiter : waiters)
+            for (Waiter* waiter : mWaiters)
             {
                 waiter->mLinked = false;
+                if (waiter->mClaim.claim())
+                {
+                    waiter->mStatus = ChannelStatus::closed;
+                    wakeups.push_back(waiter->wakeup());
+                }
             }
+            mWaiters.clear();
         }
-        // wake outside the lock, in the order they waited
-        for (Waiter* waiter : waiters)
+        // wake outside the lock, in the order they waited; a winner resumes only through its wake
+        for (const Wakeup& wakeup : wakeups)
         {
-            if (waiter->mClaim.claim())
-            {
-                waiter->mStatus = ChannelStatus::closed;
-                waiter->wake();
-            }
+            wakeup.wake();
         }
     }
 
@@ -113,6 +119,15 @@ public:
     {
         ChannelStatus status;
         std::optional<T> value;
+    };
+
+    /// what it takes to wake a waiter's task, copied out so that the waiter need not be touched afterwards
+    struct Wakeup
+    {
+        Executor* executor;
+        std::coroutine_handle<> handle;
+        CoroData* record;
+        void wake() const { executor->wake(handle, record); }
     };
 
     class Waiter
@@ -191,7 +206,7 @@ public:
 
         // From any thread. The timer, if it has not fired yet, can no longer claim the wait, so the task is made ready
         // exactly once; await_resume() removes the timer entry.
-        void wake() { mExecutor->wake(mHandle, mRecord); }
+        Wakeup wakeup() const { return Wakeup{ .executor = mExecutor, .handle = mHandle, .record = mRecord }; }
 
         void unlink()
         {

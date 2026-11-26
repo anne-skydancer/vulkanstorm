@@ -27,6 +27,7 @@
 #include <condition_variable>
 #include <coroutine>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -582,5 +583,109 @@ void object::test<17>()
     pr.post(LLSD());
     frame();
     ensure_equals(sTrace, "order_NAME status cleared");
+}
+// 18. The awaiting frame is destroyed while it waits for a task that something else started: the awaiter owns the
+//     task, so the task goes with the frame and cannot resume it later.
+template<> template<>
+void object::test<18>()
+{
+    set_test_name("destroying a waiting parent destroys the child it awaits");
+    settle();
+    LLEventStream pg("order_pg18", true);
+    std::optional<LL::Task<int>> holder;
+    exec.launch("order_H", [&holder]() -> LL::Task<void>
+        {
+            // the child starts here and waits for the event; the task object is kept outside
+            holder.emplace(addEvent("order_pg18", 1));
+            co_return;
+        });
+    ensure("child started", holder.has_value() && ! holder->done());
+    exec.launch("order_PARENT", [&holder]() -> LL::Task<void>
+        {
+            struct Sentinel
+            {
+                ~Sentinel() { mark("parent destroyed"); }
+            } sentinel;
+            int value = co_await std::move(*holder);
+            mark("PARENT resumed with " + std::to_string(value));
+        });
+    ensure_equals("destroyed", exec.shutdown(0), 1u);
+    ensure_equals(sTrace, "parent destroyed");
+    // the child is gone with the parent: the event finds no listener and nothing resumes freed memory
+    pg.post(5);
+    frame();
+    frame();
+    ensure_equals(sTrace, "parent destroyed");
+}
+
+// 19. A frame destroyed while it waits in pop_wait_for leaves nothing in the channel or the executor.
+template<> template<>
+void object::test<19>()
+{
+    set_test_name("destroying a frame waiting in a channel unlinks it");
+    settle();
+    LL::Channel<int> ch(2);
+    exec.launch("order_CW", [&ch]() -> LL::Task<void>
+        {
+            auto popped = co_await ch.pop_wait_for(30s);
+            mark("popped " + std::to_string(popped.value.value_or(-1)));
+        });
+    ensure_equals("destroyed", exec.shutdown(0), 1u);
+    // no waiter is left to be handed the value: it queues, and the cancelled timer does not fire
+    ensure("push", ch.try_push(7) == LL::ChannelStatus::success);
+    frame();
+    exec.launch("order_CW2", [&ch]() -> LL::Task<void>
+        {
+            auto popped = co_await ch.pop_wait_for(30s);
+            mark("popped " + std::to_string(popped.value.value_or(-1)));
+        });
+    ensure_equals(sTrace, "popped 7");
+    // a destroyed waiter is gone from close() too
+    exec.launch("order_CW3", [&ch]() -> LL::Task<void>
+        {
+            auto popped = co_await ch.pop_wait_for(30s);
+            mark("popped " + std::to_string(popped.value.value_or(-1)));
+        });
+    ensure_equals("destroyed", exec.shutdown(0), 1u);
+    ch.close();
+    frame();
+    ensure_equals(sTrace, "popped 7");
+}
+
+// 20. close() from another thread races the timeouts of the waiters it wakes (TSan and ASan are the judges).
+template<> template<>
+void object::test<20>()
+{
+    set_test_name("channel close races pop timeouts");
+    settle();
+    LL::Channel<int> ch(4);
+    int finished = 0;
+    for (int i = 0; i < 8; ++i)
+    {
+        exec.launch("order_R" + std::to_string(i), [&ch, &finished]() -> LL::Task<void>
+            {
+                for (;;)
+                {
+                    auto popped = co_await ch.pop_wait_for(1ms);
+                    if (popped.status == LL::ChannelStatus::closed)
+                    {
+                        ++finished;
+                        co_return;
+                    }
+                }
+            });
+    }
+    std::thread closer([&ch]
+        {
+            std::this_thread::sleep_for(30ms);
+            ch.close();
+        });
+    for (int i = 0; i < 5000 && exec.taskCount() > 0; ++i)
+    {
+        frame();
+        std::this_thread::sleep_for(1ms);
+    }
+    closer.join();
+    ensure_equals("all saw closed", finished, 8);
 }
 } // namespace tut

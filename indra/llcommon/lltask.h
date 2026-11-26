@@ -132,20 +132,22 @@ public:
         return mHandle.promise().take();
     }
 
-    /// co_await task: the awaiting coroutine continues when this one finishes, with its value or its exception.
+    /// co_await task: the awaiting coroutine continues when this one finishes, with its value or its exception. The
+    /// awaiter takes the task over, so it lives in the awaiting frame: destroying that frame while it waits destroys
+    /// the task too, and the task can never resume a frame that is gone.
     auto operator co_await() && noexcept
     {
         struct Awaiter
         {
-            handle_type mHandle;
-            bool await_ready() const noexcept { return mHandle.done(); }
+            Task mTask;
+            bool await_ready() const noexcept { return mTask.mHandle.done(); }
             void await_suspend(std::coroutine_handle<> awaiting) const noexcept
             {
-                mHandle.promise().mContinuation = awaiting;
+                mTask.mHandle.promise().mContinuation = awaiting;
             }
-            T await_resume() const { return mHandle.promise().take(); }
+            T await_resume() const { return mTask.mHandle.promise().take(); }
         };
-        return Awaiter{ mHandle };
+        return Awaiter{ std::move(*this) };
     }
 
 private:
