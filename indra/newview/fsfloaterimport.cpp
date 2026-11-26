@@ -1851,21 +1851,25 @@ void FSCreateItemCallback::fire(const LLUUID& inv_item)
     }
 }
 
+// The floater can be closed (and destroyed) while an upload coroutine is suspended,
+// so the coroutine holds a handle and re-resolves it after every suspend.
 class UploadFlag
 {
-    FSFloaterImport *mFloater;
+    LLHandle<LLFloater> mFloater;
 public:
     UploadFlag( FSFloaterImport *aFloater )
-        : mFloater( aFloater )
     {
-        if( mFloater )
-            mFloater->startUpload();
+        if( aFloater )
+        {
+            mFloater = aFloater->getHandle();
+            aFloater->startUpload();
+        }
     }
 
     ~UploadFlag()
     {
-        if( mFloater )
-            mFloater->uploadDone();
+        if( FSFloaterImport* floater = static_cast<FSFloaterImport*>( mFloater.get() ) )
+            floater->uploadDone();
     }
 };
 
@@ -1873,10 +1877,12 @@ void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter
 {
     FSResourceData* fs_data = (FSResourceData*)aResourceData->mUserData;
     FSFloaterImport* self = fs_data->mFloater;
+    LLHandle<LLFloater> hfloater = self ? self->getHandle() : LLHandle<LLFloater>();
     UploadFlag uploadDone( self );
 
     LLCore::HttpRequest::ptr_t pRequest( new LLCore::HttpRequest() );
     LLSD postResult = a_httpAdapter->postAndSuspend( pRequest, aURL, aBody );
+    self = static_cast<FSFloaterImport*>( hfloater.get() );
 
     LLSD httpResults = postResult[ LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS ];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -1900,14 +1906,16 @@ void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter
     if( uploader.empty() )
     {
         LL_WARNS( "import" ) << "No upload url provided. Nothing uploaded." << LL_ENDL;
-        self->pushNextAsset( LLUUID::null, fs_data->uuid, aResourceData->mAssetInfo.mType );
+        if( self )
+            self->pushNextAsset( LLUUID::null, fs_data->uuid, aResourceData->mAssetInfo.mType );
         return;
     }
 
     if (!LLFileSystem::getExists(aAssetId, aAssetType))
     {
         LL_WARNS() << "Asset doesn't exist in VFS anymore. Nothing uploaded." << LL_ENDL;
-        self->pushNextAsset( LLUUID::null, fs_data->uuid, aResourceData->mAssetInfo.mType );
+        if( self )
+            self->pushNextAsset( LLUUID::null, fs_data->uuid, aResourceData->mAssetInfo.mType );
         return;
     }
 
@@ -1916,6 +1924,7 @@ void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter
         pRequest.reset( new LLCore::HttpRequest() );
 
         postContentResult = a_httpAdapter->postFileAndSuspend( pRequest, uploader, aAssetId, aAssetType );
+        self = static_cast<FSFloaterImport*>( hfloater.get() );
         LLSD httpResults = postContentResult[ LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS ];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD( httpResults );
 
@@ -1924,7 +1933,8 @@ void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter
 
         if( (!status) || (ulstate != "complete") )
         {
-            self->pushNextAsset( LLUUID::null, fs_data->uuid, aResourceData->mAssetInfo.mType );
+            if( self )
+                self->pushNextAsset( LLUUID::null, fs_data->uuid, aResourceData->mAssetInfo.mType );
             LL_WARNS( "import" ) << "Asset upload failed." << ll_pretty_print_sd( postContentResult) << LL_ENDL;
             return;
         }
@@ -2079,7 +2089,8 @@ void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter
             gInventory.notifyObservers();
 
             LL_DEBUGS( "import" ) << "Asset " << postContentResult[ "new_asset" ].asString() << " saved into " << "inventory item " << item->getName() << LL_ENDL;
-            self->mAssetItemMap[ postContentResult[ "new_asset" ].asUUID() ] = item_id;
+            if( self )
+                self->mAssetItemMap[ postContentResult[ "new_asset" ].asUUID() ] = item_id;
         }
     }
 
