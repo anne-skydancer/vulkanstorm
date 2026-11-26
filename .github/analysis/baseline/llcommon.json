@@ -1,0 +1,33 @@
+{
+ "lib": "llcommon",
+ "jobs": {
+  "asan": {},
+  "clang-tidy": {
+   "clang-tidy|bugprone-switch-missing-default-case|indra/llcommon/../llmath/llvector4a.inl": 1,
+   "clang-tidy|cppcoreguidelines-pro-type-member-init|indra/llcommon/../llmath/llmatrix3a.inl": 5,
+   "clang-tidy|cppcoreguidelines-pro-type-member-init|indra/llcommon/../llmath/llquaternion.h": 3,
+   "clang-tidy|cppcoreguidelines-pro-type-member-init|indra/llcommon/../llmath/llquaternion2.inl": 1,
+   "clang-tidy|cppcoreguidelines-pro-type-member-init|indra/llcommon/../llmath/llvector4a.h": 4,
+   "clang-tidy|cppcoreguidelines-pro-type-member-init|indra/llcommon/../llmath/llvector4a.inl": 13,
+   "clang-tidy|cppcoreguidelines-pro-type-member-init|indra/llcommon/../llmath/m3math.h": 2,
+   "clang-tidy|modernize-redundant-void-arg|indra/llcommon/../llmath/llquaternion.h": 5,
+   "clang-tidy|modernize-redundant-void-arg|indra/llcommon/../llmath/m3math.h": 2,
+   "clang-tidy|modernize-return-braced-init-list|indra/llcommon/../llmath/llquaternion.h": 5,
+   "clang-tidy|modernize-type-traits|indra/llcommon/../llmath/llmatrix3a.h": 2,
+   "clang-tidy|modernize-type-traits|indra/llcommon/../llmath/llquaternion.h": 3,
+   "clang-tidy|modernize-type-traits|indra/llcommon/../llmath/llquaternion2.h": 1,
+   "clang-tidy|modernize-type-traits|indra/llcommon/../llmath/llsimdtypes.h": 2,
+   "clang-tidy|modernize-type-traits|indra/llcommon/../llmath/llvector4a.h": 1,
+   "clang-tidy|modernize-type-traits|indra/llcommon/../llmath/llvector4logical.h": 1,
+   "clang-tidy|modernize-type-traits|indra/llcommon/../llmath/m3math.h": 3,
+   "clang-tidy|modernize-use-auto|indra/llcommon/../llmath/llmath.h": 2,
+   "clang-tidy|modernize-use-nullptr|indra/llcommon/../llmath/llvector4a.h": 1,
+   "clang-tidy|modernize-use-std-numbers|indra/llcommon/../llmath/llmath.h": 9,
+   "clang-tidy|modernize-use-using|indra/llcommon/../llmath/llsimdtypes.h": 1,
+   "clang-tidy|performance-type-promotion-in-math-fn|indra/llcommon/../llmath/llmath.h": 3,
+   "clang-tidy|performance-type-promotion-in-math-fn|indra/llcommon/../llmath/llquaternion.h": 2
+  },
+  "msvc": {},
+  "tsan": {}
+ }
+}
