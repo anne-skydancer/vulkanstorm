@@ -42,10 +42,7 @@ LLRefCount& LLRefCount::operator=(const LLRefCount&)
     return *this;
 }
 
-LLRefCount::LLRefCount() :
-    mRef(0)
-{
-}
+LLRefCount::LLRefCount() = default;
 
 LLRefCount::~LLRefCount()
 {

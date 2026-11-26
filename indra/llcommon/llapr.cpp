@@ -259,7 +259,7 @@ void _ll_apr_assert_status(apr_status_t status, const char* file, int line)
 class LLAPRFilePoolScope
 {
 public:
-    LLAPRFilePoolScope() : pPool(nullptr), mInitialized(false) {}
+    LLAPRFilePoolScope() : mInitialized(false) {}
     LLAPRFilePoolScope(LLVolatileAPRPool* poolp) : mInitialized(false)
     {
         setFilePool(poolp);

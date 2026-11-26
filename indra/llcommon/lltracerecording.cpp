@@ -54,7 +54,6 @@ Recording::Recording(EPlayState state)
 
 // NOLINTNEXTLINE(bugprone-copy-constructor-init): *this = other copies the state; the base keeps its own identity
 Recording::Recording( const Recording& other )
-:   mActiveBuffers(nullptr)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_STATS;
     *this = other;
