@@ -37,10 +37,11 @@ struct OrderTestApp: public LLTestApp
     static void status(EAppStatus s) { setStatus(s); }
 };
 
-// Under ASan, scenario 3 reports stack-use-after-scope and stack-buffer-overflow on variables that are fine, because
-// Boost.Fiber is prebuilt without ASan annotations: the fibre that the launch of another fibre resumes has stale
-// redzones from the abandoned frames of earlier fibres in its shadow memory. ASan cannot judge that switch, so
-// scenario 3 does not run there; the other builds of the test check its string.
+// Under ASan, scenarios 3 and 7 (and the bridge test that repeats 7) report stack-use-after-scope and
+// stack-buffer-overflow on variables that are fine, in the first function a resumed fibre calls (the CI run reports one
+// victim each time, the first fibre to hit stale shadow memory). Boost.Fiber is prebuilt without ASan annotations, so
+// ASan cannot judge these fibre switches; the other scenarios run there, and these run in every other build of the test
+// (all pass on Boost.Fiber 1.90 on Windows). The task core has no fibre: lltask_test runs the same scenarios under ASan.
 #if defined(__SANITIZE_ADDRESS__)
 constexpr bool sAsan = true;
 #elif defined(__has_feature)
@@ -144,7 +145,7 @@ void object::test<3>()
     set_test_name("launch from the main fibre drains the ready queue");
     if (sAsan)
     {
-        skip("fibre switch from inside a launch: ASan false positives (see sAsan)");
+        skip("fibre switch: ASan false positives (see sAsan)");
     }
     settle();
     LLEventStream pp("order_pp", true), pl("order_pl", true);
@@ -238,6 +239,10 @@ template<> template<>
 void object::test<7>()
 {
     set_test_name("LLApp status stops waiters");
+    if (sAsan)
+    {
+        skip("fibre switch: ASan false positives (see sAsan)");
+    }
     settle();
     LLEventStream ps("order_ps", true);
     LLCoros::instance().launch("order_S", [&ps]()
@@ -337,6 +342,10 @@ template<> template<>
 void object::test<11>()
 {
     set_test_name("bridge: LLApp status stops a task, an uncaught exception is rethrown");
+    if (sAsan)
+    {
+        skip("fibre switch: ASan false positives (see sAsan)");
+    }
     settle();
     LLEventStream ps("order_ps", true);
     LLCoros::instance().launch("order_S", [&ps]() -> LL::Task<void>
