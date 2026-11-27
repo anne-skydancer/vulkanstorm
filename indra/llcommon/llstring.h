@@ -371,6 +371,10 @@ public:
 
     static void replaceTabsWithSpaces( string_type& string, size_type spaces_per_tab );
     static void replaceNonstandardASCII( string_type& string, T replacement );
+    // Decode UTF-8 and reduce to ASCII: typographic quotes, dashes, ellipsis and
+    // no-break space map to ASCII equivalents; any other non-ASCII code point (or
+    // invalid byte) becomes ONE replacement; control characters other than LF too.
+    static void asciiFoldName( string_type& string, T replacement );
     static void replaceChar( string_type& string, T target, T replacement );
     static void replaceString( string_type& string, string_type target, string_type replacement );
     static string_type capitalize(const string_type& str);
@@ -1620,6 +1624,64 @@ void LLStringUtilBase<T>::replaceNonstandardASCII( string_type& string, T replac
             string[i] = replacement;
         }
     }
+}
+
+//static
+template<class T>
+void LLStringUtilBase<T>::asciiFoldName( string_type& string, T replacement )
+{
+    string_type out;
+    out.reserve(string.size());
+    const size_type len = string.size();
+    size_type i = 0;
+    while (i < len)
+    {
+        const U32 b0 = U8(string[i]);
+        if (b0 < 0x80)
+        {
+            out += (b0 < 32 && b0 != 10) ? replacement : string[i];
+            ++i;
+            continue;
+        }
+        // Decode one UTF-8 sequence (reject overlong, surrogates, > U+10FFFF)
+        size_type n = 0;
+        U32 cp = 0;
+        U32 min_cp = 0;
+        if (b0 >= 0xC2 && b0 <= 0xDF) { n = 2; cp = b0 & 0x1F; min_cp = 0x80; }
+        else if (b0 >= 0xE0 && b0 <= 0xEF) { n = 3; cp = b0 & 0x0F; min_cp = 0x800; }
+        else if (b0 >= 0xF0 && b0 <= 0xF4) { n = 4; cp = b0 & 0x07; min_cp = 0x10000; }
+        bool ok = n != 0 && i + n <= len;
+        for (size_type k = 1; ok && k < n; ++k)
+        {
+            const U32 bk = U8(string[i + k]);
+            if ((bk & 0xC0) != 0x80) ok = false;
+            else cp = (cp << 6) | (bk & 0x3F);
+        }
+        if (ok && (cp < min_cp || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))) ok = false;
+        if (!ok)
+        {
+            out += replacement; // one per invalid byte
+            ++i;
+            continue;
+        }
+        i += n;
+        switch (cp)
+        {
+        case 0x2018: case 0x2019: case 0x201A: case 0x2032:
+            out += T(0x27); break;
+        case 0x201C: case 0x201D: case 0x201E: case 0x2033:
+            out += T('"'); break;
+        case 0x2013: case 0x2014: case 0x2212:
+            out += T('-'); break;
+        case 0x2026:
+            out += T('.'); out += T('.'); out += T('.'); break;
+        case 0x00A0:
+            out += T(' '); break;
+        default:
+            out += replacement; break;
+        }
+    }
+    string.swap(out);
 }
 
 //static

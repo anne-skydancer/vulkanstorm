@@ -856,4 +856,28 @@ namespace tut
                       LLStringUtil::getTokens("want x^^2", " ", "", "", "^"), StringVec{ "want", "x^2" });
         ensure_equals("escape at end", LLStringUtil::getTokens("it's^ up there^", " ", "", "'", "^"), StringVec{ "it's up", "there^" });
     }
+
+    template<> template<>
+    void string_index_object_t::test<43>()
+    {
+        // asciiFoldName: one non-ASCII character gives one ASCII result
+        auto fold = [](const std::string& in)
+        {
+            std::string s(in);
+            LLStringUtil::asciiFoldName(s, '?');
+            return s;
+        };
+        ensure_equals("ascii unchanged", fold("Plain name-1.png"), "Plain name-1.png");
+        ensure_equals("curly apostrophe", fold("Bob\xE2\x80\x99s file"), "Bob's file");
+        ensure_equals("single quotes", fold("\xE2\x80\x98x\xE2\x80\x9A\xE2\x80\xB2"), "'x''");
+        ensure_equals("double quotes", fold("\xE2\x80\x9Cq\xE2\x80\x9D\xE2\x80\x9E\xE2\x80\xB3"), "\"q\"\"\"");
+        ensure_equals("dashes", fold("a\xE2\x80\x93" "b\xE2\x80\x94" "c\xE2\x88\x92" "d"), "a-b-c-d");
+        ensure_equals("ellipsis", fold("wait\xE2\x80\xA6"), "wait...");
+        ensure_equals("no-break space", fold("a\xC2\xA0" "b"), "a b");
+        ensure_equals("2-byte char", fold("caf\xC3\xA9"), "caf?");
+        ensure_equals("emoji is one ?", fold("x\xF0\x9F\x98\x80y"), "x?y");
+        ensure_equals("invalid byte", fold("a\xFF" "b"), "a?b");
+        ensure_equals("truncated sequence", fold("a\xE2\x80"), "a??");
+        ensure_equals("control char", fold("a	b"), "a?b");
+    }
 }
