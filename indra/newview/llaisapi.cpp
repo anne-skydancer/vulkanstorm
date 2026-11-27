@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llcoros.h"
 #include "llaisapi.h"
 
 #include "llagent.h"

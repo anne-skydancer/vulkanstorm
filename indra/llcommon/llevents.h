@@ -50,7 +50,6 @@
 #include "llstl.h"
 #include "llexception.h"
 #include "llhandle.h"
-#include "llcoros.h"
 
 /*==========================================================================*|
 // override this to allow binding free functions with more parameters

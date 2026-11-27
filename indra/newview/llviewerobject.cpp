@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llcoros.h"
 
 #include "llviewerobject.h"
 #include "llshadowdirtyfeed.h" // <Vulkanstorm/> the projector shadow pool's classifier

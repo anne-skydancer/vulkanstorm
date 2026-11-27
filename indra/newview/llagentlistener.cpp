@@ -27,6 +27,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llcoros.h"
 
 #include "llagentlistener.h"
 

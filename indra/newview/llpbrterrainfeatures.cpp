@@ -24,6 +24,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llcoros.h"
 
 #include "llpbrterrainfeatures.h"
 

@@ -16,6 +16,7 @@
 
 // Generic includes
 #include "llviewerprecompiledheaders.h"
+#include "llcoros.h"
 #include "llagent.h"
 #include "llappearancemgr.h"
 #include "llappviewer.h"

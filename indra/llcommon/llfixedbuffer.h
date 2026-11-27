@@ -34,7 +34,6 @@
 #include "llstring.h"
 #include "llthread.h"
 #include "llerrorcontrol.h"
-#include "llcoros.h"
 
 //  fixed buffer implementation
 class LL_COMMON_API LLFixedBuffer : public LLLineBuffer

@@ -57,7 +57,7 @@
 
 #include "llstoredmessage.h"
 #include "llpounceable.h"
-#include "llcoros.h"
+#include "lltask.h"
 #include <mutex>
 
 const U32 MESSAGE_MAX_STRINGS_LENGTH = 64;
