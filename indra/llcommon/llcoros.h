@@ -79,6 +79,13 @@ class LL_COMMON_API LLCoros: public LLSingleton<LLCoros>
 
     void cleanupSingleton() override;
 public:
+    /// Once the app is quitting (every waiting coroutine has had Stopping
+    /// queued), let the executor's tasks run out and pump the fibre scheduler
+    /// up to 10 times so the stopped coroutines unwind while the systems they
+    /// use still exist. Logs the active coroutines before and after. Safe to
+    /// call more than once. Main fibre only.
+    void drain(const std::string& when);
+
     // For debugging, return true if on the main coroutine for the current thread
     // Code that should not be executed from a coroutine should be protected by
     // llassert(LLCoros::on_main_coro())

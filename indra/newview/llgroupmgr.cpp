@@ -2210,10 +2210,14 @@ LL::Task<void> LLGroupMgr::groupMembersRequestCoro(std::string url, LLUUID group
     }
 
     mMemberRequestInFlight = true;
+    // Cleared on every exit, including an LLCoros::Stop unwinding the wait.
+    struct InFlightGuard
+    {
+        bool& mFlag;
+        ~InFlightGuard() { mFlag = false; }
+    } in_flight_guard{ mMemberRequestInFlight };
 
     LLSD response = co_await httpAdapter->postAndSuspend(httpRequest, url, postData, httpOpts);
-
-    mMemberRequestInFlight = false;
 
     LLSD httpResults = response.get(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

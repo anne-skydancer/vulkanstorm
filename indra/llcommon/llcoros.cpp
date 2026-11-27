@@ -152,9 +152,15 @@ LLCoros::~LLCoros() = default;
 void LLCoros::cleanupSingleton()
 {
     // Some of the coroutines (like voice) will depend onto
-    // origin singletons, so clean coros before deleting those
+    // origin singletons, so clean coros before deleting those.
+    // LLAppViewer::cleanup() already drained them before tearing anything
+    // down; this is the backstop for any that remain.
+    drain("at entry to ~LLCoros()");
+}
 
-    printActiveCoroutines("at entry to ~LLCoros()");
+void LLCoros::drain(const std::string& when)
+{
+    printActiveCoroutines(when);
     // Tasks of the executor: let them run out and destroy what is left. (The coroutine switch moves this call to just
     // before LLSingletonBase::deleteAll(); until then nothing but tests starts a task.)
     mExecutor.shutdown();
