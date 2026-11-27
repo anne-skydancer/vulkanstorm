@@ -2,7 +2,7 @@
  * @file   llcoros.h
  * @author Nat Goodspeed
  * @date   2009-06-02
- * @brief  Manage running boost::coroutine instances
+ * @brief  Manage running native (C++20) coroutines
  *
  * $LicenseInfo:firstyear=2009&license=viewerlgpl$
  * Second Life Viewer Source Code
@@ -154,8 +154,7 @@ public:
      * coroutines or simple callbacks) can be registered on a particular
      * LLEventPump, every listener responding to each of the events on that
      * LLEventPump. But a particular coroutine can assert that it will consume
-     * each event for which it suspends. (See also llcoro::postAndSuspend(),
-     * llcoro::VoidListener)
+     * each event for which it suspends. (See also llcoro::postAndSuspend())
      */
     static void set_consuming(bool consuming);
     static bool get_consuming();

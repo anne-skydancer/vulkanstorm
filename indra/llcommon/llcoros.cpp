@@ -35,6 +35,7 @@
 // external library headers
 // other Linden headers
 #include "llapp.h"
+#include "llthread.h"
 #include "lltimer.h"
 #include "llevents.h"
 #include "llerror.h"
@@ -93,7 +94,13 @@ std::string LLCoros::getStatus()
     return get_CoroData().mStatus;
 }
 
-LLCoros::LLCoros() = default;
+LLCoros::LLCoros()
+{
+    // The executor's owner is the constructing thread (LL::Executor::mOwner). LLSingleton constructs on the main
+    // thread, so this holds for the instance() path; assert it so that a different construction can never leave
+    // the executor owned by another thread.
+    llassert_always(on_main_thread());
+}
 
 LLCoros::~LLCoros() = default;
 
@@ -146,9 +153,8 @@ bool LLCoros::kill(const std::string& name)
     {
         return false;
     }
-    // Because this is a boost::ptr_map, erasing the map entry also destroys
-    // the referenced heap object, in this case the boost::coroutine object,
-    // which will terminate the coroutine.
+    // Erasing the map entry destroys the coroutine record, which
+    // terminates the coroutine.
     mCoros.erase(found);
     return true;
 }

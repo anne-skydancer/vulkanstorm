@@ -170,7 +170,7 @@ bool EventAwaiter::await_ready()
         mListenerName,
         [this](const LLSD& status)
         {
-            llassert(mExecutor->onOwnerThread()); // listeners of the event awaiters run on the executor's thread
+            llassert_always(mExecutor->onOwnerThread()); // listeners of the event awaiters run on the executor's thread
             // anything except "running" should wake up the waiting coroutine
             const auto& statsd = status["status"];
             if (statsd.asString() != "running")
@@ -195,7 +195,7 @@ bool EventAwaiter::await_ready()
         mListenerName,
         [this, consuming](const LLSD& result)
         {
-            llassert(mExecutor->onOwnerThread()); // listeners of the event awaiters run on the executor's thread
+            llassert_always(mExecutor->onOwnerThread()); // listeners of the event awaiters run on the executor's thread
             if (! mClaim.claim())
             {
                 // the first event won; this one is neither delivered nor consumed
