@@ -416,11 +416,11 @@ LLUUID LLCoprocedurePool::enqueueCoprocedure(const std::string &name, LLCoproced
                                    << "\" at "
                               << mPending << LL_ENDL;
 
-        if (mPending >= (mQueueSize - 1))
+        if (mPending + 1 >= mQueueSize) // this entry takes the last free slot of the channel
         {
             // If it's all used up (not supposed to happen,
             // fetched should cap it), we are going to crash
-            LL_WARNS("CoProcMgr", "Inventory") << "About to run out of queue space for Coprocedure(" << name
+            LL_WARNS("CoProcMgr", "Inventory") << "Queue is about to be full (capacity " << mQueueSize << ") for Coprocedure(" << name
                                                << ") enqueuing with id=" << id.asString() << " Already pending:" << mPending << LL_ENDL;
         }
     }
