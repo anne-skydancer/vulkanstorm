@@ -33,7 +33,6 @@
 
 #include "../llcoproceduremanager.h"
 #include "lleventcoro.h"
-#include "llevents.h"
 
 #include <functional>
 
@@ -43,6 +42,7 @@
 
 #include "../test/lltut.h"
 #include "../test/sync.h"
+#include "../test/lltestapp.h"
 
 
 #if LL_WINDOWS
@@ -84,9 +84,8 @@ LL::Task<void> finished()
 LL::Task<void> waitsThenFinishes(int& state, Sync& sync)
 {
     state = 1;
-    // the request pump's listener answers on the reply pump, which wakes this coprocedure
-    LLSD reply = co_await llcoro::co::postAndSuspend(LLSD::emptyMap(), "PoolWaitRequest", "PoolWaitReply", "reply");
-    state = reply.asString() == "answered" ? 2 : -1;
+    co_await llcoro::co::suspend(); // one fibre tick under the bridge
+    state = 2;
     sync.bump();
 }
 } // namespace
@@ -95,6 +94,10 @@ namespace tut
 {
     struct coproceduremanager_test
     {
+        // The blocking llcoro:: calls of a coprocedure begin with LLCoros::checkStop(), which throws Stopping in a
+        // fibre unless an LLApp is running: test 5 waits, so it needs one.
+        LLTestApp mApp;
+
         coproceduremanager_test()
         {
         }
@@ -206,13 +209,6 @@ namespace tut
     {
         Sync sync;
         int state = 0;
-        LLEventStream request("PoolWaitRequest", true);
-        LLEventStream reply("PoolWaitReply", true);
-        LLTempBoundListener answer = request.listen("answer", [](const LLSD& event)
-        {
-            LLEventPumps::instance().obtain(event["reply"].asString()).post("answered");
-            return false;
-        });
         LLCoprocedureManager::instance().initializePool("PoolWait");
         LLCoprocedureManager::instance().enqueueCoprocedure("PoolWait", "WaitProc",
             [&state, &sync] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID) {
