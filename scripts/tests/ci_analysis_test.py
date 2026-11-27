@@ -98,6 +98,10 @@ class PlanTest(unittest.TestCase):
         plan = ca.resolve("clean/coroutines-callers", "pull_request", root=self.root)
         self.assertEqual((plan["run"], plan["lib"], plan["scope"]), (True, "llmessage", "lib"))
 
+    def test_coroutines_native_branch_analyses_llcommon(self):
+        plan = ca.resolve("clean/coroutines-native", "pull_request", root=self.root)
+        self.assertEqual((plan["run"], plan["lib"], plan["scope"]), (True, "llcommon", "lib"))
+
     def test_newview_area(self):
         plan = ca.resolve("clean/newview-render-pipeline", "pull_request", root=self.root)
         self.assertEqual((plan["run"], plan["lib"], plan["scope"]), (True, "newview-render-pipeline", "newview"))

@@ -33,7 +33,7 @@ TIDY_CONFIG = ROOT / ".github" / "analysis" / "clang-tidy.yaml"
 SELF_TEST_LIB = "llcommon"
 NEWVIEW_BASE = os.environ.get("NEWVIEW_BASE", "origin/release-clean")
 # A cleanup branch that is not named after a library but works in one (doc/clean/analysis.md, "What a run analyses").
-BRANCH_LIBRARY = {"coroutines": "llcommon", "coroutines-callers": "llmessage"}
+BRANCH_LIBRARY = {"coroutines": "llcommon", "coroutines-callers": "llmessage", "coroutines-native": "llcommon"}
 JOBS = ("clang-tidy", "asan", "tsan", "msvc")
 # A pull request from a branch that is not clean/<lib> runs the self-test only when it changes one of these.
 ANALYSIS_FILES = (
