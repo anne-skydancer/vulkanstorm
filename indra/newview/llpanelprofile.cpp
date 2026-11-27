@@ -2049,6 +2049,8 @@ void LLProfileImagePicker::notify(const std::vector<std::string>& filenames)
         notif_args["REASON"] = LLImage::getLastThreadError().c_str();
         LLNotificationsUtil::add("CannotUploadTexture", notif_args);
         LL_WARNS("AvatarProperties") << "Failed to upload profile image of type " << (S32)mType << ", " << notif_args["REASON"].asString() << LL_ENDL;
+        // createUploadFile can fail after it created the file
+        LLFile::remove(temp_file);
         return;
     }
 
