@@ -83,6 +83,25 @@ LL::Task<void> waitsThenFinishes(int& state)
     state = 2;
 }
 
+// Counts the destructions of the locals a suspended coprocedure holds.
+struct DrainProbe
+{
+    int& mDestroyed;
+    explicit DrainProbe(int& destroyed): mDestroyed(destroyed) {}
+    DrainProbe(const DrainProbe&) = delete;
+    DrainProbe& operator=(const DrainProbe&) = delete;
+    ~DrainProbe() { ++mDestroyed; }
+};
+
+// A coprocedure that waits for an event nobody posts: it is still suspended when LLCoros::drain() runs.
+LL::Task<void> waitsForever(int& started, int& resumed, int& destroyed)
+{
+    DrainProbe probe(destroyed);
+    ++started;
+    co_await llcoro::suspendUntilEventOn(std::string("DrainTestNobodyPosts"));
+    ++resumed;
+}
+
 // The main loop's part: pump the coroutines, a bounded number of frames, until @a done holds.
 template<typename DONE>
 bool pumpUntil(DONE done)
@@ -146,5 +165,46 @@ namespace tut
         ensure("the coprocedure did not run to its end after waiting", pumpUntil([&state] { return state == 2; }));
 
         LLCoprocedureManager::instance().close("PoolWait");
+    }
+
+    // LLCoros::drain() with a pool that has suspended coprocedures and queued work: the survivors are destroyed (their
+    // locals with them), nothing resumes and nothing queued starts, and closing the pool afterwards is clean.
+    template<> template<>
+    void coproceduremanager_object_t::test<3>()
+    {
+        int started = 0, resumed = 0, destroyed = 0;
+        LLCoprocedureManager& manager = LLCoprocedureManager::instance();
+        manager.initializePool("PoolDrain");
+        // more than any pool has invokers, so that some stay queued
+        const int total = 64;
+        for (int i = 0; i < total; ++i)
+        {
+            manager.enqueueCoprocedure("PoolDrain", "DrainProc",
+                [&started, &resumed, &destroyed] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID) {
+                    return waitsForever(started, resumed, destroyed);
+                });
+        }
+
+        // the default pool has 5 invokers (llcoproceduremanager.cpp): each takes one coprocedure and waits in it
+        const int running = 5;
+        ensure("the invokers did not all start a coprocedure", pumpUntil([&started] { return started == running; }));
+        pumpUntil([] { return false; }); // settle: the full bounded number of frames
+        ensure_equals("more coprocedures started than the pool has invokers", started, running);
+        ensure_equals("a suspended coprocedure ended early", destroyed, 0);
+        ensure("the test wants work still queued", running < total);
+
+        LLCoros::instance().drain("test");
+
+        ensure_equals("the survivors' locals were not all destroyed", destroyed, running);
+        ensure_equals("a coprocedure resumed after the wait", resumed, 0);
+        ensure_equals("queued work started during the drain", started, running);
+        ensure_equals("tasks remain after the drain", LLCoros::instance().executor().taskCount(), size_t(0));
+
+        // the invokers are gone: pumping resumes nothing and closing the pool is clean
+        pumpUntil([] { return false; });
+        manager.close("PoolDrain");
+        pumpUntil([] { return false; });
+        ensure_equals("a coprocedure resumed after the pool closed", resumed, 0);
+        ensure_equals("queued work started after the pool closed", started, running);
     }
 }  // namespace tut
