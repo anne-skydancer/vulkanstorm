@@ -438,35 +438,43 @@ def parse_status(text):
 
 
 GROUP_START = re.compile(r"^Unit test group_started name=(\S+)")
+GROUP_DONE = re.compile(r"^Unit test group_completed name=(\S+)")
 GROUP_FIELDS = (("Total Tests:", "total"), ("Passed Tests:", "passed"), ("Skipped known failures:", "skipped"),
                 ("Failed Tests:", "failed"))
 
 
 def parse_test_stats(*texts):
-    """{(group, ...): {total, passed, skipped, failed} or None} from the test runner's output. A test binary runs
-    several groups and prints one summary after them; groups that started and got no summary (a crash or hang) map
-    to None. A later text (a retry) replaces the entry of the same groups."""
+    """{(group,): {total, passed, skipped, failed} or None} from the test runner's output. A test binary prints one
+    summary right after the group_completed line of its last group, so each summary belongs to the group named by
+    the nearest group_completed line above it, however the output of parallel binaries interleaves. A group that
+    started and never completed (a crash or hang) maps to None. A later text (a retry) replaces the entry of the
+    same group."""
     runs = {}
     for text in texts:
-        pending, current = [], None
+        started, completed, current = [], set(), None
         for line in text.splitlines():
             match = GROUP_START.match(line)
             if match:
-                pending.append(match.group(1))
+                started.append(match.group(1))
                 current = None
                 continue
+            match = GROUP_DONE.match(line)
+            if match:
+                completed.add(match.group(1))
+                last_done, current = match.group(1), None
+                continue
             line = line.strip()
-            if line.startswith("Total Tests:") and pending:
+            if line.startswith("Total Tests:") and completed:
                 current = {"total": 0, "passed": 0, "skipped": 0, "failed": 0}
-                runs[tuple(pending)] = current
-                pending = []
+                runs[(last_done,)] = current
             for prefix, name in GROUP_FIELDS:
                 if current is not None and line.startswith(prefix):
                     number = re.match(r"\s*(\d+)", line[len(prefix):])
                     if number:
                         current[name] = int(number.group(1))
-        if pending:
-            runs.setdefault(tuple(pending), None)
+        for name in started:
+            if name not in completed:
+                runs.setdefault((name,), None)
     return runs
 
 
@@ -499,7 +507,7 @@ def test_findings(runs, binaries, expected):
         elif result["total"] == 0 or result["passed"] + result["skipped"] < result["total"]:
             found.append(build_finding("test-failed", f"test group(s) {label}: {result['passed']} of {result['total']} "
                                        f"passed, {result['failed']} failed", f"group {label}"))
-    line = (f"{run} test binaries run (planned {expected}); {sum(len(k) for k in runs)} test groups, {total} tests, "
+    line = (f"{run} test binaries run (planned {expected}); {len(runs)} test runs, {total} tests, "
             f"{passed} passed, {skipped} skipped known failures")
     return found, line
 

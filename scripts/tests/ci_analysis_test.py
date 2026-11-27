@@ -316,7 +316,29 @@ class BuildTest(unittest.TestCase):
         self.assertIn("llprocess", got[0]["message"])
         self.assertIn("27 of 28", got[0]["message"])
         self.assertIn("test binaries run", line)
-        self.assertEqual(runs[("LLHash", "LLMemoryStream", "LLSD", "U64_conversion")]["total"], 21)
+        self.assertEqual(runs[("U64_conversion",)]["total"], 21)
+
+    def test_totals_do_not_depend_on_how_parallel_output_interleaves(self):
+        # Three binaries print at once; the same lines in another order give the same totals.
+        a = ["Unit test group_started name=A1", "Unit test group_completed name=A1",
+             "Unit test group_started name=A2", "Unit test group_completed name=A2",
+             "\tTotal Tests:\t5", "\tPassed Tests:\t5\tYAY!! \o/"]
+        b = ["Unit test group_started name=B", "Unit test group_completed name=B",
+             "\tTotal Tests:\t9", "\tPassed Tests:\t8", "\tSkipped known failures:\t1"]
+        c = ["Unit test group_started name=C", "Unit test group_completed name=C",
+             "\tTotal Tests:\t3", "\tPassed Tests:\t3"]
+        first = "\n".join([a[0], b[0], c[0], a[1], a[2], a[3], *a[4:], *b[1:], *c[1:]])
+        second = "\n".join([c[0], b[0], a[0], b[1], *b[2:], c[1], *c[2:], *a[1:]])
+        sums = []
+        for text in (first, second):
+            runs = ca.parse_test_stats(text)
+            self.assertEqual(sorted(runs), [("A2",), ("B",), ("C",)])
+            self.assertEqual(runs[("A2",)]["total"], 5)
+            self.assertEqual(runs[("B",)]["skipped"], 1)
+            sums.append(ca.test_findings(runs, {"a", "b", "c"}, 3))
+        self.assertEqual(sums[0], sums[1])
+        self.assertEqual(sums[0][0], [])
+        self.assertIn("17 tests, 16 passed, 1 skipped", sums[0][1])
 
     def test_no_tests_or_missing_binaries_are_findings(self):
         self.assertEqual([f["check"] for f in ca.test_findings({}, set(), 3)[0]], ["no-tests-run"])
