@@ -145,8 +145,8 @@ private:
 
     CoroAdapterMap_t mCoroMapping;
 
-    void coprocedureInvokerCoro(CoprocQueuePtr pendingCoprocs,
-                                LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter);
+    LL::Task<void> coprocedureInvokerCoro(CoprocQueuePtr pendingCoprocs,
+                                          LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter);
 };
 
 //=========================================================================
@@ -461,7 +461,7 @@ LLUUID LLCoprocedurePool::enqueueCoprocedure(const std::string &name, LLCoproced
 }
 
 //-------------------------------------------------------------------------
-void LLCoprocedurePool::coprocedureInvokerCoro(
+LL::Task<void> LLCoprocedurePool::coprocedureInvokerCoro(
     CoprocQueuePtr pendingCoprocs,
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter)
 {
@@ -508,7 +508,7 @@ void LLCoprocedurePool::coprocedureInvokerCoro(
 
         try
         {
-            coproc->mProc(httpAdapter, coproc->mId);
+            co_await coproc->mProc(httpAdapter, coproc->mId);
         }
         catch (const LLCoros::Stop &e)
         {

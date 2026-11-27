@@ -422,7 +422,7 @@ void LLStreamingAudio_MediaPlugins::pollStreamStatus()
 }
 
 // static
-void LLStreamingAudio_MediaPlugins::streamStatusCoro(LLStreamingAudio_MediaPlugins* self,
+LL::Task<void> LLStreamingAudio_MediaPlugins::streamStatusCoro(LLStreamingAudio_MediaPlugins* self,
     LLSD candidates, std::string mount_path, std::string stream_url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -436,7 +436,7 @@ void LLStreamingAudio_MediaPlugins::streamStatusCoro(LLStreamingAudio_MediaPlugi
     for (LLSD::array_const_iterator cand = candidates.beginArray(); cand != candidates.endArray(); ++cand)
     {
         status_url = cand->asString();
-        result = httpAdapter->getJsonAndSuspend(httpRequest, status_url);
+        result = co_await httpAdapter->getJsonAndSuspend(httpRequest, status_url);
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         if (httpResults[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_SUCCESS].asBoolean() &&
@@ -452,13 +452,13 @@ void LLStreamingAudio_MediaPlugins::streamStatusCoro(LLStreamingAudio_MediaPlugi
     if (!gAudiop || gAudiop->getStreamingAudioImpl() != (LLStreamingAudioInterface*)self ||
         self->getURL() != stream_url)
     {
-        return;
+        co_return;
     }
 
     if (!got_status)
     {
         self->onStreamStatusFailed();
-        return;
+        co_return;
     }
 
     // icestats.source is a map for a single mount, an array for several
@@ -489,7 +489,7 @@ void LLStreamingAudio_MediaPlugins::streamStatusCoro(LLStreamingAudio_MediaPlugi
 
     if (source.isUndefined())
     {
-        return;
+        co_return;
     }
 
     std::string artist = source["artist"].asString();

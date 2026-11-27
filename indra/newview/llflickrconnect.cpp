@@ -66,7 +66,7 @@ static void toast_user_for_flickr_success()
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void LLFlickrConnect::flickrConnectCoro(std::string requestToken, std::string oauthVerifier)
+LL::Task<void> LLFlickrConnect::flickrConnectCoro(std::string requestToken, std::string oauthVerifier)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -85,7 +85,7 @@ void LLFlickrConnect::flickrConnectCoro(std::string requestToken, std::string oa
 
     setConnectionState(LLFlickrConnect::FLICKR_CONNECTION_IN_PROGRESS);
 
-    LLSD result = httpAdapter->putAndSuspend(httpRequest, getFlickrConnectURL("/connection"), body, httpOpts);
+    LLSD result = co_await httpAdapter->putAndSuspend(httpRequest, getFlickrConnectURL("/connection"), body, httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -156,7 +156,7 @@ bool LLFlickrConnect::testShareStatus(LLSD &result)
     return false;
 }
 
-void LLFlickrConnect::flickrShareCoro(LLSD share)
+LL::Task<void> LLFlickrConnect::flickrShareCoro(LLSD share)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -167,7 +167,7 @@ void LLFlickrConnect::flickrShareCoro(LLSD share)
     httpOpts->setWantHeaders(true);
     httpOpts->setFollowRedirects(false);
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, getFlickrConnectURL("/share/photo", true), share, httpOpts);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, getFlickrConnectURL("/share/photo", true), share, httpOpts);
 
     if (testShareStatus(result))
     {
@@ -178,7 +178,7 @@ void LLFlickrConnect::flickrShareCoro(LLSD share)
 
 }
 
-void LLFlickrConnect::flickrShareImageCoro(LLPointer<LLImageFormatted> image, std::string title, std::string description, std::string tags, int safetyLevel)
+LL::Task<void> LLFlickrConnect::flickrShareImageCoro(LLPointer<LLImageFormatted> image, std::string title, std::string description, std::string tags, int safetyLevel)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -206,7 +206,7 @@ void LLFlickrConnect::flickrShareImageCoro(LLPointer<LLImageFormatted> image, st
     else
     {
         LL_WARNS() << "Image to upload is not a PNG or JPEG" << LL_ENDL;
-        return;
+        co_return;
     }
 
     // All this code is mostly copied from LLWebProfile::post()
@@ -249,7 +249,7 @@ void LLFlickrConnect::flickrShareImageCoro(LLPointer<LLImageFormatted> image, st
 
     body << "\r\n--" << boundary << "--\r\n";
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, getFlickrConnectURL("/share/photo", true), raw, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, getFlickrConnectURL("/share/photo", true), raw, httpOpts, httpHeaders);
 
     if (testShareStatus(result))
     {
@@ -261,7 +261,7 @@ void LLFlickrConnect::flickrShareImageCoro(LLPointer<LLImageFormatted> image, st
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void LLFlickrConnect::flickrDisconnectCoro()
+LL::Task<void> LLFlickrConnect::flickrDisconnectCoro()
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -272,7 +272,7 @@ void LLFlickrConnect::flickrDisconnectCoro()
     setConnectionState(LLFlickrConnect::FLICKR_DISCONNECTING);
     httpOpts->setFollowRedirects(false);
 
-    LLSD result = httpAdapter->deleteAndSuspend(httpRequest, getFlickrConnectURL("/connection"), httpOpts);
+    LLSD result = co_await httpAdapter->deleteAndSuspend(httpRequest, getFlickrConnectURL("/connection"), httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -295,7 +295,7 @@ void LLFlickrConnect::flickrDisconnectCoro()
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void LLFlickrConnect::flickrConnectedCoro(bool autoConnect)
+LL::Task<void> LLFlickrConnect::flickrConnectedCoro(bool autoConnect)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -307,7 +307,7 @@ void LLFlickrConnect::flickrConnectedCoro(bool autoConnect)
 
     httpOpts->setFollowRedirects(false);
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, getFlickrConnectURL("/connection", true), httpOpts);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, getFlickrConnectURL("/connection", true), httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -345,7 +345,7 @@ void LLFlickrConnect::flickrConnectedCoro(bool autoConnect)
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void LLFlickrConnect::flickrInfoCoro()
+LL::Task<void> LLFlickrConnect::flickrInfoCoro()
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -356,7 +356,7 @@ void LLFlickrConnect::flickrInfoCoro()
     httpOpts->setWantHeaders(true);
     httpOpts->setFollowRedirects(false);
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, getFlickrConnectURL("/info", true), httpOpts);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, getFlickrConnectURL("/info", true), httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

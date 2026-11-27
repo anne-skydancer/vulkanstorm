@@ -32,6 +32,7 @@
 #include "llsdserialize.h"
 
 #include "../llcoproceduremanager.h"
+#include "lleventcoro.h"
 
 #include <functional>
 
@@ -41,6 +42,7 @@
 
 #include "../test/lltut.h"
 #include "../test/sync.h"
+#include "../test/lltestapp.h"
 
 
 #if LL_WINDOWS
@@ -68,10 +70,34 @@ LLCore::HttpRequest::~HttpRequest()
 {
 }
 
+namespace
+{
+// A coprocedure is a coroutine that returns an LL::Task; this one has nothing to wait for. The test lambda is not
+// itself the coroutine (its captures would dangle after a suspension, lltask.h).
+LL::Task<void> finished()
+{
+    co_return;
+}
+
+// A coprocedure that waits (a fibre switch under the bridge) before it finishes: the pool must await it, so what
+// comes after the wait still runs, and still counts as the coprocedure.
+LL::Task<void> waitsThenFinishes(int& state, Sync& sync)
+{
+    state = 1;
+    co_await llcoro::co::suspend(); // one fibre tick under the bridge
+    state = 2;
+    sync.bump();
+}
+} // namespace
+
 namespace tut
 {
     struct coproceduremanager_test
     {
+        // The blocking llcoro:: calls of a coprocedure begin with LLCoros::checkStop(), which throws Stopping in a
+        // fibre unless an LLApp is running: test 5 waits, so it needs one.
+        LLTestApp mApp;
+
         coproceduremanager_test()
         {
         }
@@ -93,9 +119,10 @@ namespace tut
         int foo = 0;
         LLCoprocedureManager::instance().initializePool("PoolName");
         LLCoprocedureManager::instance().enqueueCoprocedure("PoolName", "ProcName",
-            [&foo, &sync] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t & ptr, const LLUUID & id) {
+            [&foo, &sync] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ptr, LLUUID id) {
                 sync.bump();
                 foo = 1;
+                return finished();
             });
 
         sync.yield();
@@ -175,5 +202,22 @@ namespace tut
 
         LL_INFOS("CoMain") << "checking count" << LL_ENDL;
         ensure_equals("coprocedure failed to update counter", counter, 5);
+    }
+
+    template<> template<>
+    void coproceduremanager_object_t::test<5>()
+    {
+        Sync sync;
+        int state = 0;
+        LLCoprocedureManager::instance().initializePool("PoolWait");
+        LLCoprocedureManager::instance().enqueueCoprocedure("PoolWait", "WaitProc",
+            [&state, &sync] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID) {
+                return waitsThenFinishes(state, sync);
+            });
+
+        sync.yield();
+        ensure_equals("the coprocedure did not run to its end after waiting", state, 2);
+
+        LLCoprocedureManager::instance().close("PoolWait");
     }
 }  // namespace tut

@@ -5820,7 +5820,7 @@ void LLAgent::sendAgentUserInfoRequest()
     }
 }
 
-void LLAgent::requestAgentUserInfoCoro(std::string capurl)
+LL::Task<void> LLAgent::requestAgentUserInfoCoro(std::string capurl)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -5831,7 +5831,7 @@ void LLAgent::requestAgentUserInfoCoro(std::string capurl)
 
     httpOpts->setFollowRedirects(true);
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, capurl, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, capurl, httpOpts, httpHeaders);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -5839,12 +5839,12 @@ void LLAgent::requestAgentUserInfoCoro(std::string capurl)
     if (!status)
     {
         LL_WARNS("UserInfo") << "Failed to get user information." << LL_ENDL;
-        return;
+        co_return;
     }
     else if (!result["success"].asBoolean())
     {
         LL_WARNS("UserInfo") << "Failed to get user information: " << result["message"] << LL_ENDL;
-        return;
+        co_return;
     }
 
     std::string email;
@@ -5897,7 +5897,7 @@ void LLAgent::sendAgentUpdateUserInfo(bool im_via_email, const std::string& dire
 
 // <FS:Ansariel> Keep this for OpenSim
 //void LLAgent::updateAgentUserInfoCoro(std::string capurl, std::string directory_visibility)
-void LLAgent::updateAgentUserInfoCoro(std::string capurl, bool im_via_email, std::string directory_visibility)
+LL::Task<void> LLAgent::updateAgentUserInfoCoro(std::string capurl, bool im_via_email, std::string directory_visibility)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -5914,7 +5914,7 @@ void LLAgent::updateAgentUserInfoCoro(std::string capurl, bool im_via_email, std
     if (!LLGridManager::instance().isInSecondLife())
         body.insert("im_via_email", LLSD::Boolean(im_via_email));
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, capurl, body, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, capurl, body, httpOpts, httpHeaders);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

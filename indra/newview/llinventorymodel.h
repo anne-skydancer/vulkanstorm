@@ -49,6 +49,7 @@
 // <FS:TT> ReplaceWornItemsOnly
 #include "llviewerobjectlist.h"
 #include "llvoavatarself.h"
+#include "lltask.h"
 // </FS:TT>
 
 class LLInventoryObserver;
@@ -557,7 +558,7 @@ protected:
     void addCategory(LLViewerInventoryCategory* category);
     void addItem(LLViewerInventoryItem* item);
 
-    void createNewCategoryCoro(std::string url, LLSD postData, inventory_func_type callback);
+    LL::Task<void> createNewCategoryCoro(std::string url, LLSD postData, inventory_func_type callback);
 
 /**                    Mutators
  **                                                                            **

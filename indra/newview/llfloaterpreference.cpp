@@ -613,13 +613,13 @@ void LLFloaterPreference::saveAvatarProperties( void )
         {
             mAllowPublish = allowPublish;
 
-            LLCoros::instance().launch("requestAgentUserInfoCoro",
+            LLCoros::instance().launch("LLFloaterPreference::saveAvatarPropertiesCoro",
                 boost::bind(saveAvatarPropertiesCoro, cap_url, allowPublish));
         }
     }
 }
 
-void LLFloaterPreference::saveAvatarPropertiesCoro(const std::string cap_url, bool allow_publish)
+LL::Task<void> LLFloaterPreference::saveAvatarPropertiesCoro(const std::string cap_url, bool allow_publish)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -634,7 +634,7 @@ void LLFloaterPreference::saveAvatarPropertiesCoro(const std::string cap_url, bo
     LLSD data;
     data["allow_publish"] = allow_publish;
 
-    LLSD result = httpAdapter->putAndSuspend(httpRequest, finalUrl, data, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->putAndSuspend(httpRequest, finalUrl, data, httpOpts, httpHeaders);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -642,7 +642,7 @@ void LLFloaterPreference::saveAvatarPropertiesCoro(const std::string cap_url, bo
     if (!status)
     {
         LL_WARNS("Preferences") << "Failed to put agent information " << data << " for id " << gAgentID << LL_ENDL;
-        return;
+        co_return;
     }
 
     LL_DEBUGS("Preferences") << "Agent id: " << gAgentID << " Data: " << data << " Result: " << httpResults << LL_ENDL;

@@ -39,6 +39,7 @@
 #include "llvlcomposition.h"
 
 #include "lleventcoro.h"
+#include "lltask.h"
 
 class LLAvatarName;
 class LLDispatcher;
@@ -559,7 +560,7 @@ private:
     // <FS:Ansariel> Moved to public
     //static void sendEstateAccessDelta(U32 flags, const LLUUID& agent_id);
 
-    static void requestEstateGetAccessCoro(std::string url);
+    static LL::Task<void> requestEstateGetAccessCoro(std::string url);
 
     void searchAgent(LLNameListCtrl* listCtrl, const std::string& search_string);
     void copyListToClipboard(std::string list_name);

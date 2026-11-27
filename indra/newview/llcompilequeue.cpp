@@ -471,14 +471,14 @@ void LLFloaterCompileQueue::processExperienceIdResults(LLSD result, LLUUID paren
 
 /// This is a utility function to be bound and called from objectScriptProcessingQueueCoro.
 /// Do not call directly. It may throw a LLCheckedHandle<>::Stale exception.
-bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloater,
-    const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump)
+LL::Task<bool> LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloater,
+    LLPointer<LLViewerObject> object, LLInventoryObject* inventory, LLEventPump* pump)
 {
     if (LLApp::isExiting())
     {
         // Reply from coroutine came on shutdown
         // We are quiting, don't start any more coroutines!
-        return true;
+        co_return true;
     }
 
     LLSD result;
@@ -494,7 +494,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
     if (!item)
     {
         LL_WARNS("SCRIPTQ") << "item retrieved is not an LLInventoryItem." << LL_ENDL;
-        return true;
+        co_return true;
     }
 
     if (requested_target == "auto-luau")
@@ -513,7 +513,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
         {
             floater->addStringMessage(
                 "Skipping: " + item->getName() + " (no registered VM)");
-            return true;
+            co_return true;
         }
     }
 
@@ -527,7 +527,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
             std::string buffer = floater->getString( "SkippingPermissions", args );
             // </FS:Ansariel>
            floater->addStringMessage(buffer);
-           return true;
+           co_return true;
     }
 
     // Attempt to retrieve the experience
@@ -535,16 +535,16 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
     {
         // <FS:Ansariel> FIRE-17688: Recompile scripts not working on OpenSim
         //LLExperienceCache::instance().fetchAssociatedExperience(inventory->getParentUUID(), inventory->getUUID(),
-        //    boost::bind(&LLFloaterCompileQueue::handleHTTPResponse, pump.getName(), _1));
+        //    boost::bind(&LLFloaterCompileQueue::handleHTTPResponse, pump->getName(), _1));
 
-        //result = llcoro::suspendUntilEventOnWithTimeout(pump, QUEUE_INVENTORY_FETCH_TIMEOUT,
+        //result = llcoro::suspendUntilEventOnWithTimeout(*pump, QUEUE_INVENTORY_FETCH_TIMEOUT,
         //    LLSDMap("timeout", LLSD::Boolean(true)));
         if (object->getRegion() && object->getRegion()->isCapabilityAvailable("GetMetadata"))
         {
             LLExperienceCache::instance().fetchAssociatedExperience(inventory->getParentUUID(), inventory->getUUID(),
-                boost::bind(&LLFloaterCompileQueue::handleHTTPResponse, pump.getName(), _1));
+                boost::bind(&LLFloaterCompileQueue::handleHTTPResponse, pump->getName(), _1));
 
-            result = llcoro::suspendUntilEventOnWithTimeout(pump, QUEUE_INVENTORY_FETCH_TIMEOUT,
+            result = co_await llcoro::co::suspendUntilEventOnWithTimeout(*pump, QUEUE_INVENTORY_FETCH_TIMEOUT,
             LLSDMap("timeout", LLSD::Boolean(true)));
         }
         else
@@ -561,7 +561,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
             args["[OBJECT_NAME]"] = inventory->getName();
             std::string buffer = floater->getString("Timeout", args);
             floater->addStringMessage(buffer);
-            return true;
+            co_return true;
         }
 
         if (result.has(LLExperienceCache::EXPERIENCE_ID))
@@ -572,7 +572,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
                 floater->addProcessingMessage("CompileNoExperiencePerm",
                     LLSDMap("SCRIPT", inventory->getName())
                         ("EXPERIENCE", result[LLExperienceCache::NAME].asString()));
-                return true;
+                co_return true;
             }
         }
 
@@ -581,12 +581,12 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
     if (!gAssetStorage)
     {
         // viewer likely is shutting down
-        return true;
+        co_return true;
     }
 
     {
         // <FS:Ansariel> [LSL PreProc]
-        //HandleScriptUserData    userData(pump.getName());
+        //HandleScriptUserData    userData(pump->getName());
         // Not a local: the asset callback can fire after the timeout below has returned
         // from this coroutine. sPendingRetrievals owns it until the callback releases it
         // (or until static destruction, if shutdown drops the request without a callback).
@@ -596,11 +596,11 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
         {
             // Need to dump some stuff into an LLScriptQueueData struct for the LSL PreProc.
             auto datap = std::make_shared<LLScriptQueueData>(hfloater.get()->getKey().asUUID(), object->getID(), experienceId, item, compile_target);
-            userData = addPendingRetrieval(new HandleScriptUserData(pump.getName(), datap));
+            userData = addPendingRetrieval(new HandleScriptUserData(pump->getName(), datap));
         }
         else
         {
-            userData = addPendingRetrieval(new HandleScriptUserData(pump.getName(), nullptr));
+            userData = addPendingRetrieval(new HandleScriptUserData(pump->getName(), nullptr));
         }
         // </FS:Ansariel>
 
@@ -616,7 +616,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
             &LLFloaterCompileQueue::handleScriptRetrieval,
             userData);
 
-        result = llcoro::suspendUntilEventOnWithTimeout(pump, QUEUE_INVENTORY_FETCH_TIMEOUT,
+        result = co_await llcoro::co::suspendUntilEventOnWithTimeout(*pump, QUEUE_INVENTORY_FETCH_TIMEOUT,
             LLSDMap("timeout", LLSD::Boolean(true)));
     }
 
@@ -626,7 +626,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
         args["[OBJECT_NAME]"] = inventory->getName();
         std::string buffer = floater->getString("Timeout", args);
         floater->addStringMessage(buffer);
-        return true;
+        co_return true;
     }
 
     if (result.has("error"))
@@ -641,14 +641,14 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
             args["MESSAGE"] = result["alert"].asString();
             LLNotificationsUtil::add("SystemMessage", args);
         }
-        return true;
+        co_return true;
     }
 
     // <FS:Ansariel> [LSL PreProc]
     if (result.has("preproc"))
     {
         // LSL Preprocessor handles it from here on
-        return true;
+        co_return true;
     }
     // </FS:Ansariel>
 
@@ -669,7 +669,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
         floater->addStringMessage(buffer);
         LL_INFOS("SCRIPTQ") << "Skipping incompatible script: " << inventory->getName()
             << " (target " << compile_target << ")" << LL_ENDL;
-        return true;
+        co_return true;
     }
 
     std::string url = object->getRegion()->getCapability("UpdateScriptTask");
@@ -683,12 +683,12 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
             inventory->getName(),
             LLUUID(),
             experienceId,
-            boost::bind(&LLFloaterCompileQueue::handleHTTPResponse, pump.getName(), _4));
+            boost::bind(&LLFloaterCompileQueue::handleHTTPResponse, pump->getName(), _4));
 
         LLViewerAssetUpload::EnqueueInventoryUpload(url, uploadInfo);
     }
 
-    result = llcoro::suspendUntilEventOnWithTimeout(pump, QUEUE_INVENTORY_FETCH_TIMEOUT, LLSDMap("timeout", LLSD::Boolean(true)));
+    result = co_await llcoro::co::suspendUntilEventOnWithTimeout(*pump, QUEUE_INVENTORY_FETCH_TIMEOUT, LLSDMap("timeout", LLSD::Boolean(true)));
 
     floater.check();
 
@@ -698,7 +698,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
         args["[OBJECT_NAME]"] = inventory->getName();
         std::string buffer = floater->getString("Timeout", args);
         floater->addStringMessage(buffer);
-        return true;
+        co_return true;
     }
 
     // Bytecode save completed
@@ -735,7 +735,7 @@ bool LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQueue> hfloat
         LL_INFOS() << result["errors"] << LL_ENDL;
     }
 
-    return true;
+    co_return true;
 }
 
 bool LLFloaterCompileQueue::startQueue()
@@ -785,8 +785,8 @@ LLFloaterResetQueue::~LLFloaterResetQueue()
 
 /// This is a utility function to be bound and called from objectScriptProcessingQueueCoro.
 /// Do not call directly. It may throw a LLCheckedHandle<>::Stale exception.
-bool LLFloaterResetQueue::resetObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater,
-    const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump)
+LL::Task<bool> LLFloaterResetQueue::resetObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater,
+    LLPointer<LLViewerObject> object, LLInventoryObject* inventory, LLEventPump* pump)
 {
     LLCheckedHandle<LLFloaterScriptQueue> floater(hfloater);
     // Dereferencing floater may fail. If they do they throw LLExeceptionStaleHandle.
@@ -806,7 +806,7 @@ bool LLFloaterResetQueue::resetObjectScripts(LLHandle<LLFloaterScriptQueue> hflo
     msg->addUUIDFast(_PREHASH_ItemID, inventory->getUUID());
     msg->sendReliable(object->getRegion()->getHost());
 
-    return true;
+    co_return true;
 }
 
 bool LLFloaterResetQueue::startQueue()
@@ -842,8 +842,8 @@ LLFloaterRunQueue::~LLFloaterRunQueue()
 
 /// This is a utility function to be bound and called from objectScriptProcessingQueueCoro.
 /// Do not call directly. It may throw a LLCheckedHandle<>::Stale exception.
-bool LLFloaterRunQueue::runObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater,
-    const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump)
+LL::Task<bool> LLFloaterRunQueue::runObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater,
+    LLPointer<LLViewerObject> object, LLInventoryObject* inventory, LLEventPump* pump)
 {
     LLCheckedHandle<LLFloaterScriptQueue> floater(hfloater);
     // Dereferencing floater may fail. If they do they throw LLExeceptionStaleHandle.
@@ -864,7 +864,7 @@ bool LLFloaterRunQueue::runObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater
     msg->addBOOLFast(_PREHASH_Running, true);
     msg->sendReliable(object->getRegion()->getHost());
 
-    return true;
+    co_return true;
 }
 
 bool LLFloaterRunQueue::startQueue()
@@ -899,8 +899,8 @@ LLFloaterNotRunQueue::~LLFloaterNotRunQueue()
 
 /// This is a utility function to be bound and called from objectScriptProcessingQueueCoro.
 /// Do not call directly. It may throw a LLCheckedHandle<>::Stale exception.
-bool LLFloaterNotRunQueue::stopObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater,
-    const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump)
+LL::Task<bool> LLFloaterNotRunQueue::stopObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater,
+    LLPointer<LLViewerObject> object, LLInventoryObject* inventory, LLEventPump* pump)
 {
     LLCheckedHandle<LLFloaterScriptQueue> floater(hfloater);
     // Dereferencing floater may fail. If they do they throw LLExeceptionStaleHandle.
@@ -921,7 +921,7 @@ bool LLFloaterNotRunQueue::stopObjectScripts(LLHandle<LLFloaterScriptQueue> hflo
     msg->addBOOLFast(_PREHASH_Running, false);
     msg->sendReliable(object->getRegion()->getHost());
 
-    return true;
+    co_return true;
 }
 
 bool LLFloaterNotRunQueue::startQueue()
@@ -956,8 +956,8 @@ LLFloaterDeleteQueue::~LLFloaterDeleteQueue()
 
 /// This is a utility function to be bound and called from objectScriptProcessingQueueCoro.
 /// Do not call directly. It may throw a LLCheckedHandle<>::Stale exception.
-bool LLFloaterDeleteQueue::deleteObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater,
-    const LLPointer<LLViewerObject> &object, LLInventoryObject* inventory, LLEventPump &pump)
+LL::Task<bool> LLFloaterDeleteQueue::deleteObjectScripts(LLHandle<LLFloaterScriptQueue> hfloater,
+    LLPointer<LLViewerObject> object, LLInventoryObject* inventory, LLEventPump* pump)
 {
     LLCheckedHandle<LLFloaterScriptQueue> floater(hfloater);
     // Dereferencing floater may fail. If they do they throw LLExeceptionStaleHandle.
@@ -977,7 +977,7 @@ bool LLFloaterDeleteQueue::deleteObjectScripts(LLHandle<LLFloaterScriptQueue> hf
     msg->addUUIDFast(_PREHASH_ItemID, inventory->getUUID());
     msg->sendReliable(object->getRegion()->getHost());
 
-    return true;
+    co_return true;
 }
 
 
@@ -1009,7 +1009,7 @@ void ObjectInventoryFetcher::inventoryChanged(LLViewerObject* object,
 
 }
 
-void LLFloaterScriptQueue::objectScriptProcessingQueueCoro(std::string action, LLHandle<LLFloaterScriptQueue> hfloater,
+LL::Task<void> LLFloaterScriptQueue::objectScriptProcessingQueueCoro(std::string action, LLHandle<LLFloaterScriptQueue> hfloater,
     object_data_list_t objectList, fnQueueAction_t func)
 {
     LLCoros::set_consuming(true);
@@ -1038,7 +1038,7 @@ void LLFloaterScriptQueue::objectScriptProcessingQueueCoro(std::string action, L
                 args["[OBJECT_NAME]"] = (*itObj).mObjectName;
                 floater->addStringMessage(floater->getString("LoadingObjInv", args));
 
-                LLSD result = llcoro::suspendUntilEventOnWithTimeout(maildrop, QUEUE_INVENTORY_FETCH_TIMEOUT,
+                LLSD result = co_await llcoro::co::suspendUntilEventOnWithTimeout(maildrop, QUEUE_INVENTORY_FETCH_TIMEOUT,
                     LLSDMap("timeout", LLSD::Boolean(true)));
 
                 if (result.has("timeout"))
@@ -1083,7 +1083,7 @@ void LLFloaterScriptQueue::objectScriptProcessingQueueCoro(std::string action, L
                         firstForObject = false;
                     }
 
-                    if (!func(obj, (*itInv), maildrop))
+                    if (!co_await func(obj, (*itInv), &maildrop))
                     {
                         continue;
                     }
@@ -1091,7 +1091,7 @@ void LLFloaterScriptQueue::objectScriptProcessingQueueCoro(std::string action, L
 
                 // no other explicit suspension point in this loop.  func(...) MIGHT suspend
                 // but offers no guarantee of doing so.
-                llcoro::suspend();
+                co_await llcoro::co::suspend();
             }
             floater.check();
         }

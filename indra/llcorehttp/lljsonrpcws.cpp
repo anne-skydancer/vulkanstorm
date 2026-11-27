@@ -152,6 +152,50 @@ void LLJSONRPCConnection::processMessage(const LLSD& message_obj)
     }
 }
 
+LL::Task<void> LLJSONRPCConnection::runAsyncMethod(AsyncMethodHandler handler, std::string method, LLSD id,
+                                                   LLSD params, ptr_t conn)
+{
+    try
+    {
+        LLSD result = co_await handler(method, id, params);
+        if (conn->isConnected())
+        {
+            conn->sendResponse(id, result);
+        }
+        else
+        {
+            LL_WARNS("JSONRPC") << "Connection closed before async method "
+                                << method << " could send response" << LL_ENDL;
+        }
+    }
+    catch (const RPCError& e)
+    {
+        if (conn->isConnected())
+        {
+            conn->sendError(id, e);
+        }
+        else
+        {
+            LL_WARNS("JSONRPC") << "Connection closed before async method "
+                                << method << " could send error" << LL_ENDL;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        if (conn->isConnected())
+        {
+            LL_WARNS("JSONRPC") << "Exception in async method " << method
+                                << ": " << e.what() << LL_ENDL;
+            conn->sendError(id, InternalError());
+        }
+        else
+        {
+            LL_WARNS("JSONRPC") << "Connection closed before async method "
+                                << method << " could send error" << LL_ENDL;
+        }
+    }
+}
+
 void LLJSONRPCConnection::processRequest(const LLSD& request)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_WEBSOCKET;
@@ -176,15 +220,14 @@ void LLJSONRPCConnection::processRequest(const LLSD& request)
     }
 
     // Resolve the handler under the mutex, then invoke it unlocked.
-    MethodHandler handler;
-    bool          is_async = false;
+    MethodHandler      handler;
+    AsyncMethodHandler async_handler;
     {
         LLMutexLock lock(&mMutex);
         auto async_it = mAsyncMethodHandlers.find(method);
         if (async_it != mAsyncMethodHandlers.end())
         {
-            handler  = async_it->second;
-            is_async = true;
+            async_handler = async_it->second;
         }
         else
         {
@@ -196,9 +239,9 @@ void LLJSONRPCConnection::processRequest(const LLSD& request)
         }
     }
 
-    if (is_async)
+    if (async_handler)
     {
-        // Async handler — launched as a coroutine, response sent by the lambda.
+        // Async handler: launched as a coroutine, response sent when it ends.
         if (is_notification)
         {
             LL_WARNS("JSONRPC") << "Method " << method
@@ -214,51 +257,13 @@ void LLJSONRPCConnection::processRequest(const LLSD& request)
                                 + " could be launched");
         }
         bool posted = LL::WorkQueue::postToMainLoop(
-            [handler, method, id, params, conn]()
+            [async_handler, method, id, params, conn]()
             {
                 LLCoros::instance().launch(
                     "JSONRPC::" + method,
-                    [handler, method, id, params, conn]()
+                    [async_handler, method, id, params, conn]()
                     {
-                        try
-                        {
-                            LLSD result = handler(method, id, params);
-                            if (conn->isConnected())
-                            {
-                                conn->sendResponse(id, result);
-                            }
-                            else
-                            {
-                                LL_WARNS("JSONRPC") << "Connection closed before async method "
-                                                    << method << " could send response" << LL_ENDL;
-                            }
-                        }
-                        catch (const RPCError& e)
-                        {
-                            if (conn->isConnected())
-                            {
-                                conn->sendError(id, e);
-                            }
-                            else
-                            {
-                                LL_WARNS("JSONRPC") << "Connection closed before async method "
-                                                    << method << " could send error" << LL_ENDL;
-                            }
-                        }
-                        catch (const std::exception& e)
-                        {
-                            if (conn->isConnected())
-                            {
-                                LL_WARNS("JSONRPC") << "Exception in async method " << method
-                                                    << ": " << e.what() << LL_ENDL;
-                                conn->sendError(id, InternalError());
-                            }
-                            else
-                            {
-                                LL_WARNS("JSONRPC") << "Connection closed before async method "
-                                                    << method << " could send error" << LL_ENDL;
-                            }
-                        }
+                        return runAsyncMethod(async_handler, method, id, params, conn);
                     });
             });
         if (!posted)
@@ -499,7 +504,7 @@ void LLJSONRPCConnection::registerMethod(const std::string& method, MethodHandle
     LL_DEBUGS("JSONRPC") << "Registered method: " << method << LL_ENDL;
 }
 
-void LLJSONRPCConnection::registerAsyncMethod(const std::string& method, MethodHandler handler)
+void LLJSONRPCConnection::registerAsyncMethod(const std::string& method, AsyncMethodHandler handler)
 {
     {
         LLMutexLock lock(&mMutex);

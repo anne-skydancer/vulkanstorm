@@ -53,6 +53,7 @@ class LLWebRTCProtocolParser;
 
 // WebRTC Includes
 #include <llwebrtc.h>
+#include "lltask.h"
 
 class LLAvatarName;
 class LLVoiceWebRTCConnection;
@@ -463,7 +464,7 @@ private:
 
     // Coroutine support methods
     //---
-    void voiceConnectionCoro();
+    LL::Task<void> voiceConnectionCoro();
 
     //---
     /// Clean up objects created during a voice session.
@@ -637,7 +638,7 @@ class LLVoiceWebRTCConnection :
 
     void processIceUpdates();
 
-    static void processIceUpdatesCoro(connectionPtr_t connection);
+    static LL::Task<void> processIceUpdatesCoro(connectionPtr_t connection);
 
     virtual void setMuteMic(bool muted);
     virtual void setSpeakerVolume(F32 volume);
@@ -717,10 +718,10 @@ class LLVoiceWebRTCConnection :
         return mVoiceConnectionState;
     }
 
-    virtual void requestVoiceConnection() = 0;
-    static void requestVoiceConnectionCoro(connectionPtr_t connection) { connection->requestVoiceConnection(); }
+    virtual LL::Task<void> requestVoiceConnection() = 0;
+    static LL::Task<void> requestVoiceConnectionCoro(connectionPtr_t connection) { co_await connection->requestVoiceConnection(); }
 
-    static void breakVoiceConnectionCoro(connectionPtr_t connection);
+    static LL::Task<void> breakVoiceConnectionCoro(connectionPtr_t connection);
 
     LLVoiceClientStatusObserver::EStatusType mCurrentStatus;
 
@@ -769,7 +770,7 @@ class LLVoiceWebRTCSpatialConnection :
 
 protected:
 
-    void requestVoiceConnection() override;
+    LL::Task<void> requestVoiceConnection() override;
 
     S32    mParcelLocalID;
 };
@@ -784,7 +785,7 @@ class LLVoiceWebRTCAdHocConnection : public LLVoiceWebRTCConnection
     bool isSpatial() override { return false; }
 
   protected:
-    void requestVoiceConnection() override;
+    LL::Task<void> requestVoiceConnection() override;
 
     std::string mCredentials;
 };

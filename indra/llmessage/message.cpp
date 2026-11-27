@@ -4366,7 +4366,7 @@ const LLHost& LLMessageSystem::getSender() const
     return mLastSender;
 }
 
-void LLMessageSystem::sendUntrustedSimulatorMessageCoro(std::string url, std::string message, LLSD body, UntrustedCallback_t callback)
+LL::Task<void> LLMessageSystem::sendUntrustedSimulatorMessageCoro(std::string url, std::string message, LLSD body, UntrustedCallback_t callback)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -4386,7 +4386,7 @@ void LLMessageSystem::sendUntrustedSimulatorMessageCoro(std::string url, std::st
     if (url.empty())
     {
         LL_WARNS() << "sendUntrustedSimulatorMessageCoro called with empty capability!" << LL_ENDL;
-        return;
+        co_return;
     }
 
     LL_INFOS() << "sendUntrustedSimulatorMessageCoro: message " << message << " to cap " << url << LL_ENDL;
@@ -4394,7 +4394,7 @@ void LLMessageSystem::sendUntrustedSimulatorMessageCoro(std::string url, std::st
     postData["message"] = message;
     postData["body"] = body;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData, httpOpts);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData, httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

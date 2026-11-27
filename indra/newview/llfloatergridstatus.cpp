@@ -96,7 +96,7 @@ bool LLFloaterGridStatus::checkGridStatusRSS()
     return false;
 }
 
-void LLFloaterGridStatus::getGridStatusRSSCoro()
+LL::Task<void> LLFloaterGridStatus::getGridStatusRSSCoro()
 {
 
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -114,16 +114,16 @@ void LLFloaterGridStatus::getGridStatusRSSCoro()
     std::string url = LFSimFeatureHandler::instance().gridStatusRSS();
     if( url.empty() )
     {
-        return; // if OpenSim has not defined this or user has set this to undefined, then do nothing.
+        co_return; // if OpenSim has not defined this or user has set this to undefined, then do nothing.
     }
     // </FS:Beq>
 
-    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts, httpHeaders);
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
     if (!status)
     {
-        return;
+        co_return;
     }
 
     const LLSD::Binary &rawBody = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary();
@@ -154,7 +154,7 @@ void LLFloaterGridStatus::getGridStatusRSSCoro()
     LLXmlTree grid_status_xml;
     if (!grid_status_xml.parseFile(fullpath))
     {
-        return ;
+        co_return ;
     }
     bool new_entries = false;
     LLXmlTreeNode* rootp = grid_status_xml.getRoot();

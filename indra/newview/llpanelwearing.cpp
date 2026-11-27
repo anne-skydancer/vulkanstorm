@@ -527,14 +527,14 @@ void LLPanelWearing::requestAttachmentDetails()
     }
 }
 
-void LLPanelWearing::getAttachmentLimitsCoro(std::string url)
+LL::Task<void> LLPanelWearing::getAttachmentLimitsCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
     httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("getAttachmentLimitsCoro", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -542,7 +542,7 @@ void LLPanelWearing::getAttachmentLimitsCoro(std::string url)
     if (!status)
     {
         LL_WARNS() << "Unable to retrieve attachment limits." << LL_ENDL;
-        return;
+        co_return;
     }
 
     result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);

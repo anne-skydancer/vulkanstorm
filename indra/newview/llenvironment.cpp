@@ -773,7 +773,7 @@ namespace
 
         void                                testExperiencesOnParcel(S32 parcel_id);
     private:
-        static void                         testExperiencesOnParcelCoro(wptr_t that, S32 parcel_id);
+        static LL::Task<void> testExperiencesOnParcelCoro(wptr_t that, S32 parcel_id);
 
 
         void                                animateSkyChange(LLSettingsSky::ptr_t psky, LLSettingsBase::Seconds transition);
@@ -2240,14 +2240,14 @@ void LLEnvironment::requestParcel(S32 parcel_id, environment_apply_fn cb)
     }
 
     LLCoros::instance().launch("LLEnvironment::coroRequestEnvironment",
-        [this, parcel_id, cb]() { coroRequestEnvironment(parcel_id, cb); });
+        [this, parcel_id, cb]() { return coroRequestEnvironment(parcel_id, cb); });
 }
 
 void LLEnvironment::updateParcel(S32 parcel_id, const LLUUID &asset_id, std::string display_name, S32 track_num, S32 day_length, S32 day_offset, U32 flags, LLEnvironment::altitudes_vect_t altitudes, environment_apply_fn cb)
 {
     UpdateInfo::ptr_t updates(std::make_shared<UpdateInfo>(asset_id, display_name, day_length, day_offset, altitudes, flags));
     LLCoros::instance().launch("LLEnvironment::coroUpdateEnvironment",
-        [this, parcel_id, track_num, updates, cb]() { coroUpdateEnvironment(parcel_id, track_num, updates, cb); });
+        [this, parcel_id, track_num, updates, cb]() { return coroUpdateEnvironment(parcel_id, track_num, updates, cb); });
 }
 
 void LLEnvironment::onUpdateParcelAssetLoaded(LLUUID asset_id, LLSettingsBase::ptr_t settings, S32 status, S32 parcel_id, S32 day_length, S32 day_offset, LLEnvironment::altitudes_vect_t altitudes)
@@ -2299,7 +2299,7 @@ void LLEnvironment::updateParcel(S32 parcel_id, const LLSettingsDay::ptr_t &pday
     UpdateInfo::ptr_t updates(std::make_shared<UpdateInfo>(pday, day_length, day_offset, altitudes));
 
     LLCoros::instance().launch("LLEnvironment::coroUpdateEnvironment",
-        [this, parcel_id, track_num, updates, cb]() { coroUpdateEnvironment(parcel_id, track_num, updates, cb); });
+        [this, parcel_id, track_num, updates, cb]() { return coroUpdateEnvironment(parcel_id, track_num, updates, cb); });
 }
 
 void LLEnvironment::updateParcel(S32 parcel_id, const LLSettingsDay::ptr_t &pday, S32 day_length, S32 day_offset, LLEnvironment::altitudes_vect_t altitudes, environment_apply_fn cb)
@@ -2310,10 +2310,10 @@ void LLEnvironment::updateParcel(S32 parcel_id, const LLSettingsDay::ptr_t &pday
 void LLEnvironment::resetParcel(S32 parcel_id, environment_apply_fn cb)
 {
     LLCoros::instance().launch("LLEnvironment::coroResetEnvironment",
-        [this, parcel_id, cb]() { coroResetEnvironment(parcel_id, NO_TRACK, cb); });
+        [this, parcel_id, cb]() { return coroResetEnvironment(parcel_id, NO_TRACK, cb); });
 }
 
-void LLEnvironment::coroRequestEnvironment(S32 parcel_id, LLEnvironment::environment_apply_fn apply)
+LL::Task<void> LLEnvironment::coroRequestEnvironment(S32 parcel_id, LLEnvironment::environment_apply_fn apply)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -2322,7 +2322,7 @@ void LLEnvironment::coroRequestEnvironment(S32 parcel_id, LLEnvironment::environ
 
     std::string url = gAgent.getRegionCapability("ExtEnvironment");
     if (url.empty())
-        return;
+        co_return;
 
     LL_DEBUGS("ENVIRONMENT") << "Requesting for parcel_id=" << parcel_id << LL_ENDL;
 
@@ -2334,7 +2334,7 @@ void LLEnvironment::coroRequestEnvironment(S32 parcel_id, LLEnvironment::environ
         url += query.str();
     }
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
     // results that come back may contain the new settings
 
     LLSD httpResults = result["http_result"];
@@ -2345,7 +2345,7 @@ void LLEnvironment::coroRequestEnvironment(S32 parcel_id, LLEnvironment::environ
     }
     else if (LLApp::isExiting() || gDisconnected)
     {
-        return;
+        co_return;
     }
     else
     {
@@ -2361,7 +2361,7 @@ void LLEnvironment::coroRequestEnvironment(S32 parcel_id, LLEnvironment::environ
     }
 }
 
-void LLEnvironment::coroUpdateEnvironment(S32 parcel_id, S32 track_no, UpdateInfo::ptr_t updates, environment_apply_fn apply)
+LL::Task<void> LLEnvironment::coroUpdateEnvironment(S32 parcel_id, S32 track_no, UpdateInfo::ptr_t updates, environment_apply_fn apply)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -2370,7 +2370,7 @@ void LLEnvironment::coroUpdateEnvironment(S32 parcel_id, S32 track_no, UpdateInf
 
     std::string url = gAgent.getRegionCapability("ExtEnvironment");
     if (url.empty())
-        return;
+        co_return;
 
     LLSD body(LLSD::emptyMap());
     body[KEY_ENVIRONMENT] = LLSD::emptyMap();
@@ -2434,11 +2434,11 @@ void LLEnvironment::coroUpdateEnvironment(S32 parcel_id, S32 track_no, UpdateInf
         url += query.str();
     }
 
-    LLSD result = httpAdapter->putAndSuspend(httpRequest, url, body);
+    LLSD result = co_await httpAdapter->putAndSuspend(httpRequest, url, body);
     // results that come back may contain the new settings
 
     if (LLApp::isExiting())
-        return;
+        co_return;
 
     LLSD notify;
 
@@ -2477,7 +2477,7 @@ void LLEnvironment::coroUpdateEnvironment(S32 parcel_id, S32 track_no, UpdateInf
     }
 }
 
-void LLEnvironment::coroResetEnvironment(S32 parcel_id, S32 track_no, environment_apply_fn apply)
+LL::Task<void> LLEnvironment::coroResetEnvironment(S32 parcel_id, S32 track_no, environment_apply_fn apply)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -2486,7 +2486,7 @@ void LLEnvironment::coroResetEnvironment(S32 parcel_id, S32 track_no, environmen
 
     std::string url = gAgent.getRegionCapability("ExtEnvironment");
     if (url.empty())
-        return;
+        co_return;
 
     if ((parcel_id != INVALID_PARCEL_ID) || (track_no != NO_TRACK))
     {
@@ -2507,11 +2507,11 @@ void LLEnvironment::coroResetEnvironment(S32 parcel_id, S32 track_no, environmen
         url += query.str();
     }
 
-    LLSD result = httpAdapter->deleteAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->deleteAndSuspend(httpRequest, url);
     // results that come back may contain the new settings
 
     if (LLApp::isExiting())
-        return;
+        co_return;
 
     LLSD notify;
 
@@ -3612,7 +3612,7 @@ namespace
     void DayInjection::testExperiencesOnParcel(S32 parcel_id)
     {
         LLCoros::instance().launch("DayInjection::testExperiencesOnParcel",
-            [this, parcel_id]() { DayInjection::testExperiencesOnParcelCoro(std::static_pointer_cast<DayInjection>(this->shared_from_this()), parcel_id); });
+            [this, parcel_id]() { return DayInjection::testExperiencesOnParcelCoro(std::static_pointer_cast<DayInjection>(this->shared_from_this()), parcel_id); });
 
     }
 
@@ -3705,7 +3705,7 @@ namespace
     }
 
 
-    void DayInjection::testExperiencesOnParcelCoro(wptr_t that, S32 parcel_id)
+    LL::Task<void> DayInjection::testExperiencesOnParcelCoro(wptr_t that, S32 parcel_id)
     {
         LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
         LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -3716,7 +3716,7 @@ namespace
         if (url.empty())
         {
             LL_WARNS("ENVIRONMENT") << "No experience query cap." << LL_ENDL;
-            return; // no checking in this region.
+            co_return; // no checking in this region.
         }
 
         {
@@ -3724,7 +3724,7 @@ namespace
             std::stringstream fullurl;
 
             if (!thatlock)
-                return;
+                co_return;
 
             fullurl << url << "?";
             fullurl << "parcelid=" << parcel_id;
@@ -3740,25 +3740,25 @@ namespace
             url = fullurl.str();
         }
 
-        LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+        LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
         if (!status)
         {
             LL_WARNS() << "Unable to retrieve experience status for parcel." << LL_ENDL;
-            return;
+            co_return;
         }
 
         {
             LLParcel* parcel = LLViewerParcelMgr::instance().getAgentParcel();
             if (!parcel)
-                return;
+                co_return;
 
             if (parcel_id != parcel->getLocalID())
             {
                 // Agent no longer on queried parcel.
-                return;
+                co_return;
             }
         }
 
@@ -3767,7 +3767,7 @@ namespace
         {
             ptr_t thatlock(that);
             if (!thatlock)
-                return;
+                co_return;
 
             for (LLSD::map_iterator itr = experiences.beginMap(); itr != experiences.endMap(); ++itr)
             {

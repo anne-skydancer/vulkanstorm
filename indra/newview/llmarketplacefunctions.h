@@ -33,6 +33,7 @@
 #include "llstring.h"
 
 #include <boost/signals2.hpp>
+#include "lltask.h"
 
 namespace MarketplaceErrorCodes
 {
@@ -261,13 +262,13 @@ private:
     void deleteSLMListing(S32 listing_id);
     std::string getSLMConnectURL(const std::string& route);
 
-    void getMerchantStatusCoro();
-    void getSLMListingsCoro(LLUUID folderId);
-    void getSingleListingCoro(S32 listingId, LLUUID folderId);
-    void createSLMListingCoro(LLUUID folderId, LLUUID versionId, S32 count);
-    void updateSLMListingCoro(LLUUID folderId, S32 listingId, LLUUID versionId, bool isListed, S32 count);
-    void associateSLMListingCoro(LLUUID folderId, S32 listingId, LLUUID versionId, LLUUID sourceFolderId);
-    void deleteSLMListingCoro(S32 listingId);
+    LL::Task<void> getMerchantStatusCoro();
+    LL::Task<void> getSLMListingsCoro(LLUUID folderId);
+    LL::Task<void> getSingleListingCoro(S32 listingId, LLUUID folderId);
+    LL::Task<void> createSLMListingCoro(LLUUID folderId, LLUUID versionId, S32 count);
+    LL::Task<void> updateSLMListingCoro(LLUUID folderId, S32 listingId, LLUUID versionId, bool isListed, S32 count);
+    LL::Task<void> associateSLMListingCoro(LLUUID folderId, S32 listingId, LLUUID versionId, LLUUID sourceFolderId);
+    LL::Task<void> deleteSLMListingCoro(S32 listingId);
 
     // Handling Marketplace connection and inventory connection
     U32  mMarketPlaceStatus;

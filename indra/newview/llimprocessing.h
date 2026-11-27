@@ -28,6 +28,7 @@
 #define LL_LLIMPROCESSING_H
 
 #include "llinstantmessage.h"
+#include "lltask.h"
 
 class LLIMProcessing
 {
@@ -59,7 +60,7 @@ public:
     static void requestOfflineMessages();
 
 private:
-    static void requestOfflineMessagesCoro(std::string url);
+    static LL::Task<void> requestOfflineMessagesCoro(std::string url);
     static void requestOfflineMessagesLegacy();
 };
 

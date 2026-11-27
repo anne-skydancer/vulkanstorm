@@ -34,6 +34,7 @@
 #include "llviewerinventory.h"
 #include "llcorehttputil.h"
 #include "llcoproceduremanager.h"
+#include "lltask.h"
 
 class AISAPI
 {
@@ -89,17 +90,17 @@ private:
     static const std::string INVENTORY_CAP_NAME;
     static const std::string LIBRARY_CAP_NAME;
 
-    typedef std::function<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLCore::HttpRequest::ptr_t,
-        const std::string, LLSD, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t) > invokationFn_t;
+    typedef std::function<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLCore::HttpRequest::ptr_t,
+        std::string, LLSD, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t) > invokationFn_t;
 
     static void EnqueueAISCommand(const std::string &procName, LLCoprocedureManager::CoProcedure_t proc);
     static void onIdle(void *userdata); // launches postponed AIS commands
-    static void onUpdateReceived(const LLSD& update, COMMAND_TYPE type, const LLSD& request_body);
+    static LL::Task<void> onUpdateReceived(LLSD update, COMMAND_TYPE type, LLSD request_body);
 
     static std::string getInvCap();
     static std::string getLibCap();
 
-    static void InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter,
+    static LL::Task<void> InvokeAISCommandCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter,
         invokationFn_t invoke, std::string url, LLUUID targetId, LLSD body,
         completion_t callback, COMMAND_TYPE type);
 
@@ -107,28 +108,30 @@ private:
     static std::list<ais_query_item_t> sPostponedQuery;
 };
 
+// Empty until parseUpdate() has run; doUpdate() applies what the parse collected.
 class AISUpdate
 {
 public:
-    AISUpdate(const LLSD& update, AISAPI::COMMAND_TYPE type, const LLSD& request_body);
-    void parseUpdate(const LLSD& update);
+    AISUpdate(AISAPI::COMMAND_TYPE type, const LLSD& request_body);
+    LL::Task<void> parseUpdate(LLSD update);
     void parseMeta(const LLSD& update);
-    void parseContent(const LLSD& update);
+    LL::Task<void> parseContent(LLSD update);
     void parseUUIDArray(const LLSD& content, const std::string& name, uuid_list_t& ids);
-    void parseLink(const LLSD& link_map, S32 depth);
+    LL::Task<void> parseLink(LLSD link_map, S32 depth);
     void parseItem(const LLSD& link_map);
-    void parseCategory(const LLSD& link_map, S32 depth);
+    LL::Task<void> parseCategory(LLSD link_map, S32 depth);
     void parseDescendentCount(const LLUUID& category_id, LLFolderType::EType type, const LLSD& embedded);
-    void parseEmbedded(const LLSD& embedded, S32 depth);
-    void parseEmbeddedLinks(const LLSD& links, S32 depth);
+    LL::Task<void> parseEmbedded(LLSD embedded, S32 depth);
+    LL::Task<void> parseEmbeddedLinks(LLSD links, S32 depth);
     void parseEmbeddedItems(const LLSD& items);
-    void parseEmbeddedCategories(const LLSD& categories, S32 depth);
+    LL::Task<void> parseEmbeddedCategories(LLSD categories, S32 depth);
     void parseEmbeddedItem(const LLSD& item);
-    void parseEmbeddedCategory(const LLSD& category, S32 depth);
-    void doUpdate();
+    LL::Task<void> parseEmbeddedCategory(LLSD category, S32 depth);
+    LL::Task<void> doUpdate();
 private:
     void clearParseResults();
-    void checkTimeout();
+    bool timeoutPending() { return mTaskTimer.hasExpired() || sBatchTimer.hasExpired(); }
+    LL::Task<void> checkTimeout();
 
     // Fetches can return large packets of data,
     // throttle them individually to not get stuck

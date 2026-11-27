@@ -43,6 +43,7 @@
 #include <boost/signals2.hpp>
 
 #include <functional>
+#include "lltask.h"
 
 extern const bool   ANIMATE;
 extern const U8     AGENT_STATE_TYPING;  // Typing indication
@@ -1065,10 +1066,10 @@ public:
     // </FS:Ansariel> [Legacy Bake]
 
 private:
-    void            requestAgentUserInfoCoro(std::string capurl);
+    LL::Task<void> requestAgentUserInfoCoro(std::string capurl);
     // <FS:Ansariel> Keep this for OpenSim
     //void            updateAgentUserInfoCoro(std::string capurl, std::string directory_visibility);
-    void            updateAgentUserInfoCoro(std::string capurl, bool im_via_email, std::string directory_visibility);
+    LL::Task<void> updateAgentUserInfoCoro(std::string capurl, bool im_via_email, std::string directory_visibility);
     // DEPRECATED: may be removed when User Info cap propagates
     void            sendAgentUserInfoRequestMessage();
     // <FS:Ansariel> Keep this for OpenSim

@@ -32,6 +32,7 @@
 #include "llvoicechannel.h"
 #include "lleventcoro.h"
 #include "llcoros.h"
+#include "lltask.h"
 
 class LLSpeakerMgr;
 class LLAvatarName;
@@ -334,7 +335,7 @@ protected:
      */
     void forceVoiceModeratedMode(bool should_be_muted);
 
-    void moderationActionCoro(std::string url, LLSD action);
+    LL::Task<void> moderationActionCoro(std::string url, LLSD action);
 
 };
 

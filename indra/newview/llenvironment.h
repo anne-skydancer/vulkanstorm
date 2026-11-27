@@ -42,6 +42,7 @@
 #include <boost/signals2.hpp>
 
 #include <array>
+#include "lltask.h"
 
 //-------------------------------------------------------------------------
 class LLViewerCamera;
@@ -507,9 +508,9 @@ private:
         U32                     mFlags;
     };
 
-    void                        coroRequestEnvironment(S32 parcel_id, environment_apply_fn apply);
-    void                        coroUpdateEnvironment(S32 parcel_id, S32 track_no, UpdateInfo::ptr_t updates, environment_apply_fn apply);
-    void                        coroResetEnvironment(S32 parcel_id, S32 track_no, environment_apply_fn apply);
+    LL::Task<void> coroRequestEnvironment(S32 parcel_id, environment_apply_fn apply);
+    LL::Task<void> coroUpdateEnvironment(S32 parcel_id, S32 track_no, UpdateInfo::ptr_t updates, environment_apply_fn apply);
+    LL::Task<void> coroResetEnvironment(S32 parcel_id, S32 track_no, environment_apply_fn apply);
 
     void                        recordEnvironment(S32 parcel_id, EnvironmentInfo::ptr_t environment, LLSettingsBase::Seconds transition);
 

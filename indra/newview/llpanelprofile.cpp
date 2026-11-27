@@ -107,7 +107,7 @@ static const std::string PROFILE_IMAGE_UPLOAD_CAP = "UploadAgentProfileImage";
 
 //////////////////////////////////////////////////////////////////////////
 
-LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::string path_to_image, LLHandle<LLPanel> *handle)
+LL::Task<LLUUID> post_profile_image(std::string cap_url, LLSD first_data, std::string path_to_image, LLHandle<LLPanel> *handle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -126,7 +126,7 @@ LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::stri
     while (upload_retry_count <= MAX_UPLOAD_RETRIES)
     {
         // Stage 1: Request uploader URL
-        LLSD result = httpAdapter->postAndSuspend(httpRequest, cap_url, first_data, httpOpts, httpHeaders);
+        LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, cap_url, first_data, httpOpts, httpHeaders);
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -135,21 +135,21 @@ LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::stri
         {
             // todo: notification?
             LL_WARNS("AvatarProperties") << "Failed to get uploader cap " << status.toString() << LL_ENDL;
-            return LLUUID::null;
+            co_return LLUUID::null;
         }
 
         if (!result.has("uploader"))
         {
             // todo: notification?
             LL_WARNS("AvatarProperties") << "Failed to get uploader cap, response contains no data." << LL_ENDL;
-            return LLUUID::null;
+            co_return LLUUID::null;
         }
 
         std::string uploader_cap = result["uploader"].asString();
         if (uploader_cap.empty())
         {
             LL_WARNS("AvatarProperties") << "Failed to get uploader cap, cap invalid." << LL_ENDL;
-            return LLUUID::null;
+            co_return LLUUID::null;
         }
 
         // Stage 2: Upload the image
@@ -163,7 +163,7 @@ LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::stri
             if (!instream.is_open())
             {
                 LL_WARNS("AvatarProperties") << "Failed to open file " << path_to_image << LL_ENDL;
-                return LLUUID::null;
+                co_return LLUUID::null;
             }
             length = instream.tellg();
         }
@@ -172,7 +172,7 @@ LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::stri
         uploaderhttpHeaders->append(HTTP_OUT_HEADER_CONTENT_LENGTH, std::to_string(length));
         uploaderhttpOpts->setFollowRedirects(true);
 
-        result = httpAdapter->postFileAndSuspend(uploaderhttpRequest, uploader_cap, path_to_image, uploaderhttpOpts, uploaderhttpHeaders);
+        result = co_await httpAdapter->postFileAndSuspend(uploaderhttpRequest, uploader_cap, path_to_image, uploaderhttpOpts, uploaderhttpHeaders);
 
         httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -187,14 +187,14 @@ LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::stri
                 LL_WARNS("AvatarProperties") << "Failed to upload image (attempt " << upload_retry_count
                                              << " of " << (MAX_UPLOAD_RETRIES + 1) << "): " << status.toString()
                                              << ", re-requesting uploader..." << LL_ENDL;
-                llcoro::suspendUntilTimeout(1.0f);
+                co_await llcoro::co::suspendUntilTimeout(1.0f);
                 continue;
             }
             else
             {
                 LL_WARNS("AvatarProperties") << "Failed to upload image after " << (MAX_UPLOAD_RETRIES + 1)
                                             << " attempts: " << status.toString() << LL_ENDL;
-                return LLUUID::null;
+                co_return LLUUID::null;
             }
         }
 
@@ -217,7 +217,7 @@ LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::stri
                                                  << " of " << (MAX_UPLOAD_RETRIES + 1)
                                                  << "), re-requesting uploader..." << LL_ENDL;
                 }
-                llcoro::suspendUntilTimeout(1.0f);
+                co_await llcoro::co::suspendUntilTimeout(1.0f);
                 continue;
             }
             else
@@ -233,7 +233,7 @@ LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::stri
                     LL_WARNS("AvatarProperties") << "Failed to upload image after " << (MAX_UPLOAD_RETRIES + 1)
                                                 << " attempts" << LL_ENDL;
                 }
-                return LLUUID::null;
+                co_return LLUUID::null;
             }
         }
 
@@ -242,7 +242,7 @@ LLUUID post_profile_image(std::string cap_url, const LLSD &first_data, std::stri
         break;
     }
 
-    return result_uuid;
+    co_return result_uuid;
 }
 
 enum EProfileImageType
@@ -251,7 +251,7 @@ enum EProfileImageType
     PROFILE_IMAGE_FL,
 };
 
-void post_profile_image_coro(std::string cap_url, EProfileImageType type, std::string path_to_image, LLHandle<LLPanel> *handle)
+LL::Task<void> post_profile_image_coro(std::string cap_url, EProfileImageType type, std::string path_to_image, LLHandle<LLPanel> *handle)
 {
     LLSD data;
     switch (type)
@@ -264,7 +264,7 @@ void post_profile_image_coro(std::string cap_url, EProfileImageType type, std::s
         break;
     }
 
-    LLUUID result = post_profile_image(cap_url, data, path_to_image, handle);
+    LLUUID result = co_await post_profile_image(cap_url, data, path_to_image, handle);
 
     // reset loading indicator
     if (!handle->isDead())

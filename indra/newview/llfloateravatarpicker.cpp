@@ -678,7 +678,7 @@ bool LLFloaterAvatarPicker::visibleItemsSelected() const
 }
 
 /*static*/
-void LLFloaterAvatarPicker::findByIdCoro(std::string url, LLUUID query_id, LLUUID agent_id, std::string floater_key)
+LL::Task<void> LLFloaterAvatarPicker::findByIdCoro(std::string url, LLUUID query_id, LLUUID agent_id, std::string floater_key)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -688,7 +688,7 @@ void LLFloaterAvatarPicker::findByIdCoro(std::string url, LLUUID query_id, LLUUI
 
     httpOpts->setTimeout(AVATAR_PICKER_SEARCH_TIMEOUT);
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
 
     LL_DEBUGS("Agent") << result << LL_ENDL;
 
@@ -713,7 +713,7 @@ void LLFloaterAvatarPicker::findByIdCoro(std::string url, LLUUID query_id, LLUUI
 }
 
 /*static*/
-void LLFloaterAvatarPicker::findByNameCoro(std::string url, LLUUID queryID, std::string name)
+LL::Task<void> LLFloaterAvatarPicker::findByNameCoro(std::string url, LLUUID queryID, std::string name)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -725,7 +725,7 @@ void LLFloaterAvatarPicker::findByNameCoro(std::string url, LLUUID queryID, std:
 
     httpOpts->setTimeout(AVATAR_PICKER_SEARCH_TIMEOUT);
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

@@ -124,24 +124,24 @@ public:
 
     virtual ~LLTranslationAPIHandler() {}
 
-    void verifyKeyCoro(LLTranslate::EService service, LLSD key, LLTranslate::KeyVerificationResult_fn fnc);
-    void translateMessageCoro(LanguagePair_t fromTo, std::string msg, LLTranslate::TranslationSuccess_fn success, LLTranslate::TranslationFailure_fn failure);
+    LL::Task<void> verifyKeyCoro(LLTranslate::EService service, LLSD key, LLTranslate::KeyVerificationResult_fn fnc);
+    LL::Task<void> translateMessageCoro(LanguagePair_t fromTo, std::string msg, LLTranslate::TranslationSuccess_fn success, LLTranslate::TranslationFailure_fn failure);
 
     virtual void initHttpHeader(LLCore::HttpHeaders::ptr_t headers, const std::string& user_agent) const = 0;
     virtual void initHttpHeader(LLCore::HttpHeaders::ptr_t headers, const std::string& user_agent, const LLSD &key) const = 0;
-    virtual LLSD sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+    virtual LL::Task<LLSD> sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
                                        LLCore::HttpRequest::ptr_t request,
                                        LLCore::HttpOptions::ptr_t options,
                                        LLCore::HttpHeaders::ptr_t headers,
-                                       const std::string & url,
-                                       const std::string & msg,
-                                       const std::string& from_lang,
-                                       const std::string& to_lang) const = 0;
-    virtual LLSD verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+                                       std::string url,
+                                       std::string msg,
+                                       std::string from_lang,
+                                       std::string to_lang) const = 0;
+    virtual LL::Task<LLSD> verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
         LLCore::HttpRequest::ptr_t request,
         LLCore::HttpOptions::ptr_t options,
         LLCore::HttpHeaders::ptr_t headers,
-        const std::string & url) const = 0;
+        std::string url) const = 0;
 };
 
 void LLTranslationAPIHandler::translateMessage(LanguagePair_t fromTo, std::string msg, LLTranslate::TranslationSuccess_fn success, LLTranslate::TranslationFailure_fn failure)
@@ -151,7 +151,7 @@ void LLTranslationAPIHandler::translateMessage(LanguagePair_t fromTo, std::strin
 
 }
 
-void LLTranslationAPIHandler::verifyKeyCoro(LLTranslate::EService service, LLSD key, LLTranslate::KeyVerificationResult_fn fnc)
+LL::Task<void> LLTranslationAPIHandler::verifyKeyCoro(LLTranslate::EService service, LLSD key, LLTranslate::KeyVerificationResult_fn fnc)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -177,17 +177,17 @@ void LLTranslationAPIHandler::verifyKeyCoro(LLTranslate::EService service, LLSD 
     if (url.empty())
     {
         LL_INFOS("Translate") << "No translation URL" << LL_ENDL;
-        return;
+        co_return;
     }
 
     std::string::size_type delim_pos = url.find("://");
     if (delim_pos == std::string::npos)
     {
         LL_INFOS("Translate") << "URL is missing a scheme" << LL_ENDL;
-        return;
+        co_return;
     }
 
-    LLSD result = verifyAndSuspend(httpAdapter, httpRequest, httpOpts, httpHeaders, url);
+    LLSD result = co_await verifyAndSuspend(httpAdapter, httpRequest, httpOpts, httpHeaders, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -205,7 +205,7 @@ void LLTranslationAPIHandler::verifyKeyCoro(LLTranslate::EService service, LLSD 
     }
 }
 
-void LLTranslationAPIHandler::translateMessageCoro(LanguagePair_t fromTo, std::string msg,
+LL::Task<void> LLTranslationAPIHandler::translateMessageCoro(LanguagePair_t fromTo, std::string msg,
     LLTranslate::TranslationSuccess_fn success, LLTranslate::TranslationFailure_fn failure)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -230,14 +230,14 @@ void LLTranslationAPIHandler::translateMessageCoro(LanguagePair_t fromTo, std::s
     if (url.empty())
     {
         LL_INFOS("Translate") << "No translation URL" << LL_ENDL;
-        return;
+        co_return;
     }
 
-    LLSD result = sendMessageAndSuspend(httpAdapter, httpRequest, httpOpts, httpHeaders, url, msg, fromTo.first, fromTo.second);
+    LLSD result = co_await sendMessageAndSuspend(httpAdapter, httpRequest, httpOpts, httpHeaders, url, msg, fromTo.first, fromTo.second);
 
     if (LLApp::isQuitting())
     {
-        return;
+        co_return;
     }
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
@@ -327,20 +327,20 @@ public:
 
     void initHttpHeader(LLCore::HttpHeaders::ptr_t headers, const std::string& user_agent) const override;
     void initHttpHeader(LLCore::HttpHeaders::ptr_t headers, const std::string& user_agent, const LLSD &key) const override;
-    LLSD sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+    LL::Task<LLSD> sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
         LLCore::HttpRequest::ptr_t request,
         LLCore::HttpOptions::ptr_t options,
         LLCore::HttpHeaders::ptr_t headers,
-        const std::string & url,
-        const std::string & msg,
-        const std::string& from_lang,
-        const std::string& to_lang) const override;
+        std::string url,
+        std::string msg,
+        std::string from_lang,
+        std::string to_lang) const override;
 
-    LLSD verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+    LL::Task<LLSD> verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
         LLCore::HttpRequest::ptr_t request,
         LLCore::HttpOptions::ptr_t options,
         LLCore::HttpHeaders::ptr_t headers,
-        const std::string & url) const override;
+        std::string url) const override;
 
 private:
     static void parseErrorResponse(
@@ -509,25 +509,25 @@ void LLGoogleTranslationHandler::initHttpHeader(
     initHttpHeader(headers, user_agent);
 }
 
-LLSD LLGoogleTranslationHandler::sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+LL::Task<LLSD> LLGoogleTranslationHandler::sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
     LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options,
     LLCore::HttpHeaders::ptr_t headers,
-    const std::string & url,
-    const std::string & msg,
-    const std::string& from_lang,
-    const std::string& to_lang) const
+    std::string url,
+    std::string msg,
+    std::string from_lang,
+    std::string to_lang) const
 {
-    return adapter->getRawAndSuspend(request, url, options, headers);
+    co_return co_await adapter->getRawAndSuspend(request, url, options, headers);
 }
 
-LLSD LLGoogleTranslationHandler::verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+LL::Task<LLSD> LLGoogleTranslationHandler::verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
     LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options,
     LLCore::HttpHeaders::ptr_t headers,
-    const std::string & url) const
+    std::string url) const
 {
-    return adapter->getAndSuspend(request, url, options, headers);
+    co_return co_await adapter->getAndSuspend(request, url, options, headers);
 }
 
 //=========================================================================
@@ -561,20 +561,20 @@ public:
 
     void initHttpHeader(LLCore::HttpHeaders::ptr_t headers, const std::string& user_agent) const override;
     void initHttpHeader(LLCore::HttpHeaders::ptr_t headers, const std::string& user_agent, const LLSD &key) const override;
-    LLSD sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+    LL::Task<LLSD> sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
         LLCore::HttpRequest::ptr_t request,
         LLCore::HttpOptions::ptr_t options,
         LLCore::HttpHeaders::ptr_t headers,
-        const std::string & url,
-        const std::string & msg,
-        const std::string& from_lang,
-        const std::string& to_lang) const override;
+        std::string url,
+        std::string msg,
+        std::string from_lang,
+        std::string to_lang) const override;
 
-    LLSD verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+    LL::Task<LLSD> verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
         LLCore::HttpRequest::ptr_t request,
         LLCore::HttpOptions::ptr_t options,
         LLCore::HttpHeaders::ptr_t headers,
-        const std::string & url) const override;
+        std::string url) const override;
 private:
     static std::string parseErrorResponse(
         const std::string& body);
@@ -795,14 +795,14 @@ void LLAzureTranslationHandler::initHttpHeader(
     }
 }
 
-LLSD LLAzureTranslationHandler::sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+LL::Task<LLSD> LLAzureTranslationHandler::sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
     LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options,
     LLCore::HttpHeaders::ptr_t headers,
-    const std::string & url,
-    const std::string & msg,
-    const std::string& from_lang,
-    const std::string& to_lang) const
+    std::string url,
+    std::string msg,
+    std::string from_lang,
+    std::string to_lang) const
 {
     LLCore::BufferArray::ptr_t rawbody(new LLCore::BufferArray);
     LLCore::BufferArrayStream outs(rawbody.get());
@@ -815,20 +815,20 @@ LLSD LLAzureTranslationHandler::sendMessageAndSuspend(LLCoreHttpUtil::HttpCorout
     outs << LLURI::escape(msg, allowed_chars);
     outs << "\"}]";
 
-    return adapter->postRawAndSuspend(request, url, rawbody, options, headers);
+    co_return co_await adapter->postRawAndSuspend(request, url, rawbody, options, headers);
 }
 
-LLSD LLAzureTranslationHandler::verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+LL::Task<LLSD> LLAzureTranslationHandler::verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
     LLCore::HttpRequest::ptr_t request,
     LLCore::HttpOptions::ptr_t options,
     LLCore::HttpHeaders::ptr_t headers,
-    const std::string & url) const
+    std::string url) const
 {
     LLCore::BufferArray::ptr_t rawbody(new LLCore::BufferArray);
     LLCore::BufferArrayStream outs(rawbody.get());
     outs << "[{\"intentionally_invalid_400\"}]";
 
-    return adapter->postRawAndSuspend(request, url, rawbody, options, headers);
+    co_return co_await adapter->postRawAndSuspend(request, url, rawbody, options, headers);
 }
 
 //=========================================================================
@@ -865,20 +865,20 @@ public:
 
     void initHttpHeader(LLCore::HttpHeaders::ptr_t headers, const std::string& user_agent) const override;
     void initHttpHeader(LLCore::HttpHeaders::ptr_t headers, const std::string& user_agent, const LLSD& key) const override;
-    LLSD sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+    LL::Task<LLSD> sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
                                LLCore::HttpRequest::ptr_t request,
                                LLCore::HttpOptions::ptr_t options,
                                LLCore::HttpHeaders::ptr_t headers,
-                               const std::string& url,
-                               const std::string& msg,
-                               const std::string& from_lang,
-                               const std::string& to_lang) const override;
+                               std::string url,
+                               std::string msg,
+                               std::string from_lang,
+                               std::string to_lang) const override;
 
-    LLSD verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+    LL::Task<LLSD> verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
                           LLCore::HttpRequest::ptr_t request,
                           LLCore::HttpOptions::ptr_t options,
                           LLCore::HttpHeaders::ptr_t headers,
-                          const std::string& url) const override;
+                          std::string url) const override;
 private:
     static std::string parseErrorResponse(
         const std::string& body);
@@ -1067,14 +1067,14 @@ void LLDeepLTranslationHandler::initHttpHeader(
     }
 }
 
-LLSD LLDeepLTranslationHandler::sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+LL::Task<LLSD> LLDeepLTranslationHandler::sendMessageAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
                                                       LLCore::HttpRequest::ptr_t request,
                                                       LLCore::HttpOptions::ptr_t options,
                                                       LLCore::HttpHeaders::ptr_t headers,
-                                                      const std::string& url,
-                                                      const std::string& msg,
-                                                      const std::string& from_lang,
-                                                      const std::string& to_lang) const
+                                                      std::string url,
+                                                      std::string msg,
+                                                      std::string from_lang,
+                                                      std::string to_lang) const
 {
     LLCore::BufferArray::ptr_t rawbody(new LLCore::BufferArray);
     LLCore::BufferArrayStream outs(rawbody.get());
@@ -1086,20 +1086,20 @@ LLSD LLDeepLTranslationHandler::sendMessageAndSuspend(LLCoreHttpUtil::HttpCorout
     LLStringUtil::toUpper(lang);
     outs << lang;
 
-    return adapter->postRawAndSuspend(request, url, rawbody, options, headers);
+    co_return co_await adapter->postRawAndSuspend(request, url, rawbody, options, headers);
 }
 
-LLSD LLDeepLTranslationHandler::verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
+LL::Task<LLSD> LLDeepLTranslationHandler::verifyAndSuspend(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t adapter,
                                                  LLCore::HttpRequest::ptr_t request,
                                                  LLCore::HttpOptions::ptr_t options,
                                                  LLCore::HttpHeaders::ptr_t headers,
-                                                 const std::string& url) const
+                                                 std::string url) const
 {
     LLCore::BufferArray::ptr_t rawbody(new LLCore::BufferArray);
     LLCore::BufferArrayStream outs(rawbody.get());
     outs << "text=&target_lang=EN";
 
-    return adapter->postRawAndSuspend(request, url, rawbody, options, headers);
+    co_return co_await adapter->postRawAndSuspend(request, url, rawbody, options, headers);
 }
 
 //=========================================================================

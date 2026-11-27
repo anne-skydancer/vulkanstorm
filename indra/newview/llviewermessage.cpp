@@ -220,7 +220,7 @@ public:
 FSHelloToKokuaRefreshAttachmentsTimer gFSRefreshAttachmentsTimer;
 // </FS:Ansariel>
 
-void accept_friendship_coro(std::string url, LLSD notification)
+LL::Task<void> accept_friendship_coro(std::string url, LLSD notification)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -229,7 +229,7 @@ void accept_friendship_coro(std::string url, LLSD notification)
     if (url.empty())
     {
         LL_WARNS("Friendship") << "Empty capability!" << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLSD payload = notification["payload"];
@@ -237,7 +237,7 @@ void accept_friendship_coro(std::string url, LLSD notification)
     url += "&agent_name=\"" + LLURI::escape(gAgentAvatarp->getFullname()) + "\"";
 
     LLSD data;
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, data);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, data);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -265,12 +265,12 @@ void accept_friendship_coro(std::string url, LLSD notification)
     }
 }
 
-void decline_friendship_coro(std::string url, LLSD notification, S32 option)
+LL::Task<void> decline_friendship_coro(std::string url, LLSD notification, S32 option)
 {
     if (url.empty())
     {
         LL_WARNS("Friendship") << "Empty capability!" << LL_ENDL;
-        return;
+        co_return;
     }
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -280,7 +280,7 @@ void decline_friendship_coro(std::string url, LLSD notification, S32 option)
     LLSD payload = notification["payload"];
     url += "?from=" + payload["from_id"].asString();
 
-    LLSD result = httpAdapter->deleteAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->deleteAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -645,12 +645,12 @@ void send_sound_trigger(const LLUUID& sound_id, F32 gain)
 static LLSD sSavedGroupInvite;
 static LLSD sSavedResponse;
 
-void response_group_invitation_coro(std::string url, LLUUID group_id, bool notify_and_update)
+LL::Task<void> response_group_invitation_coro(std::string url, LLUUID group_id, bool notify_and_update)
 {
     if (url.empty())
     {
         LL_WARNS("GroupInvite") << "Empty capability!" << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -661,7 +661,7 @@ void response_group_invitation_coro(std::string url, LLUUID group_id, bool notif
     LLSD payload;
     payload["group"] = group_id;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, payload);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, payload);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

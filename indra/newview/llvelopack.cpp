@@ -73,7 +73,7 @@ static std::string sTargetVersion;                           // Velopack's actua
 static void show_required_update_prompt();
 static void show_downloading_notification(const std::string& version);
 static void ensure_update_manager(bool allow_downgrade);
-static void velopack_download_pending_update();
+static LL::Task<void> velopack_download_pending_update();
 static std::unordered_map<std::string, std::string> sAssetUrlMap; // basename -> original absolute URL
 
 //
@@ -133,7 +133,7 @@ static std::string rewrite_release_feed(const std::string& json_str)
     return boost::json::serialize(jv);
 }
 
-static std::string download_url_raw(const std::string& url)
+static LL::Task<std::string> download_url_raw(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     auto httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("VelopackSource", httpPolicy);
@@ -141,20 +141,20 @@ static std::string download_url_raw(const std::string& url)
     auto httpOpts = std::make_shared<LLCore::HttpOptions>();
     httpOpts->setFollowRedirects(true);
 
-    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts);
+    LLSD result = co_await httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts);
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
     if (!status)
     {
         LL_WARNS("Velopack") << "HTTP request failed for " << url << ": " << status.toString() << LL_ENDL;
-        return {};
+        co_return {};
     }
 
     const LLSD::Binary& rawBody = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary();
-    return std::string(rawBody.begin(), rawBody.end());
+    co_return std::string(rawBody.begin(), rawBody.end());
 }
 
-static bool download_url_to_file(const std::string& url, const std::string& local_path)
+static LL::Task<bool> download_url_to_file(std::string url, std::string local_path)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     auto httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("VelopackDownload", httpPolicy);
@@ -163,13 +163,13 @@ static bool download_url_to_file(const std::string& url, const std::string& loca
     httpOpts->setFollowRedirects(true);
     httpOpts->setTransferTimeout(1200);
 
-    LLSD result = httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts);
+    LLSD result = co_await httpAdapter->getRawAndSuspend(httpRequest, url, httpOpts);
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
     if (!status)
     {
         LL_WARNS("Velopack") << "Download failed for " << url << ": " << status.toString() << LL_ENDL;
-        return false;
+        co_return false;
     }
 
     const LLSD::Binary& rawBody = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW].asBinary();
@@ -177,18 +177,40 @@ static bool download_url_to_file(const std::string& url, const std::string& loca
     if (!outFile.is_open())
     {
         LL_WARNS("Velopack") << "Failed to open file for writing: " << local_path << LL_ENDL;
-        return false;
+        co_return false;
     }
     outFile.write(reinterpret_cast<const char*>(rawBody.data()), rawBody.size());
     outFile.close();
-    return true;
+    co_return true;
 }
 
 //
 // Custom source callbacks
 //
 
-static char* custom_get_release_feed(void* user_data, const char* releases_name)
+// The release feed is fetched by the check coroutine before it calls vpkc_check_for_updates (single pass): the
+// callback below is C++ that Velopack's Rust library calls, where a coroutine cannot suspend, and only serves these
+// bytes.
+static std::string sPreFetchedFeedName;
+static std::string sPreFetchedFeed;
+
+// The feed Velopack asks for is releases.<channel>.json. The channel is explicit: packages are packed with
+// "vpk pack --channel" and ensure_update_manager sets ExplicitChannel from the same constant (viewer_manifest.py
+// VELOPACK_CHANNEL_WINDOWS / VELOPACK_CHANNEL_MACOS keep these names; they are Velopack's per-OS defaults).
+#if LL_WINDOWS
+static constexpr const char* VELOPACK_CHANNEL = "win";
+#elif LL_DARWIN
+static constexpr const char* VELOPACK_CHANNEL = "osx";
+#else
+static constexpr const char* VELOPACK_CHANNEL = "linux";
+#endif
+
+static std::string default_release_feed_name()
+{
+    return std::string("releases.") + VELOPACK_CHANNEL + ".json";
+}
+
+static LL::Task<bool> prefetch_release_feed(std::string releases_name)
 {
     std::string base = sUpdateUrl;
     if (!base.empty() && base.back() == '/')
@@ -196,11 +218,21 @@ static char* custom_get_release_feed(void* user_data, const char* releases_name)
     std::string url = base + "/" + releases_name;
     LL_INFOS("Velopack") << "Fetching release feed: " << url << LL_ENDL;
 
-    std::string json_str = download_url_raw(url);
-    if (json_str.empty())
+    sPreFetchedFeed = co_await download_url_raw(url);
+    sPreFetchedFeedName = releases_name;
+    co_return !sPreFetchedFeed.empty();
+}
+
+static char* custom_get_release_feed(void* user_data, const char* releases_name)
+{
+    // Called by vpkc_check_for_updates from the check coroutine, after prefetch_release_feed(). Do not wait here.
+    if (sPreFetchedFeedName != releases_name || sPreFetchedFeed.empty())
     {
+        LL_WARNS("Velopack") << "Velopack asked for the release feed " << releases_name
+                             << ", the check fetched '" << sPreFetchedFeedName << "'" << LL_ENDL;
         return nullptr;
     }
+    std::string json_str = sPreFetchedFeed;
 
     try
     {
@@ -1022,7 +1054,7 @@ static void ensure_update_manager(bool allow_downgrade)
 
     vpkc_update_options_t options = {};
     options.AllowVersionDowngrade = allow_downgrade;
-    options.ExplicitChannel = nullptr;
+    options.ExplicitChannel = VELOPACK_CHANNEL;
 
     if (!sUpdateSource)
     {
@@ -1146,12 +1178,12 @@ bool velopack_initialize()
 
 // Downloads the update that was found during the check phase.
 // Operates on sPendingCheckInfo which was set by velopack_check_for_updates.
-static void velopack_download_pending_update()
+static LL::Task<void> velopack_download_pending_update()
 {
     if (!sUpdateManager || !sPendingCheckInfo)
     {
         LL_WARNS("Velopack") << "No pending check info to download" << LL_ENDL;
-        return;
+        co_return;
     }
 
     LL_DEBUGS("Velopack") << "Setting up detailed logging";
@@ -1181,11 +1213,11 @@ static void velopack_download_pending_update()
     LL_INFOS("Velopack") << "Pre-downloading " << asset_url
         << " to " << sPreDownloadedAssetPath << LL_ENDL;
 
-    if (!download_url_to_file(asset_url, sPreDownloadedAssetPath))
+    if (!co_await download_url_to_file(asset_url, sPreDownloadedAssetPath))
     {
         LL_WARNS("Velopack") << "Failed to pre-download update asset" << LL_ENDL;
         sPreDownloadedAssetPath.clear();
-        return;
+        co_return;
     }
 
     LL_INFOS("Velopack") << "Pre-download complete, handing to Velopack" << LL_ENDL;
@@ -1237,9 +1269,9 @@ static void on_required_update_response(const LLSD& notification, const LLSD& re
 {
     LL_INFOS("Velopack") << "Required update acknowledged, starting download" << LL_ENDL;
     show_downloading_notification(sTargetVersion);
-    LLCoros::instance().launch("VelopackRequiredUpdate", []()
+    LLCoros::instance().launch("VelopackRequiredUpdate", []() -> LL::Task<void>
     {
-        velopack_download_pending_update();
+        co_await velopack_download_pending_update();
         dismiss_downloading_notification();
         if (velopack_is_update_pending())
         {
@@ -1257,9 +1289,9 @@ static void on_optional_update_response(const LLSD& notification, const LLSD& re
     {
         LL_INFOS("Velopack") << "User accepted optional update, starting download" << LL_ENDL;
         show_downloading_notification(sTargetVersion);
-        LLCoros::instance().launch("VelopackOptionalUpdate", []()
+        LLCoros::instance().launch("VelopackOptionalUpdate", []() -> LL::Task<void>
         {
-            velopack_download_pending_update();
+            co_await velopack_download_pending_update();
             dismiss_downloading_notification();
             if (velopack_is_update_pending())
             {
@@ -1289,12 +1321,12 @@ static void show_required_update_prompt()
     LLNotificationsUtil::add("PauseForUpdate", args, LLSD(), on_required_update_response);
 }
 
-void velopack_check_for_updates(const std::string& required_version, const std::string& relnotes_url)
+LL::Task<void> velopack_check_for_updates(std::string required_version, std::string relnotes_url)
 {
     if (sUpdateUrl.empty())
     {
         LL_DEBUGS("Velopack") << "No update URL set, skipping update check" << LL_ENDL;
-        return;
+        co_return;
     }
 
     // Allow downgrades only for rollbacks: VVM requires a version that's
@@ -1304,22 +1336,31 @@ void velopack_check_for_updates(const std::string& required_version, const std::
     if (!comparison)
     {
         LL_WARNS("Velopack") << "Invalid required viewer version: " << required_version << LL_ENDL;
-        return;
+        co_return;
     }
     const int ver_cmp = *comparison;
     bool allow_downgrade = ver_cmp > 0; // running > required → rollback scenario
     ensure_update_manager(allow_downgrade);
     if (!sUpdateManager)
-        return;
+        co_return;
+
+    // Fetch the feed first, then let Velopack read it: one pass, no suspension inside the Rust FFI.
+    if (!co_await prefetch_release_feed(default_release_feed_name()))
+    {
+        LL_INFOS("Velopack") << "No update available from feed (release feed not fetched)" << LL_ENDL;
+        co_return;
+    }
 
     // Ask Velopack to check its feed — this is the source of truth
     vpkc_update_info_t* update_info = nullptr;
     vpkc_update_check_t result = vpkc_check_for_updates(sUpdateManager, &update_info);
+    sPreFetchedFeed.clear(); // served; do not keep the feed text
+    sPreFetchedFeedName.clear();
 
     if (result != UPDATE_AVAILABLE || !update_info)
     {
         LL_INFOS("Velopack") << "No update available from feed (result=" << result << ")" << LL_ENDL;
-        return;
+        co_return;
     }
 
     // Extract the actual target version from Velopack's feed
@@ -1346,7 +1387,7 @@ void velopack_check_for_updates(const std::string& required_version, const std::
         LL_INFOS("Velopack") << "Required update (running below " << required_version
                              << "), prompting user for " << target_version << LL_ENDL;
         show_required_update_prompt();
-        return;
+        co_return;
     }
 
     // Optional update — check user preference
@@ -1357,8 +1398,8 @@ void velopack_check_for_updates(const std::string& required_version, const std::
         // "Install each update automatically" — download silently, apply on quit
         LL_INFOS("Velopack") << "Optional update to " << target_version
                              << ", downloading automatically (UpdaterServiceSetting=3)" << LL_ENDL;
-        velopack_download_pending_update();
-        return;
+        co_await velopack_download_pending_update();
+        co_return;
     }
 
     // Default / value 1: "Ask me when an optional update is ready to install"

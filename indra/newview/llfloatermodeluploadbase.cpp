@@ -61,7 +61,7 @@ void LLFloaterModelUploadBase::requestAgentUploadPermissions()
     }
 }
 
-void LLFloaterModelUploadBase::requestAgentUploadPermissionsCoro(std::string url,
+LL::Task<void> LLFloaterModelUploadBase::requestAgentUploadPermissionsCoro(std::string url,
     LLHandle<LLUploadPermissionsObserver> observerHandle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
@@ -70,7 +70,7 @@ void LLFloaterModelUploadBase::requestAgentUploadPermissionsCoro(std::string url
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -80,13 +80,13 @@ void LLFloaterModelUploadBase::requestAgentUploadPermissionsCoro(std::string url
     if (!observer)
     {
         LL_WARNS("MeshUploadFlag") << "Unable to get observer after call to '" << url << "' aborting." << LL_ENDL;
-        return;
+        co_return;
     }
 
     if (!status)
     {
         observer->setPermissonsErrorStatus(status.getStatus(), status.getMessage());
-        return;
+        co_return;
     }
 
     result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);

@@ -893,8 +893,8 @@ LLUUID LLViewerAssetUpload::EnqueueInventoryUpload(const std::string &url, const
 
 //=========================================================================
 /*static*/
-void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter,
-    const LLUUID &id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo)
+LL::Task<void> LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter,
+    LLUUID id, std::string url, LLResourceUploadInfo::ptr_t uploadInfo)
 {
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
     LLCore::HttpOptions::ptr_t httpOptions = std::make_shared<LLCore::HttpOptions>();
@@ -906,10 +906,10 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
     if (result.has("error"))
     {
         HandleUploadError(LLCore::HttpStatus(499), result, uploadInfo);
-        return;
+        co_return;
     }
 
-    llcoro::suspend();
+    co_await llcoro::co::suspend();
 
     if (uploadInfo->showUploadDialog())
     {
@@ -934,7 +934,7 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
     while (upload_retry_count <= MAX_UPLOAD_RETRIES)
     {
         // Stage 1: Request uploader URL
-        result = httpAdapter->postAndSuspend(httpRequest, url, body, httpOptions);
+        result = co_await httpAdapter->postAndSuspend(httpRequest, url, body, httpOptions);
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -944,7 +944,7 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
             HandleUploadError(status, result, uploadInfo);
             if (uploadInfo->showUploadDialog())
                 LLUploadDialog::modalUploadFinished();
-            return;
+            co_return;
         }
 
         std::string uploader = result["uploader"].asString();
@@ -955,7 +955,7 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
         }
 
         // Stage 2: Upload to the uploader URL
-        result = httpAdapter->postFileAndSuspend(httpRequest, uploader, uploadInfo->getAssetId(), uploadInfo->getAssetType(), httpOptions);
+        result = co_await httpAdapter->postFileAndSuspend(httpRequest, uploader, uploadInfo->getAssetId(), uploadInfo->getAssetType(), httpOptions);
         httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
 
@@ -968,7 +968,7 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
                 upload_retry_count++;
                 LL_WARNS() << "Upload to uploader failed (attempt " << upload_retry_count
                           << " of " << (MAX_UPLOAD_RETRIES + 1) << "), re-requesting uploader..." << LL_ENDL;
-                llcoro::suspendUntilTimeout(1.0f);
+                co_await llcoro::co::suspendUntilTimeout(1.0f);
                 continue;
             }
             else
@@ -976,7 +976,7 @@ void LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::HttpCorouti
                 HandleUploadError(status, result, uploadInfo);
                 if (uploadInfo->showUploadDialog())
                     LLUploadDialog::modalUploadFinished();
-                return;
+                co_return;
             }
         }
 

@@ -3192,9 +3192,9 @@ void LLViewerObject::fetchInventoryDelayed(const F64 &time_seconds)
 }
 
 //static
-void LLViewerObject::fetchInventoryDelayedCoro(const LLUUID task_inv, const F64 time_seconds)
+LL::Task<void> LLViewerObject::fetchInventoryDelayedCoro(const LLUUID task_inv, const F64 time_seconds)
 {
-    llcoro::suspendUntilTimeout((float)time_seconds);
+    co_await llcoro::co::suspendUntilTimeout((float)time_seconds);
     LLViewerObject *obj = gObjectList.findObject(task_inv);
     if (obj)
     {
@@ -3208,7 +3208,7 @@ void LLViewerObject::fetchInventoryDelayedCoro(const LLUUID task_inv, const F64 
 }
 
 //static
-void LLViewerObject::fetchInventoryFromCapCoro(const LLUUID task_inv)
+LL::Task<void> LLViewerObject::fetchInventoryFromCapCoro(const LLUUID task_inv)
 {
     LLViewerObject *obj = gObjectList.findObject(task_inv);
     if (obj)
@@ -3224,7 +3224,7 @@ void LLViewerObject::fetchInventoryFromCapCoro(const LLUUID task_inv)
             url += "&inventory_serial=" + std::to_string(obj->mInventorySerialNum);
 
         obj->mInvRequestState = INVENTORY_XFER;
-        LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+        LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -3234,7 +3234,7 @@ void LLViewerObject::fetchInventoryFromCapCoro(const LLUUID task_inv)
         if (!obj)
         {
             LL_WARNS() << "Object " << task_inv << " went away while fetching inventory, dropping result" << LL_ENDL;
-            return;
+            co_return;
         }
 
         bool potentially_stale = false;
@@ -8396,7 +8396,7 @@ void LLViewerObject::createInventoryItem(
 }
 
 
-void LLViewerObject::createInventoryItemCoro(
+LL::Task<void> LLViewerObject::createInventoryItemCoro(
     const std::string cap_url, const LLSD body,
     std::function<void(bool, const LLSD&)> callback)
 {
@@ -8405,7 +8405,7 @@ void LLViewerObject::createInventoryItemCoro(
         std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("CreateTaskInventoryItem", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, cap_url, body);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, cap_url, body);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

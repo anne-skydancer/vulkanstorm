@@ -31,6 +31,7 @@
 #include "llfloater.h"
 #include "lleventcoro.h"
 #include "llcoros.h"
+#include "lltask.h"
 
 class LLFloaterPerms : public LLFloater
 {
@@ -86,7 +87,7 @@ private:
     void refresh() override;
 
     static const std::string sCategoryNames[CAT_LAST];
-    static void updateCapCoro(std::string url);
+    static LL::Task<void> updateCapCoro(std::string url);
 
 
     // cached values only for implementing cancel.

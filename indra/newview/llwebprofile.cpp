@@ -96,7 +96,7 @@ LLCore::HttpHeaders::ptr_t LLWebProfile::buildDefaultHeaders()
 
 
 /*static*/
-void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::string caption, bool addLocation)
+LL::Task<void> LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::string caption, bool addLocation)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -109,7 +109,7 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
     {
         LL_WARNS() << "Image to upload is not a PNG" << LL_ENDL;
         llassert(dynamic_cast<LLImagePNG*>(image.get()) != 0);
-        return;
+        co_return;
     }
 
     httpOpts->setWantHeaders(true);
@@ -126,7 +126,7 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
     httpHeaders = buildDefaultHeaders();
     httpHeaders->append(HTTP_OUT_HEADER_COOKIE, getAuthCookie());
 
-    LLSD result = httpAdapter->getJsonAndSuspend(httpRequest, configUrl, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->getJsonAndSuspend(httpRequest, configUrl, httpOpts, httpHeaders);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -139,7 +139,7 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
         {
             LLNotificationsUtil::add("CannotUploadSnapshotWebTooBig");
         }
-        return;
+        co_return;
     }
 
     // Ready to build our image post body.
@@ -156,7 +156,7 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
 
     LLCore::BufferArray::ptr_t body = LLWebProfile::buildPostData(data, image, boundary);
 
-    result = httpAdapter->postAndSuspend(httpRequest, uploadUrl, body, httpOpts, httpHeaders);
+    result = co_await httpAdapter->postAndSuspend(httpRequest, uploadUrl, body, httpOpts, httpHeaders);
 
     body.reset();
     httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
@@ -170,7 +170,7 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
         {
             LLNotificationsUtil::add("CannotUploadSnapshotWebTooBig");
         }
-        return;
+        co_return;
     }
 
     LLSD resultHeaders = httpResults[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_HEADERS];
@@ -188,7 +188,7 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
 
     LL_DEBUGS("Snapshots") << "Got redirection URL: " << redirUrl << LL_ENDL;
 
-    result = httpAdapter->getRawAndSuspend(httpRequest, redirUrl, httpOpts, httpHeaders);
+    result = co_await httpAdapter->getRawAndSuspend(httpRequest, redirUrl, httpOpts, httpHeaders);
 
     httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -201,7 +201,7 @@ void LLWebProfile::uploadImageCoro(LLPointer<LLImageFormatted> image, std::strin
         {
             LLNotificationsUtil::add("CannotUploadSnapshotWebTooBig");
         }
-        return;
+        co_return;
     }
 
     //LLSD raw = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS_RAW];

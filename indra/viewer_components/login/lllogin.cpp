@@ -114,7 +114,7 @@ private:
 
     // In a coroutine's top-level function args, do NOT NOT NOT accept
     // references (const or otherwise) to anything! Pass by value only!
-    void loginCoro(std::string uri, LLSD credentials);
+    LL::Task<void> loginCoro(std::string uri, LLSD credentials);
 
     LLEventStream mPump;
     LLSD mAuthResponse, mValidAuthResponse;
@@ -127,12 +127,12 @@ void LLLogin::Impl::connect(const std::string& uri, const LLSD& login_params)
     // Launch a coroutine with our login_() method. Run the coroutine until
     // its first wait; at that point, return here.
     std::string coroname =
-        LLCoros::instance().launch("LLLogin::Impl::login_", [=, this]() { loginCoro(uri, login_params); });
+        LLCoros::instance().launch("LLLogin::Impl::login_", [this, uri, login_params]() { return loginCoro(uri, login_params); });
 
     LL_DEBUGS("LLLogin") << " connected with uri '" << uri << "', login_params " << login_params << LL_ENDL;
 }
 
-void LLLogin::Impl::loginCoro(std::string uri, LLSD login_params)
+LL::Task<void> LLLogin::Impl::loginCoro(std::string uri, LLSD login_params)
 {
     LLSD printable_params = hidePasswd(login_params);
 
@@ -171,10 +171,10 @@ void LLLogin::Impl::loginCoro(std::string uri, LLSD login_params)
             // returns. Subsequent responses, of course, must be awaited
             // without posting again.
             for (mAuthResponse = validateResponse(loginReplyPump.getName(),
-                                                  llcoro::postAndSuspend(request, xmlrpcPump, loginReplyPump, "reply"));
+                                                  co_await llcoro::co::postAndSuspend(request, xmlrpcPump, loginReplyPump, "reply"));
                  mAuthResponse["status"].asString() == "Downloading";
                  mAuthResponse = validateResponse(loginReplyPump.getName(),
-                                                  llcoro::suspendUntilEventOn(loginReplyPump)))
+                                                  co_await llcoro::co::suspendUntilEventOn(loginReplyPump)))
             {
                 // Still Downloading -- send progress update.
                 sendProgressEvent("offline", "downloading");
@@ -217,7 +217,7 @@ void LLLogin::Impl::loginCoro(std::string uri, LLSD login_params)
                 LLSD responses(mAuthResponse["responses"]);
                 sendProgressEvent("offline", "fail.login", responses);
             }
-            return;             // Done!
+            co_return;             // Done!
         }
 
 /*==========================================================================*|
@@ -240,7 +240,7 @@ void LLLogin::Impl::loginCoro(std::string uri, LLSD login_params)
             LL_ERRS("LLLogin") << "Unexpected status " << status
                                << " from " << xmlrpcPump.getName()
                                << " pump: " << mAuthResponse << LL_ENDL;
-            return;
+            co_return;
         }
 
         if (status == "BadType")

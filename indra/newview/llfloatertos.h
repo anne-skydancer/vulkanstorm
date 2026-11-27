@@ -32,6 +32,7 @@
 #include "llmediactrl.h"
 #include "lleventcoro.h"
 #include "llcoros.h"
+#include "lltask.h"
 
 class LLButton;
 class LLRadioGroup;
@@ -62,7 +63,7 @@ public:
     void handleMediaEvent(LLPluginClassMedia* self, EMediaEvent event) override;
 
 private:
-    static void testSiteIsAliveCoro(LLHandle<LLFloater> handle, std::string url);
+    static LL::Task<void> testSiteIsAliveCoro(LLHandle<LLFloater> handle, std::string url);
 
     std::string     mMessage;
     bool            mLoadingScreenLoaded;

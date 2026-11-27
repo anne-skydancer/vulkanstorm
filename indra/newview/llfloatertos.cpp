@@ -306,7 +306,7 @@ void LLFloaterTOS::handleMediaEvent(LLPluginClassMedia* /*self*/, EMediaEvent ev
     }
 }
 
-void LLFloaterTOS::testSiteIsAliveCoro(LLHandle<LLFloater> handle, std::string url)
+LL::Task<void> LLFloaterTOS::testSiteIsAliveCoro(LLHandle<LLFloater> handle, std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -319,7 +319,7 @@ void LLFloaterTOS::testSiteIsAliveCoro(LLHandle<LLFloater> handle, std::string u
 
     LL_INFOS("testSiteIsAliveCoro") << "Generic POST for " << url << LL_ENDL;
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -327,7 +327,7 @@ void LLFloaterTOS::testSiteIsAliveCoro(LLHandle<LLFloater> handle, std::string u
     if (handle.isDead())
     {
         LL_WARNS("testSiteIsAliveCoro") << "Dialog canceled before response." << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLFloaterTOS *that = dynamic_cast<LLFloaterTOS *>(handle.get());

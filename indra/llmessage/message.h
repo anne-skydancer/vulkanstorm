@@ -903,7 +903,7 @@ public:
 
 private:
     typedef std::function<void(S32)>  UntrustedCallback_t;
-    void sendUntrustedSimulatorMessageCoro(std::string url, std::string message, LLSD body, UntrustedCallback_t callback);
+    LL::Task<void> sendUntrustedSimulatorMessageCoro(std::string url, std::string message, LLSD body, UntrustedCallback_t callback);
 
 
     bool mLastMessageFromTrustedMessageService;

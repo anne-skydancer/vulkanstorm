@@ -75,9 +75,9 @@ private:
     static std::unique_ptr<LLEventPump> sStateWatcher;
     static std::unique_ptr<LLEventPump> sInfoWatcher;
 
-    void discordConnectCoro();
-    void discordDisconnectCoro();
-    void discordConnectedCoro(bool autoConnect);
+    void discordConnect_();
+    void discordDisconnect_();
+    void discordConnected_(bool autoConnect);
 
     bool checkMarkerFile() const;
     void setMarkerFile();

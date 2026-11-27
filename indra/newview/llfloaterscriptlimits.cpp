@@ -174,7 +174,7 @@ bool LLPanelScriptLimitsRegionMemory::getLandScriptResources()
     }
 }
 
-void LLPanelScriptLimitsRegionMemory::getLandScriptResourcesCoro(std::string url)
+LL::Task<void> LLPanelScriptLimitsRegionMemory::getLandScriptResourcesCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -185,7 +185,7 @@ void LLPanelScriptLimitsRegionMemory::getLandScriptResourcesCoro(std::string url
 
     postData["parcel_id"] = mParcelId;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -193,7 +193,7 @@ void LLPanelScriptLimitsRegionMemory::getLandScriptResourcesCoro(std::string url
     if (!status)
     {
         LL_WARNS() << "Failed to get script resource info" << LL_ENDL;
-        return;
+        co_return;
     }
 
     // We could retrieve these sequentially inline from this coroutine. But
@@ -218,14 +218,14 @@ void LLPanelScriptLimitsRegionMemory::getLandScriptResourcesCoro(std::string url
 
 }
 
-void LLPanelScriptLimitsRegionMemory::getLandScriptSummaryCoro(std::string url)
+LL::Task<void> LLPanelScriptLimitsRegionMemory::getLandScriptSummaryCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("getLandScriptSummaryCoro", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -233,28 +233,28 @@ void LLPanelScriptLimitsRegionMemory::getLandScriptSummaryCoro(std::string url)
     if (!status)
     {
         LL_WARNS() << "Unable to retrieve script summary." << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLFloaterScriptLimits* instance = LLFloaterReg::getTypedInstance<LLFloaterScriptLimits>("script_limits");
     if (!instance)
     {
         LL_WARNS() << "Failed to get llfloaterscriptlimits instance" << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLTabContainer* tab = instance->getChild<LLTabContainer>("scriptlimits_panels");
     if (!tab)
     {
         LL_WARNS() << "Unable to access script limits tab" << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLPanelScriptLimitsRegionMemory* panelMemory = (LLPanelScriptLimitsRegionMemory*)tab->getChild<LLPanel>("script_limits_region_memory_panel");
     if (!panelMemory)
     {
         LL_WARNS() << "Unable to get memory panel." << LL_ENDL;
-        return;
+        co_return;
     }
 
     panelMemory->getChild<LLUICtrl>("loading_text")->setValue(LLSD(std::string("")));
@@ -270,14 +270,14 @@ void LLPanelScriptLimitsRegionMemory::getLandScriptSummaryCoro(std::string url)
 
 }
 
-void LLPanelScriptLimitsRegionMemory::getLandScriptDetailsCoro(std::string url)
+LL::Task<void> LLPanelScriptLimitsRegionMemory::getLandScriptDetailsCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
         httpAdapter = std::make_shared<LLCoreHttpUtil::HttpCoroutineAdapter>("getLandScriptDetailsCoro", httpPolicy);
     LLCore::HttpRequest::ptr_t httpRequest = std::make_shared<LLCore::HttpRequest>();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -285,7 +285,7 @@ void LLPanelScriptLimitsRegionMemory::getLandScriptDetailsCoro(std::string url)
     if (!status)
     {
         LL_WARNS() << "Unable to retrieve script details." << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLFloaterScriptLimits* instance = LLFloaterReg::getTypedInstance<LLFloaterScriptLimits>("script_limits");
@@ -293,14 +293,14 @@ void LLPanelScriptLimitsRegionMemory::getLandScriptDetailsCoro(std::string url)
     if (!instance)
     {
         LL_WARNS() << "Failed to get llfloaterscriptlimits instance" << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLTabContainer* tab = instance->getChild<LLTabContainer>("scriptlimits_panels");
     if (!tab)
     {
         LL_WARNS() << "Unable to access script limits tab" << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLPanelScriptLimitsRegionMemory* panelMemory = (LLPanelScriptLimitsRegionMemory*)tab->getChild<LLPanel>("script_limits_region_memory_panel");
@@ -308,7 +308,7 @@ void LLPanelScriptLimitsRegionMemory::getLandScriptDetailsCoro(std::string url)
     if (!panelMemory)
     {
         LL_WARNS() << "Unable to get memory panel." << LL_ENDL;
-        return;
+        co_return;
     }
 
     result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);

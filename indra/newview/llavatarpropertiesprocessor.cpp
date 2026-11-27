@@ -176,8 +176,8 @@ void LLAvatarPropertiesProcessor::sendAvatarPropertiesRequestMessage(const LLUUI
 void LLAvatarPropertiesProcessor::initAgentProfileCapRequest(const LLUUID& avatar_id, const std::string& cap_url, EAvatarProcessorType type)
 {
     addPendingRequest(avatar_id, type);
-    LLCoros::instance().launch("requestAgentUserInfoCoro",
-        [cap_url, avatar_id, type]() { requestAvatarPropertiesCoro(cap_url, avatar_id, type); });
+    LLCoros::instance().launch("LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro",
+        [cap_url, avatar_id, type]() { return requestAvatarPropertiesCoro(cap_url, avatar_id, type); });
 }
 void LLAvatarPropertiesProcessor::sendAvatarPropertiesRequest(const LLUUID& avatar_id)
 {
@@ -307,7 +307,7 @@ bool LLAvatarPropertiesProcessor::hasPaymentInfoOnFile(const LLAvatarData* avata
 }
 
 // static
-void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_url, LLUUID avatar_id, EAvatarProcessorType type)
+LL::Task<void> LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_url, LLUUID avatar_id, EAvatarProcessorType type)
 {
     LLAvatarPropertiesProcessor& inst = instance();
 
@@ -322,7 +322,7 @@ void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_ur
 
     std::string finalUrl = cap_url + "/" + avatar_id.asString();
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, finalUrl, httpOpts, httpHeaders);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, finalUrl, httpOpts, httpHeaders);
 
     // Response is being processed, no longer pending is required
     inst.removePendingRequest(avatar_id, type);
@@ -338,7 +338,7 @@ void LLAvatarPropertiesProcessor::requestAvatarPropertiesCoro(std::string cap_ur
             << (!status ? " (no HTTP status)" : !result.has("id") ? " (no result.id)" :
                 std::string(" (result.id=") + result["id"].asUUID().asString() + ")")
             << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLAvatarData avatar_data;

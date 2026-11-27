@@ -29,6 +29,7 @@
 #define LL_LLFLOATERREGIONRESTARTSCHEDULE_H
 
 #include "llfloater.h"
+#include "lltask.h"
 
 class LLLineEditor;
 class LLButton;
@@ -56,8 +57,8 @@ public:
     static bool canUse();
 
 protected:
-    static void requestRegionShcheduleCoro(std::string url, LLHandle<LLFloater> handle);
-    static void setRegionShcheduleCoro(std::string url, LLSD body, LLHandle<LLFloater> handle);
+    static LL::Task<void> requestRegionShcheduleCoro(std::string url, LLHandle<LLFloater> handle);
+    static LL::Task<void> setRegionShcheduleCoro(std::string url, LLSD body, LLHandle<LLFloater> handle);
 
     LLHandle<LLView> mOwnerHandle;
     F32 mContextConeOpacity{ 0.f };

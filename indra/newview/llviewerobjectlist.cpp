@@ -1298,7 +1298,7 @@ void LLViewerObjectList::reportObjectCostFailure(LLSD &objectList)
 
 // <FS:Ansariel> FIRE-5496: Missing LI for objects outside agent's region
 //void LLViewerObjectList::fetchObjectCostsCoro(std::string url)
-void LLViewerObjectList::fetchObjectCostsCoro(std::string url, uuid_set_t staleObjects)
+LL::Task<void> LLViewerObjectList::fetchObjectCostsCoro(std::string url, uuid_set_t staleObjects)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -1323,7 +1323,7 @@ void LLViewerObjectList::fetchObjectCostsCoro(std::string url, uuid_set_t staleO
     if (diff.empty())
     {
         LL_DEBUGS() << "No outstanding object IDs to request. Pending count: " << mPendingObjectCost.size() << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLSD idList(LLSD::emptyArray());
@@ -1339,7 +1339,7 @@ void LLViewerObjectList::fetchObjectCostsCoro(std::string url, uuid_set_t staleO
 
     postData["object_ids"] = idList;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -1358,7 +1358,7 @@ void LLViewerObjectList::fetchObjectCostsCoro(std::string url, uuid_set_t staleO
         }
         reportObjectCostFailure(idList);
 
-        return;
+        co_return;
     }
 
     // Success, grab the resource cost and linked set costs
@@ -1436,7 +1436,7 @@ void LLViewerObjectList::reportPhysicsFlagFailure(LLSD &objectList)
     }
 }
 
-void LLViewerObjectList::fetchPhisicsFlagsCoro(std::string url)
+LL::Task<void> LLViewerObjectList::fetchPhisicsFlagsCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -1467,14 +1467,14 @@ void LLViewerObjectList::fetchPhisicsFlagsCoro(std::string url)
     if (idList.size() < 1)
     {
         LL_DEBUGS() << "No outstanding object physics flags to request." << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLSD postData = LLSD::emptyMap();
 
     postData["object_ids"] = idList;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -1493,7 +1493,7 @@ void LLViewerObjectList::fetchPhisicsFlagsCoro(std::string url)
         }
         reportPhysicsFlagFailure(idList);
 
-        return;
+        co_return;
     }
 
     // Success, grab the resource cost and linked set costs

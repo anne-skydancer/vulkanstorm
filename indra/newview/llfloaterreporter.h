@@ -32,6 +32,7 @@
 #include "lluuid.h"
 #include "v3math.h"
 #include "llextendedstatus.h"
+#include "lltask.h"
 
 class LLAvatarName;
 class LLMessageSystem;
@@ -131,7 +132,7 @@ private:
     // <FS:Ansariel> FIRE-15368: Don't include floater in screenshot update
     void onUpdateScreenshot();
 
-    static void requestAbuseCategoriesCoro(std::string url, LLHandle<LLFloater> handle);
+    static LL::Task<void> requestAbuseCategoriesCoro(std::string url, LLHandle<LLFloater> handle);
     static void finishedARPost(const LLSD &);
 
 private:

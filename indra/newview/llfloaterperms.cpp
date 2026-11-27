@@ -209,7 +209,7 @@ void LLFloaterPermsDefault::updateCap()
 }
 
 /*static*/
-void LLFloaterPermsDefault::updateCapCoro(std::string url)
+LL::Task<void> LLFloaterPermsDefault::updateCapCoro(std::string url)
 {
     int retryCount = 0;
     std::string previousReason;
@@ -237,7 +237,7 @@ void LLFloaterPermsDefault::updateCapCoro(std::string url)
     while (true)
     {
         ++retryCount;
-        LLSD result = httpAdapter->postAndSuspend(httpRequest, url, postData);
+        LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, postData);
 
         LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -257,12 +257,12 @@ void LLFloaterPermsDefault::updateCapCoro(std::string url)
                 LLNotificationsUtil::add("DefaultObjectPermissions", args);
             }
 
-            llcoro::suspendUntilTimeout(RETRY_TIMEOUT);
+            co_await llcoro::co::suspendUntilTimeout(RETRY_TIMEOUT);
             if (retryCount < MAX_HTTP_RETRIES)
                 continue;
 
             LL_WARNS("ObjectPermissionsFloater") << "Unable to send default permissions.  Giving up for now." << LL_ENDL;
-            return;
+            co_return;
         }
         break;
     }

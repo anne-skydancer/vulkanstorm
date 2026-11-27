@@ -56,6 +56,7 @@ namespace LL
 }
 
 #include "fsregioncross.h" // <FS:JN> Improved region crossing support
+#include "lltask.h"
 
 class LLAgent;          // TODO: Get rid of this.
 class LLAudioSource;
@@ -785,9 +786,9 @@ private:
 
     // forms task inventory request after some time passed, marks request as pending
     void fetchInventoryDelayed(const F64 &time_seconds);
-    static void fetchInventoryDelayedCoro(const LLUUID task_inv, const F64 time_seconds);
-    static void fetchInventoryFromCapCoro(const LLUUID task_inv);
-    static void createInventoryItemCoro(const std::string cap_url, const LLSD body, std::function<void(bool, const LLSD&)> callback);
+    static LL::Task<void> fetchInventoryDelayedCoro(const LLUUID task_inv, const F64 time_seconds);
+    static LL::Task<void> fetchInventoryFromCapCoro(const LLUUID task_inv);
+    static LL::Task<void> createInventoryItemCoro(const std::string cap_url, const LLSD body, std::function<void(bool, const LLSD&)> callback);
 
 public:
     //

@@ -2802,7 +2802,7 @@ const std::string LLVOAvatarSelf::debugDumpAllLocalTextureDataInfo() const
     return text;
 }
 
-void LLVOAvatarSelf::appearanceChangeMetricsCoro(std::string url)
+LL::Task<void> LLVOAvatarSelf::appearanceChangeMetricsCoro(std::string url)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -2863,7 +2863,7 @@ void LLVOAvatarSelf::appearanceChangeMetricsCoro(std::string url)
 
     gPendingMetricsUploads++;
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, msg);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, msg);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -2873,7 +2873,7 @@ void LLVOAvatarSelf::appearanceChangeMetricsCoro(std::string url)
     if (!status)
     {
         LL_WARNS("Avatar") << "Unable to upload statistics" << LL_ENDL;
-        return;
+        co_return;
     }
     else
     {

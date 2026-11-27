@@ -29,6 +29,7 @@
 
 #include "llfloater.h"
 #include "llpanel.h"
+#include "lltask.h"
 
 class LLFloaterMyScripts : public LLFloater
 {
@@ -43,7 +44,7 @@ public:
     void clearList();
 
 private:
-    void getAttachmentLimitsCoro(std::string url);
+    LL::Task<void> getAttachmentLimitsCoro(std::string url);
 
     bool mGotAttachmentMemoryUsed;
     bool mAttachmentDetailsRequested;

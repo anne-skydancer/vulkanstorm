@@ -31,6 +31,7 @@
 
 #include "httpcommon.h"
 #include "llcoros.h"
+#include "lltask.h"
 
 class LLViewerRegion;
 
@@ -59,8 +60,8 @@ class LLAvatarRenderInfoAccountant : public LLSingleton<LLAvatarRenderInfoAccoun
     // further limited by per region Request and Report timers
     LLFrameTimer mRenderInfoScanTimer;
 
-    static void avatarRenderInfoGetCoro(std::string url, U64 regionHandle);
-    static void avatarRenderInfoReportCoro(std::string url, U64 regionHandle);
+    static LL::Task<void> avatarRenderInfoGetCoro(std::string url, U64 regionHandle);
+    static LL::Task<void> avatarRenderInfoReportCoro(std::string url, U64 regionHandle);
 };
 
 #endif /* ! defined(LL_llavatarrenderinfoaccountant_H) */

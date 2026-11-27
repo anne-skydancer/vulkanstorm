@@ -31,6 +31,7 @@
 #include "lleventcoro.h"
 #include "llcoros.h"
 #include "llcorehttputil.h"
+#include "lltask.h"
 #include "lluuid.h"
 
 class LLCoprocedurePool;
@@ -44,12 +45,14 @@ public:
     typedef std::function<U32(const std::string &)> SettingQuery_t;
     typedef std::function<void(const std::string &, U32, const std::string &)> SettingUpdate_t;
 
-    typedef std::function<void(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &, const LLUUID &id)> CoProcedure_t;
+    typedef std::function<LL::Task<void>(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID)> CoProcedure_t;
 
     /// Places the coprocedure on the queue for processing.
     ///
     /// @param name Is used for debugging and should identify this coroutine.
-    /// @param proc Is a bound function to be executed
+    /// @param proc Is a bound function to be executed. It returns an LL::Task<void> that the pool awaits;
+    ///        the coroutine itself must not be a capturing lambda, because its captures would dangle after a
+    ///        suspension. Let the lambda return the Task of a coroutine function that takes its arguments by value.
     ///
     /// @return This method returns a UUID that can be used later to cancel execution.
     LLUUID enqueueCoprocedure(const std::string &pool, const std::string &name, CoProcedure_t proc);

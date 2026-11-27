@@ -33,6 +33,7 @@
 
 #include "llstreamingaudio.h"
 #include "lltimer.h"
+#include "lltask.h"
 
 class LLPluginClassMedia;
 
@@ -81,7 +82,7 @@ private:
     void pollStreamStatus();
     void onStreamStatus(const std::string& artist, const std::string& title, const std::string& status_url);
     void onStreamStatusFailed();
-    static void streamStatusCoro(LLStreamingAudio_MediaPlugins* self, LLSD candidates, std::string mount_path, std::string stream_url);
+    static LL::Task<void> streamStatusCoro(LLStreamingAudio_MediaPlugins* self, LLSD candidates, std::string mount_path, std::string stream_url);
     void resetMetadata();
 
     std::string mArtist;        // last emitted pair

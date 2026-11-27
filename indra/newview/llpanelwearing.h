@@ -33,6 +33,7 @@
 #include "llpanelappearancetab.h"
 #include "llselectmgr.h"
 #include "lltimer.h"
+#include "lltask.h"
 
 class LLAccordionCtrl;
 class LLAccordionCtrlTab;
@@ -97,7 +98,7 @@ private:
     void onWearableItemsListRightClick(LLUICtrl* ctrl, S32 x, S32 y);
     void onTempAttachmentsListRightClick(LLUICtrl* ctrl, S32 x, S32 y);
 
-    void getAttachmentLimitsCoro(std::string url);
+    LL::Task<void> getAttachmentLimitsCoro(std::string url);
 
     // <FS:Ansariel> FIRE-22484: Double-click wear in outfits list
     void onDoubleClick();

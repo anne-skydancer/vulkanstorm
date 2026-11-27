@@ -23,6 +23,7 @@
 
 #include "rlvcommon.h"
 #include "rlvhelper.h"
+#include "lltask.h"
 
 // ============================================================================
 // RlvHandler class
@@ -183,7 +184,7 @@ public:
     static void cleanupClass();
     static void onIdleStartup(void* pParam);
 protected:
-    void getAttachmentResourcesCoro(const std::string& strUrl);
+    LL::Task<void> getAttachmentResourcesCoro(std::string strUrl);
     void onTeleportCallback(U64 hRegion, const LLVector3& posRegion, const LLVector3& vecLookAt, const LLUUID& idRlvObj);
 
     /*

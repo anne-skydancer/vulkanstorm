@@ -90,7 +90,7 @@ void resourceDeleter( LLResourceData *aData )
     delete aData;
 }
 
-void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter, std::string aURL,  LLSD aBody, LLAssetID aAssetId, LLAssetType::EType aAssetType, boost::shared_ptr< LLResourceData > aResourceData );
+LL::Task<void> uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t a_httpAdapter, std::string aURL,  LLSD aBody, LLAssetID aAssetId, LLAssetType::EType aAssetType, boost::shared_ptr< LLResourceData > aResourceData );
 
 FSFloaterImport::FSFloaterImport(const LLSD& filename) :
     LLFloater(filename),
@@ -1888,7 +1888,7 @@ public:
     }
 };
 
-void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter, std::string aURL, LLSD aBody, LLAssetID aAssetId, LLAssetType::EType aAssetType, boost::shared_ptr< LLResourceData > aResourceData )
+LL::Task<void> uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t a_httpAdapter, std::string aURL, LLSD aBody, LLAssetID aAssetId, LLAssetType::EType aAssetType, boost::shared_ptr< LLResourceData > aResourceData )
 {
     FSResourceData* fs_data = (FSResourceData*)aResourceData->mUserData;
     FSFloaterImport* self = fs_data->getFloater();
@@ -1896,7 +1896,7 @@ void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter
     UploadFlag uploadDone( self );
 
     LLCore::HttpRequest::ptr_t pRequest( new LLCore::HttpRequest() );
-    LLSD postResult = a_httpAdapter->postAndSuspend( pRequest, aURL, aBody );
+    LLSD postResult = co_await a_httpAdapter->postAndSuspend( pRequest, aURL, aBody );
     self = static_cast<FSFloaterImport*>( hfloater.get() );
 
     LLSD httpResults = postResult[ LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS ];
@@ -1923,7 +1923,7 @@ void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter
         LL_WARNS( "import" ) << "No upload url provided. Nothing uploaded." << LL_ENDL;
         if( self )
             self->pushNextAsset( LLUUID::null, fs_data->uuid, aResourceData->mAssetInfo.mType );
-        return;
+        co_return;
     }
 
     if (!LLFileSystem::getExists(aAssetId, aAssetType))
@@ -1931,14 +1931,14 @@ void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter
         LL_WARNS() << "Asset doesn't exist in VFS anymore. Nothing uploaded." << LL_ENDL;
         if( self )
             self->pushNextAsset( LLUUID::null, fs_data->uuid, aResourceData->mAssetInfo.mType );
-        return;
+        co_return;
     }
 
     LLSD postContentResult;
     {
         pRequest.reset( new LLCore::HttpRequest() );
 
-        postContentResult = a_httpAdapter->postFileAndSuspend( pRequest, uploader, aAssetId, aAssetType );
+        postContentResult = co_await a_httpAdapter->postFileAndSuspend( pRequest, uploader, aAssetId, aAssetType );
         self = static_cast<FSFloaterImport*>( hfloater.get() );
         LLSD httpResults = postContentResult[ LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS ];
         LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD( httpResults );
@@ -1951,7 +1951,7 @@ void uploadCoroutine( LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &a_httpAdapter
             if( self )
                 self->pushNextAsset( LLUUID::null, fs_data->uuid, aResourceData->mAssetInfo.mType );
             LL_WARNS( "import" ) << "Asset upload failed." << ll_pretty_print_sd( postContentResult) << LL_ENDL;
-            return;
+            co_return;
         }
     }
 

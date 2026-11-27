@@ -268,7 +268,7 @@ bool LLFloaterRegionRestartSchedule::canUse()
     return !url.empty();
 }
 
-void LLFloaterRegionRestartSchedule::requestRegionShcheduleCoro(std::string url, LLHandle<LLFloater> handle)
+LL::Task<void> LLFloaterRegionRestartSchedule::requestRegionShcheduleCoro(std::string url, LLHandle<LLFloater> handle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -278,7 +278,7 @@ void LLFloaterRegionRestartSchedule::requestRegionShcheduleCoro(std::string url,
 
     httpOpts->setWantHeaders(true);
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url, httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -363,7 +363,7 @@ void LLFloaterRegionRestartSchedule::requestRegionShcheduleCoro(std::string url,
     }
 }
 
-void LLFloaterRegionRestartSchedule::setRegionShcheduleCoro(std::string url, LLSD body, LLHandle<LLFloater> handle)
+LL::Task<void> LLFloaterRegionRestartSchedule::setRegionShcheduleCoro(std::string url, LLSD body, LLHandle<LLFloater> handle)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -373,7 +373,7 @@ void LLFloaterRegionRestartSchedule::setRegionShcheduleCoro(std::string url, LLS
 
     httpOpts->setWantHeaders(true);
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, body, httpOpts);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);

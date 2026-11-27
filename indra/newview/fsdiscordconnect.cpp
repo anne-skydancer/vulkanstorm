@@ -108,7 +108,7 @@ static void handleDiscordDisconnected(int errorCode, const char* message)
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void FSDiscordConnect::discordConnectCoro()
+void FSDiscordConnect::discordConnect_()
 {
     DiscordEventHandlers handlers;
     memset(&handlers, 0, sizeof(handlers));
@@ -125,7 +125,7 @@ void FSDiscordConnect::discordConnectCoro()
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void FSDiscordConnect::discordDisconnectCoro()
+void FSDiscordConnect::discordDisconnect_()
 {
     Discord_Shutdown();
     setConnectionState(FSDiscordConnect::DISCORD_NOT_CONNECTED);
@@ -133,7 +133,7 @@ void FSDiscordConnect::discordDisconnectCoro()
 
 ///////////////////////////////////////////////////////////////////////////////
 //
-void FSDiscordConnect::discordConnectedCoro(bool autoConnect)
+void FSDiscordConnect::discordConnected_(bool autoConnect)
 {
     if (autoConnect)
     {
@@ -264,22 +264,20 @@ FSDiscordConnect::~FSDiscordConnect()
 
 void FSDiscordConnect::connectToDiscord()
 {
-    LLCoros::instance().launch("FSDiscordConnect::discordConnectCoro",
-        std::bind(&FSDiscordConnect::discordConnectCoro, this));
+    // These three never wait: plain calls (they were launched as coroutines that ran to their end at once).
+    discordConnect_();
 }
 
 void FSDiscordConnect::disconnectFromDiscord()
 {
     setConnectionState(FSDiscordConnect::DISCORD_DISCONNECTING);
 
-    LLCoros::instance().launch("FSDiscordConnect::discordDisconnectCoro",
-        std::bind(&FSDiscordConnect::discordDisconnectCoro, this));
+    discordDisconnect_();
 }
 
 void FSDiscordConnect::checkConnectionToDiscord(bool auto_connect)
 {
-    LLCoros::instance().launch("FSDiscordConnect::discordConnectedCoro",
-        std::bind(&FSDiscordConnect::discordConnectedCoro, this, auto_connect));
+    discordConnected_(auto_connect);
 }
 
 bool FSDiscordConnect::Tick(const LLSD&)

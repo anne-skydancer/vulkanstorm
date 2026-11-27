@@ -323,7 +323,7 @@ void LLFloaterExperiences::retrieveExperienceList(const std::string &url,
 {
     invokationFn_t getFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -344,7 +344,7 @@ void LLFloaterExperiences::requestNewExperience(const std::string &url,
 {
     invokationFn_t postFn = boost::bind(
         // Humans ignore next line.  It is just a cast to specify which LLCoreHttpUtil::HttpCoroutineAdapter routine overload.
-        static_cast<LLSD(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, const std::string &, const LLSD &, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
+        static_cast<LL::Task<LLSD>(LLCoreHttpUtil::HttpCoroutineAdapter::*)(LLCore::HttpRequest::ptr_t, std::string, LLSD, LLCore::HttpOptions::ptr_t, LLCore::HttpHeaders::ptr_t)>
         //----
         // _1 -> httpAdapter
         // _2 -> httpRequest
@@ -360,7 +360,7 @@ void LLFloaterExperiences::requestNewExperience(const std::string &url,
 }
 
 
-void LLFloaterExperiences::retrieveExperienceListCoro(std::string url,
+LL::Task<void> LLFloaterExperiences::retrieveExperienceListCoro(std::string url,
     LLHandle<LLFloaterExperiences> hparent, NameMap_t tabMapping,
     std::string errorNotify, Callback_t cback, invokationFn_t invoker)
 {
@@ -375,10 +375,10 @@ void LLFloaterExperiences::retrieveExperienceListCoro(std::string url,
     if (url.empty())
     {
         LL_WARNS() << "retrieveExperienceListCoro called with empty capability!" << LL_ENDL;
-        return;
+        co_return;
     }
 
-    LLSD result = invoker(httpAdapter, httpRequest, url, httpOptions, httpHeaders);
+    LLSD result = co_await invoker(httpAdapter, httpRequest, url, httpOptions, httpHeaders);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -392,11 +392,11 @@ void LLFloaterExperiences::retrieveExperienceListCoro(std::string url,
         subs["ERROR_MESSAGE"] = llformat(" %d\n %s", (S32)status.getType(), status.getMessage().c_str());
         LLNotificationsUtil::add(errorNotify, subs);
 
-        return;
+        co_return;
     }
 
     if (hparent.isDead())
-        return;
+        co_return;
 
     LLFloaterExperiences* parent = hparent.get();
     LLTabContainer* tabs = parent->getChild<LLTabContainer>("xp_tabs");

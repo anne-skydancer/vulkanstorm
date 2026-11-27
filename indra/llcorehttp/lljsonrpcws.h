@@ -30,6 +30,7 @@
 #include "llsd.h"
 #include "lluuid.h"
 #include "lltimer.h"
+#include "lltask.h"
 
 #include <functional>
 #include <unordered_map>
@@ -108,6 +109,12 @@ public:
     /// @return The result to return to the caller
     /// @throw RPCError-derived exceptions for error responses
     using MethodHandler = std::function<LLSD(const std::string& method, const LLSD& id, const LLSD& params)>;
+
+    /// Async method handler signature: a coroutine, run on the main loop by registerAsyncMethod(). Its parameters
+    /// are by value because the coroutine outlives the call that started it.
+    /// @return The result to return to the caller (the task's value)
+    /// @throw RPCError-derived exceptions for error responses
+    using AsyncMethodHandler = std::function<LL::Task<LLSD>(std::string method, LLSD id, LLSD params)>;
 
     /// Response callback function signature
     /// @param result The result from a successful call (undefined if error occurred)
@@ -257,15 +264,15 @@ public:
     /**
      * @brief Register an async method handler, executed in a coroutine
      *
-     * Unlike registerMethod(), the handler runs inside an LLCoros coroutine
-     * and may use llcoro::suspendUntilEventOn* to wait for async results.
-     * The handler returns its result normally; the framework sends the
-     * JSON-RPC response automatically when the coroutine returns.
+     * Unlike registerMethod(), the handler is an LL::Task coroutine run by
+     * LLCoros on the main loop, and may co_await llcoro::co::suspendUntilEventOn*
+     * to wait for async results. The handler co_returns its result; the
+     * framework sends the JSON-RPC response automatically when the task ends.
      *
      * @param method  The method name to register
      * @param handler The coroutine-safe function to call
      */
-    void registerAsyncMethod(const std::string& method, MethodHandler handler);
+    void registerAsyncMethod(const std::string& method, AsyncMethodHandler handler);
 
     /**
      * @brief Unregister a method handler
@@ -344,6 +351,14 @@ protected:
     void processRequest(const LLSD& request);
 
     /**
+     * @brief Run an async method handler as a coroutine and send its response
+     *
+     * The task body of registerAsyncMethod() handlers. Everything is by value: the coroutine outlives processRequest().
+     */
+    static LL::Task<void> runAsyncMethod(AsyncMethodHandler handler, std::string method, LLSD id, LLSD params,
+                                         ptr_t conn);
+
+    /**
      * @brief Process a JSON-RPC response
      * @param response The response object
      */
@@ -398,7 +413,7 @@ private:
     // and to keep the critical section short.
     mutable LLMutex mMutex;
     std::unordered_map<std::string, MethodHandler> mMethodHandlers;
-    std::unordered_map<std::string, MethodHandler> mAsyncMethodHandlers;
+    std::unordered_map<std::string, AsyncMethodHandler> mAsyncMethodHandlers;
     std::unordered_map<std::string, ResponseCallback> mPendingRequests;
 
     // Per-request timeout tracking. mPendingDeadlines is a min-heap of

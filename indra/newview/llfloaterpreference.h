@@ -41,6 +41,7 @@
 #include "llkeyconflict.h"
 
 #include "llaudioengine.h" // <FS:Ansariel> Output device selection
+#include "lltask.h"
 
 class LLConversationLogObserver;
 class LLPanelPreference;
@@ -113,7 +114,7 @@ public:
 
     void processProperties( void* pData, EAvatarProcessorType type );
     void saveAvatarProperties( void );
-    static void saveAvatarPropertiesCoro(const std::string url, bool allow_publish);
+    static LL::Task<void> saveAvatarPropertiesCoro(const std::string url, bool allow_publish);
     void selectPrivacyPanel();
     void selectChatPanel();
     void getControlNames(std::vector<std::string>& names);

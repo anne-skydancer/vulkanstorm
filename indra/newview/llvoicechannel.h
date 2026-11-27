@@ -31,6 +31,7 @@
 #include "llvoiceclient.h"
 #include "lleventcoro.h"
 #include "llcoros.h"
+#include "lltask.h"
 
 class LLPanel;
 
@@ -157,7 +158,7 @@ protected:
     void setState(EState state) override;
 
 private:
-    void voiceCallCapCoro(std::string url);
+    LL::Task<void> voiceCallCapCoro(std::string url);
 
     U32 mRetries;
     bool mIsRetrying;

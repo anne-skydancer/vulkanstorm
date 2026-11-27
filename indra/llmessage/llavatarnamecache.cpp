@@ -132,7 +132,7 @@ LLAvatarNameCache::~LLAvatarNameCache()
     mCache.clear();
 }
 
-void LLAvatarNameCache::requestAvatarNameCache_(std::string url, std::vector<LLUUID> agentIds)
+LL::Task<void> LLAvatarNameCache::requestAvatarNameCache_(std::string url, std::vector<LLUUID> agentIds)
 {
     LL_DEBUGS("AvNameCache") << "Entering coroutine " << LLCoros::getName()
         << " with url '" << url << "', requesting " << agentIds.size() << " Agent Ids" << LL_ENDL;
@@ -141,7 +141,7 @@ void LLAvatarNameCache::requestAvatarNameCache_(std::string url, std::vector<LLU
     if (!sHttpRequest || !sHttpOptions || !sHttpHeaders)
     {
         LL_WARNS("AvNameCache") << " Trying to request name cache when http pointers are not initialized." << LL_ENDL;
-        return;
+        co_return;
     }
 
     LLSD httpResults;
@@ -151,7 +151,7 @@ void LLAvatarNameCache::requestAvatarNameCache_(std::string url, std::vector<LLU
     {
 
         LLCoreHttpUtil::HttpCoroutineAdapter httpAdapter("NameCache", sHttpPolicy);
-        LLSD results = httpAdapter.getAndSuspend(sHttpRequest, url);
+        LLSD results = co_await httpAdapter.getAndSuspend(sHttpRequest, url);
 
         LL_DEBUGS() << results << LL_ENDL;
 

@@ -33,6 +33,7 @@
 #include "llpointer.h"
 
 #include <unordered_map>
+#include "lltask.h"
 
 class LLFetchedGLTFMaterial;
 class LLGLTFOverrideCacheEntry;
@@ -124,7 +125,7 @@ private:
         bool mSuccess = true;
     };
     static void flushUpdatesOnce(std::shared_ptr<CallbackHolder> callback_holder);
-    static void modifyMaterialCoro(std::string cap_url, LLSD overrides, std::shared_ptr<CallbackHolder> callback_holder);
+    static LL::Task<void> modifyMaterialCoro(std::string cap_url, LLSD overrides, std::shared_ptr<CallbackHolder> callback_holder);
 
 protected:
     static void onAssetLoadComplete(

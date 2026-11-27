@@ -182,7 +182,7 @@ void LLSyntaxDefCache::fetchKeywords()
 //-----------------------------------------------------------------------------
 // fetchKeywordsFileCoro
 // This uses the legacy language cap which only sends the LSL keywords file.
-void LLSyntaxDefCache::fetchKeywordsFileCoro(std::string url, LLUUID syntax_id)
+LL::Task<void> LLSyntaxDefCache::fetchKeywordsFileCoro(std::string url, LLUUID syntax_id)
 {
     LLCore::HttpRequest::policy_t httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t
@@ -193,10 +193,10 @@ void LLSyntaxDefCache::fetchKeywordsFileCoro(std::string url, LLUUID syntax_id)
     if (!insrt.second)
     {
         LL_WARNS("SyntaxLSL") << "Already downloading keyword file for syntax ID \"" << syntax_id << "\"." << LL_ENDL;
-        return;
+        co_return;
     }
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -206,7 +206,7 @@ void LLSyntaxDefCache::fetchKeywordsFileCoro(std::string url, LLUUID syntax_id)
     if (!status)
     {
         LL_WARNS("SyntaxLSL") << "Failed to fetch syntax file for syntax ID \"" << syntax_id << "\"" << LL_ENDL;
-        return;
+        co_return;
     }
 
     result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
@@ -221,7 +221,7 @@ void LLSyntaxDefCache::fetchKeywordsFileCoro(std::string url, LLUUID syntax_id)
             if (LLFile::mkdir(path))
             {
                 LL_WARNS("SyntaxLSL") << "Failed to create cache directory '" << path << "'. Cannot cache syntax defs file." << LL_ENDL;
-                return;
+                co_return;
             }
         }
 
@@ -254,7 +254,7 @@ void LLSyntaxDefCache::fetchKeywordsFileCoro(std::string url, LLUUID syntax_id)
 
 }
 
-void LLSyntaxDefCache::fetchKeywordsDefsCoro(std::string url, LLUUID syntax_id)
+LL::Task<void> LLSyntaxDefCache::fetchKeywordsDefsCoro(std::string url, LLUUID syntax_id)
 {
     LLCore::HttpRequest::policy_t               httpPolicy(LLCore::HttpRequest::DEFAULT_POLICY_ID);
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter =
@@ -267,10 +267,10 @@ void LLSyntaxDefCache::fetchKeywordsDefsCoro(std::string url, LLUUID syntax_id)
     if (!insrt.second)
     {
         LL_WARNS("SyntaxLSL") << "Already downloading keyword defs for \"" << syntax_id << "\"." << LL_ENDL;
-        return;
+        co_return;
     }
 
-    LLSD result = httpAdapter->getAndSuspend(httpRequest, url);
+    LLSD result = co_await httpAdapter->getAndSuspend(httpRequest, url);
 
     LLSD               httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status      = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -281,7 +281,7 @@ void LLSyntaxDefCache::fetchKeywordsDefsCoro(std::string url, LLUUID syntax_id)
     {
         LL_WARNS("SyntaxLSL") << "Failed to fetch syntax file \"" << syntax_id << "\"" << LL_ENDL;
         result.erase(LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS);
-        return;
+        co_return;
     }
 
     // Now we need to walk through the returned LLSD.  It consists of a map keyed on the file name containing a binary
@@ -301,7 +301,7 @@ void LLSyntaxDefCache::fetchKeywordsDefsCoro(std::string url, LLUUID syntax_id)
             if (LLFile::mkdir(path))
             {
                 LL_WARNS("SyntaxLSL") << "Failed to create cache directory '" << path << "'. Cannot cache syntax defs file." << LL_ENDL;
-                return;
+                co_return;
             }
         }
 

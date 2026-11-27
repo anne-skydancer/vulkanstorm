@@ -36,6 +36,7 @@
 #include "llviewerinventory.h"
 #include "llcorehttputil.h"
 #include <memory>
+#include "lltask.h"
 
 class LLWearableHoldingPattern;
 class LLInventoryCallback;
@@ -264,10 +265,10 @@ public:
 // [/SL:KB]
 
 private:
-    void serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t &httpAdapter);
+    LL::Task<void> serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter);
 
 // [SL:KB] - Patch: Appearance-Misc
-    void syncCofVersionAndRefreshCoro();
+    LL::Task<void> syncCofVersionAndRefreshCoro();
 // [/SL:KB]
 
     static void debugAppearanceUpdateCOF(const LLSD& content);

@@ -196,7 +196,7 @@ bool LLRemoteParcelInfoProcessor::requestRegionParcelInfo(const std::string &url
     return false;
 }
 
-void LLRemoteParcelInfoProcessor::regionParcelInfoCoro(std::string url,
+LL::Task<void> LLRemoteParcelInfoProcessor::regionParcelInfoCoro(std::string url,
     LLUUID regionId, LLVector3 posRegion, LLVector3d posGlobal,
     LLHandle<LLRemoteParcelInfoObserver> observerHandle)
 {
@@ -220,7 +220,7 @@ void LLRemoteParcelInfoProcessor::regionParcelInfoCoro(std::string url,
         bodyData["region_handle"] = ll_sd_from_U64(regionHandle);
     }
 
-    LLSD result = httpAdapter->postAndSuspend(httpRequest, url, bodyData);
+    LLSD result = co_await httpAdapter->postAndSuspend(httpRequest, url, bodyData);
 
     LLSD httpResults = result[LLCoreHttpUtil::HttpCoroutineAdapter::HTTP_RESULTS];
     LLCore::HttpStatus status = LLCoreHttpUtil::HttpCoroutineAdapter::getStatusFromLLSD(httpResults);
@@ -229,7 +229,7 @@ void LLRemoteParcelInfoProcessor::regionParcelInfoCoro(std::string url,
     // Panel inspecting the information may be closed and destroyed
     // before this response is received.
     if (!observer)
-        return;
+        co_return;
 
     if (!status)
     {

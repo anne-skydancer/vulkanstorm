@@ -31,6 +31,7 @@
 #include "llviewermediaobserver.h"
 
 #include <string>
+#include "lltask.h"
 
 class LLMediaCtrl;
 
@@ -49,7 +50,7 @@ public:
     /*virtual*/ void handleReshape(const LLRect& new_rect, bool by_user = false);
 
     static bool checkGridStatusRSS();
-    static void getGridStatusRSSCoro();
+    static LL::Task<void> getGridStatusRSSCoro();
 
     void startGridStatusTimer();
     bool isFirstUpdate() { return mIsFirstUpdate; }

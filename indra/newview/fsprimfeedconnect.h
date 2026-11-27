@@ -37,6 +37,7 @@
 #include "llcoros.h"
 #include "llviewercontrol.h" // for gSavedSettings/gSavedPerAccountSettings
 #include <functional>
+#include "lltask.h"
 
 // Coro based connector designed to interface with floater designed along the same principles as LLFloaterFlickr.cpp
 #ifndef FS_PF_USER_AGENT
@@ -73,7 +74,7 @@ public:
 
 private:
     // Internal coroutine entry-point for uploads
-    void uploadPhotoCoro(const LLSD& params, LLImageFormatted* image);
+    LL::Task<void> uploadPhotoCoro(LLSD params, LLImageFormatted* image);
 
     // Cached callback until coroutine completes
     post_callback_t mPostCallback;
