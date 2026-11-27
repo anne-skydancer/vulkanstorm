@@ -664,6 +664,7 @@ int main(int argc, char **argv)
         s.close();
     }
 
+    LLError::cleanupForApplication();
     ll_cleanup_apr();
 
     int retval = (success ? 0 : 1);

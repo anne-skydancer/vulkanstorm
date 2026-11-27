@@ -64,6 +64,12 @@ namespace LLError
         // logs to stderr and windows debug log
         // sets up log configuration from the file logcontrol.xml in dir
 
+    LL_COMMON_API void cleanupForApplication();
+        // stops and frees the log control file watcher created by
+        // initForApplication; logging keeps working afterwards.
+        // Call from the thread that called initForApplication, while the
+        // event timers still exist, after which nothing may reconfigure logging.
+
 
     /*
         Settings that control what is logged.

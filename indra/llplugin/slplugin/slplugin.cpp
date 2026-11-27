@@ -261,6 +261,7 @@ int main(int argc, char **argv)
     }
     delete plugin;
 
+    LLError::cleanupForApplication();
     ll_cleanup_apr();
 
 
