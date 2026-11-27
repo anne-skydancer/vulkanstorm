@@ -189,7 +189,8 @@ static LL::Task<bool> download_url_to_file(std::string url, std::string local_pa
 //
 
 // The release feed is fetched by the check coroutine before it calls vpkc_check_for_updates (single pass): the
-// callback below is C++ that Velopack's Rust library calls, where a coroutine cannot suspend, and only serves these bytes.
+// callback below is C++ that Velopack's Rust library calls, where a coroutine cannot suspend, and only serves these
+// bytes.
 static std::string sPreFetchedFeedName;
 static std::string sPreFetchedFeed;
 

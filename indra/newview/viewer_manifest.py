@@ -63,8 +63,8 @@ except ImportError:
 # </FS:Beq>
 
 
-# The Velopack channel of each platform's package; the feed is releases.<channel>.json. Keep in step with
-# VELOPACK_CHANNEL in llvelopack.cpp (the viewer asks for that feed). These are Velopack's per-OS defaults, so
+# The Velopack channel of each platform's package; the feed is releases.<channel>.json. Keep these
+# constants equal to VELOPACK_CHANNEL in llvelopack.cpp for the same OS (the viewer asks for that feed). These are Velopack's per-OS defaults, so
 # existing feeds keep their names.
 VELOPACK_CHANNEL_WINDOWS = 'win'
 VELOPACK_CHANNEL_MACOS = 'osx'

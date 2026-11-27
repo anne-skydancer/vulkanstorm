@@ -6,14 +6,16 @@
  *
  * doc/clean/plan.md ("Coroutines", stage 4): the AIS parse (AISUpdate::parseUpdate and the nine functions below it,
  * llaisapi.cpp) is a recursion over an LLSD tree that became a chain of Task coroutines. Every call of the chain
- * allocates a coroutine frame, takes its LLSD parameter by value (const) and, at each parseEmbedded, tests the timers inline and awaits checkTimeout
- * only when a timer expired. This test measures what that costs per node, in the fibre bridge (nothing in the tree suspends, so every
- * task runs to its end at once, as the AIS parse does unless its time budget runs out).
+ * allocates a coroutine frame, takes its LLSD parameter by value (const) and, at each parseEmbedded, tests the
+ * timers inline and awaits checkTimeout only when a timer expired. This test measures what that costs per node, in
+ * the fibre bridge (nothing in the tree suspends, so every task runs to its end at once, as the AIS parse does
+ * unless its time budget runs out).
  *
  * Three variants walk the same tree, interleaved round by round (so that a loaded machine hits all three alike):
  * - plain: ordinary recursion over const LLSD&;
  * - task: the same recursion as Task coroutines taking the LLSD by value;
- * - task+check: like task, and each node tests an unexpired timer flag inline, as the AIS parse does (no frame on the usual path).
+ * - task+check: like task, and each node tests the timer-expired flag inline, as the AIS parse does; the flag is
+ *   false on this path, so no frame is allocated for the check.
  *
  * The test fails only when the three disagree on the answer. The medians are written to stderr and, when the
  * environment names a file in GITHUB_STEP_SUMMARY (CI), appended there as a table. A sanitizer build checks the
@@ -92,10 +94,10 @@ LL::Task<long long> walkTask(const LLSD node)
     co_return sum;
 }
 
-// checkTimeout() on its slow path only: the caller tests the timers inline first, so the usual
-// path allocates no frame.
+// Stands for "a timer has expired"; always false here, as on the usual path of the AIS parse.
 static volatile bool sTimerExpired = false;
 
+// Stands for checkTimeout(), which the caller awaits only when a timer has expired (slow path).
 LL::Task<void> checkNothing()
 {
     co_return;

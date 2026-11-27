@@ -299,8 +299,8 @@ private:
 /// An adapter to handle some of the boilerplate code surrounding HTTP and coroutine
 /// interaction.
 ///
-/// The ...AndSuspend methods return an LL::Task<LLSD> that the caller awaits
-/// (co_await) from a coroutine; nothing is sent until it is awaited.
+/// The ...AndSuspend methods send the request when they are called and return an
+/// LL::Task<LLSD>, which the caller co_awaits from a coroutine for the reply.
 ///
 /// Construct an HttpCoroutineAdapter giving it a name and policy Id. After
 /// any application specific setup call the post, put or get method.  The request

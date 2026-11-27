@@ -451,7 +451,8 @@ namespace tut
         boost::system::error_code ec;
         const LLSD sent = LlsdFromJson(boost::json::parse(conn.mSent[0], ec));
         ensure("parsed without error", !ec);
-        ensure_equals("internal error code", sent["error"]["code"].asInteger(), LLJSONRPCConnection::RPCError::INTERNAL_ERROR);
+        ensure_equals("internal error code", sent["error"]["code"].asInteger(),
+                      LLJSONRPCConnection::RPCError::INTERNAL_ERROR);
 
         // The exception's own message must never reach the client -- it can
         // carry paths, connection strings, or other internal detail.
