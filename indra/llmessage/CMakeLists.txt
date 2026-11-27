@@ -202,6 +202,14 @@ if (LL_TESTS)
     lltrustedmessageservice.cpp
     lltemplatemessagedispatcher.cpp
     )
+  # These tests stub a few methods of LLMessageSystem and LLTemplateMessageReader instead of linking them, so the
+  # classes' typeinfo (emitted with their key function) is not in the test. UBSan's vptr check references it from every
+  # translation unit it instruments, so the analysis build (-fsanitize=...undefined, see .github/workflows/analysis.yaml)
+  # drops that one check here; the other checks and the other libraries keep it. Other builds are not affected.
+  if (CMAKE_CXX_FLAGS MATCHES "-fsanitize=[^ ]*undefined")
+    set_property( SOURCE lltemplatemessagedispatcher.cpp lltrustedmessageservice.cpp llcoproceduremanager.cpp
+      APPEND PROPERTY COMPILE_OPTIONS -fno-sanitize=vptr)
+  endif ()
   set_property( SOURCE ${llmessage_TEST_SOURCE_FILES} PROPERTY LL_TEST_ADDITIONAL_LIBRARIES llmath llcorehttp)
   LL_ADD_PROJECT_UNIT_TESTS(llmessage "${llmessage_TEST_SOURCE_FILES}")
 
