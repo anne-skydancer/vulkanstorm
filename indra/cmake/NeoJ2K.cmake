@@ -27,12 +27,13 @@ option(NEOJ2K_STATIC "With USE_NEOJ2K, link neo-j2k statically (built from the r
 add_library(ll::neoj2k INTERFACE IMPORTED GLOBAL)
 
 if (USE_NEOJ2K AND NEOJ2K_STATIC)
-  # The neo-j2k release (v0.1.3: the 3p-neoj2k package's source too), built here as its static library (no link-time
+  # The neo-j2k revision of 3p-neoj2k v0.1.3-1, including the partial-download correction, built as its static library (no link-time
   # code generation in it, nothing exported, the library of the package without the DLL boundary): the same options
   # as 3p-neoj2k's build-cmd.sh, with the library alone. Bumping the release means the URL and its hash.
   include(FetchContent)
   set(NJ2K_BUILD_STATIC ON CACHE BOOL "" FORCE)
   set(NJ2K_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+  set(NJ2K_MODULE_OPENJP2 OFF CACHE BOOL "" FORCE)
   set(NJ2K_BUILD_TESTS OFF CACHE BOOL "" FORCE)
   set(NJ2K_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
   set(NJ2K_BUILD_BENCH OFF CACHE BOOL "" FORCE)
@@ -42,8 +43,8 @@ if (USE_NEOJ2K AND NEOJ2K_STATIC)
   set(NJ2K_WERROR OFF CACHE BOOL "" FORCE)
   set(NJ2K_SIMD AVX2 CACHE STRING "" FORCE)
   FetchContent_Declare(neoj2k_source
-      URL https://github.com/anne-skydancer/neo-j2k/archive/refs/tags/v0.1.3.tar.gz
-      URL_HASH SHA256=1a68eb98421714793298efaa2c335f3220c9afa608c22acd8192e9749a188d72
+      URL https://github.com/anne-skydancer/neo-j2k/archive/649201f8c5a6ddb0683b165a5616c56fdf18d3c3.tar.gz
+      URL_HASH SHA256=7ce005da2c31d5b1e9a61ffb879742fe0fa2431a65f46be1880f43f0f8c83f01
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
   FetchContent_MakeAvailable(neoj2k_source)
 
