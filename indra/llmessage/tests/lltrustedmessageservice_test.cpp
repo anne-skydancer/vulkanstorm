@@ -37,6 +37,11 @@
 
 LLPounceable<LLMessageSystem*, LLPounceableStatic> gMessageSystem;
 
+// The stubbed members below never touch their object, so the tests only need
+// a valid, aligned address to call them on: a null object is undefined
+// behaviour even when the callee ignores it.
+alignas(LLMessageSystem) static unsigned char sMessageSystemStorage[sizeof(LLMessageSystem)];
+
 LLMessageConfig::SenderTrust
 LLMessageConfig::getSenderTrustedness(const std::string& msg_name)
 {
@@ -91,6 +96,12 @@ namespace tut
                 lastMessageName = "uninitialised message name";
                 messageDispatched = false;
                 messageDispatchedAsBinary = false;
+                gMessageSystem = reinterpret_cast<LLMessageSystem*>(sMessageSystemStorage);
+            }
+
+            ~LLTrustedMessageServiceData()
+            {
+                gMessageSystem = nullptr;
             }
         };
 
