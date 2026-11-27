@@ -27,13 +27,13 @@
 #ifndef LL_LLTHREADSAFEQUEUE_H
 #define LL_LLTHREADSAFEQUEUE_H
 
-#include "llcoros.h"
-#include LLCOROS_MUTEX_HEADER
-#include <boost/fiber/timed_mutex.hpp>
-#include LLCOROS_CONDVAR_HEADER
+#include "llerror.h"
 #include "llexception.h"
+#include "llprofiler.h"
 #include "mutex.h"
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <queue>
 #include <string>
 
@@ -182,10 +182,10 @@ protected:
     size_t mCapacity;
     std::atomic<bool> mClosed; // <FS:Beq/> Try harder to stop the compiler optimising the mClosed state inside the loops
 
-    boost::fibers::timed_mutex mLock;
+    std::timed_mutex mLock;
     using lock_t = std::unique_lock<decltype(mLock)>;
-    boost::fibers::condition_variable_any mCapacityCond;
-    boost::fibers::condition_variable_any mEmptyCond;
+    std::condition_variable_any mCapacityCond;
+    std::condition_variable_any mEmptyCond;
 
     enum pop_result { EMPTY, DONE, WAITING, POPPED };
     // implementation logic, suitable for passing to tryLockUntil()
@@ -411,7 +411,7 @@ bool LLThreadSafeQueue<ElementT, QueueT>::tryPushUntil(
                     return true;
 
                 // Storage Full. Wait for signal.
-                if (LLCoros::cv_status::timeout == mCapacityCond.wait_until(lock, until))
+                if (std::cv_status::timeout == mCapacityCond.wait_until(lock, until))
                 {
                     // timed out -- formally we might recheck both conditions above
                     return false;
@@ -544,7 +544,7 @@ LLThreadSafeQueue<ElementT, QueueT>::tryPopUntil_(
         }
 
         // EMPTY or WAITING: wait for signal.
-        if (LLCoros::cv_status::timeout == mEmptyCond.wait_until(lock, until))
+        if (std::cv_status::timeout == mEmptyCond.wait_until(lock, until))
         {
             // timed out -- formally we might recheck
             // as it is, break loop

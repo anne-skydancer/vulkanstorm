@@ -58,7 +58,7 @@
 #include "llstoredmessage.h"
 #include "llpounceable.h"
 #include "llcoros.h"
-#include LLCOROS_MUTEX_HEADER
+#include <mutex>
 
 const U32 MESSAGE_MAX_STRINGS_LENGTH = 64;
 const U32 MESSAGE_NUMBER_OF_HASH_BUCKETS = 8192;
@@ -283,7 +283,7 @@ private:
     // Only LockMessageReader can set mPtr.
     friend class LockMessageReader;
     LLMessageReader* mPtr;
-    LLCoros::Mutex mMutex;
+    std::mutex mMutex;
 };
 
 /**
@@ -319,7 +319,7 @@ private:
     // capture a reference to LLMessageReaderPointer::mPtr
     decltype(LLMessageReaderPointer::mPtr)& mVar;
     // while holding a lock on LLMessageReaderPointer::mMutex
-    LLCoros::LockType mLock;
+    std::unique_lock<std::mutex> mLock;
 };
 
 /**

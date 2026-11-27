@@ -15,10 +15,9 @@
 #define LL_LLCOND_H
 
 #include "llunits.h"
-#include "llcoros.h"
-#include LLCOROS_MUTEX_HEADER
 #include "mutex.h"
 #include <chrono>
+#include <condition_variable>
 
 /**
  * LLCond encapsulates the pattern required to use a condition_variable. It
@@ -33,8 +32,9 @@
  * For a scalar DATA type, consider LLScalarCond instead. For specifically
  * bool, consider LLBoolCond.
  *
- * Use of LLCoros::ConditionVariable makes LLCond work between
- * coroutines as well as between threads.
+ * LLCond works between threads: it is a std::mutex and a
+ * std::condition_variable. A coroutine (an LL::Task) runs on the main loop,
+ * so it must not wait on one; it waits on an event instead.
  */
 template <typename DATA>
 class LLCond
@@ -45,16 +45,11 @@ public:
 private:
     // This is the DATA controlled by the condition_variable.
     value_type mData;
-    // condition_variable must be used in conjunction with a mutex. Use
-    // LLCoros::Mutex instead of std::mutex because the latter blocks
-    // the entire calling thread, whereas the former blocks only the current
-    // coroutine within the calling thread. Yet LLCoros::Mutex is safe to
-    // use across threads as well: it subsumes std::mutex functionality.
-    LLCoros::Mutex mMutex;
-    // Use LLCoros::ConditionVariable for the same reason.
-    LLCoros::ConditionVariable mCond;
-    using LockType = LLCoros::LockType;
-    using cv_status = LLCoros::cv_status;
+    // condition_variable must be used in conjunction with a mutex.
+    std::mutex mMutex;
+    std::condition_variable mCond;
+    using LockType = std::unique_lock<std::mutex>;
+    using cv_status = std::cv_status;
 
 public:
     /// LLCond can be explicitly initialized with a specific value for mData if

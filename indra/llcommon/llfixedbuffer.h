@@ -29,6 +29,7 @@
 
 #include "timer.h"
 #include <deque>
+#include <mutex>
 #include <string>
 #include "llstring.h"
 #include "llthread.h"
@@ -62,7 +63,7 @@ protected:
     void addWLine(const LLWString& line);
 
 protected:
-    LLCoros::Mutex mMutex ;
+    std::mutex mMutex ;
 };
 
 #endif //LL_FIXED_BUFFER_H

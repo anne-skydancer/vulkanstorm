@@ -30,6 +30,7 @@
 #include "llsdserialize.h"
 #include "lljoint.h"
 #include "llcallbacklist.h"
+#include "llexception.h"
 
 #include "llmatrix4a.h"
 #include <boost/bind.hpp>

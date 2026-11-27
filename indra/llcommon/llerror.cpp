@@ -47,6 +47,7 @@
 #include <utility>
 #include <vector>
 #include <cstring>
+#include <mutex>
 
 #include "llapp.h"
 #include "llapr.h"
@@ -516,7 +517,7 @@ namespace
         LLError::TimeFunction               mTimeFunction{nullptr};
 
         Recorders                           mRecorders;
-        LL_PROFILE_MUTEX_NAMED(LLCoros::RMutex, mRecorderMutex, "Log Recorders");
+        LL_PROFILE_MUTEX_NAMED(std::recursive_mutex, mRecorderMutex, "Log Recorders");
 
         int                                 mShouldLogCallCounter{0};
 

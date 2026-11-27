@@ -33,26 +33,9 @@
 #include "llexecutor.h"
 #include "lltask.h"
 #include "llsingleton.h"
-#include <boost/fiber/future/future.hpp>
-#include <boost/fiber/future/promise.hpp>
-#include <boost/fiber/recursive_mutex.hpp>
-#include "mutex.h"
 #include <string>
 #include <type_traits>
 #include <utility>
-
-// e.g. #include LLCOROS_MUTEX_HEADER
-// NOLINTNEXTLINE(bugprone-macro-parentheses): the replacement is a header name, which cannot be parenthesised
-#define LLCOROS_MUTEX_HEADER   <boost/fiber/mutex.hpp>
-// NOLINTNEXTLINE(bugprone-macro-parentheses): the replacement is a header name, which cannot be parenthesised
-#define LLCOROS_CONDVAR_HEADER <boost/fiber/condition_variable.hpp>
-
-namespace boost::fibers
-{
-class mutex;
-enum class cv_status;
-class condition_variable;
-}
 
 class LL_COMMON_API LLCoros: public LLSingleton<LLCoros>
 {
@@ -254,23 +237,6 @@ public:
     /// continue running into application shutdown. Throws Stop if LLCoros has
     /// been cleaned up.
     static void checkStop();
-
-    /**
-     * Aliases for promise and future (still used by WorkQueue::waitForResult()).
-     */
-    template <typename T>
-    using Promise = boost::fibers::promise<T>;
-    template <typename T>
-    using Future = boost::fibers::future<T>;
-    template <typename T>
-    static Future<T> getFuture(Promise<T>& promise) { return promise.get_future(); }
-
-    // use mutex, lock, condition_variable suitable for coroutines (until the standard ones replace them)
-    using Mutex = boost::fibers::mutex;
-    using RMutex = boost::fibers::recursive_mutex;
-    using LockType = std::unique_lock<Mutex>;
-    using cv_status = boost::fibers::cv_status;
-    using ConditionVariable = boost::fibers::condition_variable;
 
     /// for data local to each running coroutine
     template <typename T>

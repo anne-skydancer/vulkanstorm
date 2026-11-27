@@ -2,9 +2,9 @@
  * @file   sync.h
  * @author Nat Goodspeed
  * @date   2019-03-13
- * @brief  Synchronize coroutines within a test program so we can observe side
- *         effects. Certain test programs test coroutine synchronization
- *         mechanisms. Such tests usually want to interleave coroutine
+ * @brief  Synchronize threads within a test program so we can observe side
+ *         effects. Certain test programs test thread synchronization
+ *         mechanisms. Such tests usually want to interleave thread
  *         executions in strictly stepwise fashion. This class supports that
  *         paradigm.
  *
@@ -23,10 +23,8 @@
 #include "llcoros.h"
 
 /**
- * Instantiate Sync in any test in which we need to suspend one coroutine
- * until we're sure that another has had a chance to run. Simply calling
- * llcoro::suspend() isn't necessarily enough; that provides a chance for the
- * other to run, but doesn't guarantee that it has. If each coroutine is
+ * Instantiate Sync in any test in which we need to suspend one thread
+ * until we're sure that another has had a chance to run. If each thread is
  * consistent about calling Sync::bump() every time it wakes from any
  * suspension, Sync::yield() and yield_until() should at least ensure that
  * somebody else has had a chance to run.
@@ -43,20 +41,16 @@ public:
 
     /**
      * Bump mCond by n steps -- ideally, do this every time a participating
-     * coroutine wakes up from any suspension. The choice to bump() after
+     * thread wakes up from any suspension. The choice to bump() after
      * resumption rather than just before suspending is worth calling out:
-     * this practice relies on the fact that condition_variable::notify_all()
-     * merely marks a suspended coroutine ready to run, rather than
-     * immediately resuming it. This way, though, even if a coroutine exits
-     * before reaching its next suspend point, the other coroutine isn't
-     * left waiting forever.
+     * this way, even if a thread exits before reaching its next suspend
+     * point, the other thread isn't left waiting forever.
      */
     void bump(int n=1)
     {
-        // Calling mCond.set_all(mCond.get() + n) would be great for
-        // coroutines -- but not so good between kernel threads -- it would be
-        // racy. Make the increment atomic by calling update_all(), which runs
-        // the passed lambda within a mutex lock.
+        // Calling mCond.set_all(mCond.get() + n) would be racy between
+        // threads. Make the increment atomic by calling update_all(), which
+        // runs the passed lambda within a mutex lock.
         int updated;
         mCond.update_all(
             [&n, &updated](int& data)
@@ -65,10 +59,10 @@ public:
                 // Capture the new value for possible logging purposes.
                 updated = data;
             });
-        // In the multi-threaded case, this log message could be a bit
-        // misleading, as it will be emitted after waiting threads have
-        // already awakened. But emitting the log message within the lock
-        // would seem to hold the lock longer than we really ought.
+        // This log message could be a bit misleading, as it will be emitted
+        // after waiting threads have already awakened. But emitting the log
+        // message within the lock would seem to hold the lock longer than we
+        // really ought.
         LL_DEBUGS() << llcoro::logname() << " bump(" << n << ") -> " << updated << LL_ENDL;
     }
 

@@ -44,7 +44,7 @@ void LLMutex::lock()
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
 
     // LLMutex is not coroutine aware and should not be used from a coroutine
-    // If your code is running in a coroutine, you should use LLCoros::Mutex instead
+    // If your code is running in a coroutine, you should use std::mutex instead
     // NOTE:  If the stack trace you're staring at contains non-thread-safe code,
     // you should use LLAppViewer::instance().postToMainThread() to shuttle execution
     // back to the main loop.

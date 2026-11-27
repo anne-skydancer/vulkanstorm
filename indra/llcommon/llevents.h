@@ -37,6 +37,7 @@
 #include <set>
 #include <vector>
 #include <deque>
+#include <mutex>
 #include <functional>
 
 #include <boost/signals2.hpp>
@@ -592,7 +593,7 @@ private:
     LLHandle<LLEventPumps> mRegistry;
 
     std::string mName;
-    LLCoros::Mutex mConnectionListMutex;
+    std::mutex mConnectionListMutex;
 
 protected:
     virtual LLBoundListener listen_impl(const std::string& name, const LLEventListener&,

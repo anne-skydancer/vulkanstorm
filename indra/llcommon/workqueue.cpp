@@ -18,15 +18,12 @@
 // external library headers
 // other Linden headers
 #include "llapp.h"
-#include "llcoros.h"
-#include LLCOROS_MUTEX_HEADER
 #include "llerror.h"
 #include "llevents.h"
 #include "llexception.h"
 #include "stringize.h"
 
-using Mutex = LLCoros::Mutex;
-using Lock  = LLCoros::LockType;
+#include <mutex>
 
 /*****************************************************************************
 *   WorkQueueBase
@@ -64,17 +61,8 @@ LL::WorkQueueBase::~WorkQueueBase()
     if (!mListenerName.empty() && !mPumpHandle.isDead())
     {
         // Due to shutdown order issues, use handle, not a singleton
-        // and ignore fiber issue.
-        try
-        {
-            LLEventPumps* pump = mPumpHandle.get();
-            pump->obtain("LLApp").stopListening(mListenerName);
-        }
-        // NOLINTNEXTLINE(bugprone-empty-catch): the mutex is already down at shutdown, nothing left to stop
-        catch (const boost::fibers::lock_error&)
-        {
-            // Likely mutex is down, ignore
-        }
+        LLEventPumps* pump = mPumpHandle.get();
+        pump->obtain("LLApp").stopListening(mListenerName);
     }
 }
 
@@ -133,13 +121,13 @@ std::string LL::WorkQueueBase::makeName(const std::string& name)
         return name;
 
     static U32 discriminator = 0;
-    static Mutex mutex;
+    static std::mutex mutex;
     U32 num;
     {
         // Protect discriminator from concurrent access by different threads.
         // It can't be thread_local, else two racing threads will come up with
         // the same name.
-        Lock lk(mutex);
+        std::scoped_lock lk(mutex);
         num = discriminator++;
     }
     return STRINGIZE("WorkQueue" << num);
@@ -252,16 +240,6 @@ void LL::WorkQueueBase::callWork(const Work& work)
 void LL::WorkQueueBase::error(const std::string& msg)
 {
     LL_ERRS("WorkQueue") << msg << LL_ENDL;
-}
-
-void LL::WorkQueueBase::checkCoroutine(const std::string& method)
-{
-    // By convention, the default coroutine on each thread has an empty name
-    // string. See also LLCoros::logname().
-    if (LLCoros::getName().empty())
-    {
-        LLTHROW(Error("Do not call " + method + " from a thread's default coroutine"));
-    }
 }
 
 /*****************************************************************************

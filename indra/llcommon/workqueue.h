@@ -122,18 +122,6 @@ namespace LL
         bool postTo(const weak_t& target, CALLABLE&& callable, FOLLOWUP&& callback,
                     ARGS&&... args);
 
-        /**
-         * Post work to another WorkQueue, blocking the calling coroutine
-         * until then, returning the result to caller on completion. Optional
-         * final argument is TimePoint for WorkSchedule.
-         *
-         * In general, we assume that each thread's default coroutine is busy
-         * servicing its WorkQueue or whatever. To try to prevent mistakes, we
-         * forbid calling waitForResult() from a thread's default coroutine.
-         */
-        template <typename CALLABLE, typename... ARGS>
-        auto waitForResult(CALLABLE&& callable, ARGS&&... args);
-
         /*--------------------------- worker API ---------------------------*/
 
         /**
@@ -189,14 +177,6 @@ namespace LL
         template <typename CALLABLE, typename FOLLOWUP>
         struct MakeReplyLambda<CALLABLE, FOLLOWUP, void>;
 
-        /// general case: arbitrary C++ return type
-        template <typename CALLABLE, typename RETURNTYPE>
-        struct WaitForResult;
-        /// specialize for CALLABLE returning void
-        template <typename CALLABLE>
-        struct WaitForResult<CALLABLE, void>;
-
-        static void checkCoroutine(const std::string& method);
         static void error(const std::string& msg);
         static std::string makeName(const std::string& name);
         void callWork(const Work& work);
@@ -561,86 +541,6 @@ namespace LL
         }
         // target no longer exists
         return false;
-    }
-
-    /// general case: arbitrary C++ return type
-    template <typename CALLABLE, typename RETURNTYPE>
-    struct WorkQueueBase::WaitForResult
-    {
-        template <typename... ARGS>
-        auto operator()(WorkQueueBase* self, CALLABLE&& callable, ARGS&&... args)
-        {
-            LLCoros::Promise<RETURNTYPE> promise;
-            bool posted = self->post(
-                // We dare to bind a reference to Promise because it's
-                // specifically designed for cross-thread communication.
-                [&promise, callable = std::move(callable)]()
-                mutable {
-                    try
-                    {
-                        // call the caller's callable and trigger promise with result
-                        promise.set_value(callable());
-                    }
-                    catch (...)
-                    {
-                        promise.set_exception(std::current_exception());
-                    }
-                },
-                // if caller passed a TimePoint, pass it to post()
-                std::forward<ARGS>(args)...);
-            if (! posted)
-            {
-                LLTHROW(WorkQueueBase::Closed());
-            }
-            auto future{ LLCoros::getFuture(promise) };
-            // now, on the calling thread, wait for that result
-            LLCoros::TempStatus st("waiting for WorkQueue::waitForResult()");
-            return future.get();
-        }
-    };
-
-    /// specialize for CALLABLE returning void
-    template <typename CALLABLE>
-    struct WorkQueueBase::WaitForResult<CALLABLE, void>
-    {
-        template <typename... ARGS>
-        void operator()(WorkQueueBase* self, CALLABLE&& callable, ARGS&&... args)
-        {
-            LLCoros::Promise<void> promise;
-            bool posted = self->post(
-                // &promise is designed for cross-thread access
-                [&promise, callable = std::move(callable)]()
-                mutable {
-                    try
-                    {
-                        callable();
-                        promise.set_value();
-                    }
-                    catch (...)
-                    {
-                        promise.set_exception(std::current_exception());
-                    }
-                },
-                // if caller passed a TimePoint, pass it to post()
-                std::forward<ARGS>(args)...);
-            if (! posted)
-            {
-                LLTHROW(WorkQueueBase::Closed());
-            }
-            auto future{ LLCoros::getFuture(promise) };
-            // block until set_value()
-            LLCoros::TempStatus st("waiting for void WorkQueue::waitForResult()");
-            future.get();
-        }
-    };
-
-    template <typename CALLABLE, typename... ARGS>
-    auto WorkQueueBase::waitForResult(CALLABLE&& callable, ARGS&&... args)
-    {
-        checkCoroutine("waitForResult()");
-        // derive callable's return type so we can specialize for void
-        return WaitForResult<CALLABLE, decltype(std::forward<CALLABLE>(callable)())>()
-            (this, std::forward<CALLABLE>(callable), std::forward<ARGS>(args)...);
     }
 
 } // namespace LL

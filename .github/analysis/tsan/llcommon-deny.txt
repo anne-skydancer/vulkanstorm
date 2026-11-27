@@ -1,9 +1,6 @@
 # The llcommon integration tests ThreadSanitizer does not run: the deny list. Every other test of the library runs.
-# Boost.Fiber is prebuilt without TSan fibre annotations, so a test that switches fibres (coroutines) would report
-# races that are not there; the tests that start child processes are left out for the same reason (TSan and fork).
+# The tests that start child processes are left out (TSan and fork).
 # A name here that is no test of the library is a warning in the plan job's summary.
-llcond
-workqueue
 llleap
 llprocess
 llprocessstdin
