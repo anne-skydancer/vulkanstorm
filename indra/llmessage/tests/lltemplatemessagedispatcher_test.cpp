@@ -38,6 +38,12 @@
 
 LLPounceable<LLMessageSystem*, LLPounceableStatic> gMessageSystem;
 
+// The stubbed members below never touch their object, so the tests only need
+// a valid, aligned address to call them on: a null object or reference is
+// undefined behaviour even when the callee ignores it.
+alignas(LLTemplateMessageReader) static unsigned char sReaderStorage[sizeof(LLTemplateMessageReader)];
+alignas(LLMessageSystem) static unsigned char sMessageSystemStorage[sizeof(LLMessageSystem)];
+
 // sensor test doubles
 bool gClearRecvWasCalled = false;
 void LLMessageSystem::clearReceiveState(void)
@@ -86,6 +92,12 @@ namespace tut
                 gClearRecvWasCalled = false;
                 gValidateMessage = false;
                 mMessage["body"]["binary-template-data"] = std::vector<U8>();
+                gMessageSystem = reinterpret_cast<LLMessageSystem*>(sMessageSystemStorage);
+            }
+
+            ~LLTemplateMessageDispatcherData()
+            {
+                gMessageSystem = nullptr;
             }
 
             LLSD mMessage;
@@ -108,8 +120,8 @@ namespace tut
     template<> template<>
     void object::test<1>()
     {
-        LLTemplateMessageReader* pReader = NULL;
-        LLTemplateMessageDispatcher t(*pReader);
+        LLTemplateMessageReader& reader = *reinterpret_cast<LLTemplateMessageReader*>(sReaderStorage);
+        LLTemplateMessageDispatcher t(reader);
         t.dispatch(mMessageName, mMessage, mResponsePtr);
         ensure(! gUdpDispatchWasCalled);
         ensure(! gClearRecvWasCalled);
@@ -119,8 +131,8 @@ namespace tut
     template<> template<>
     void object::test<2>()
     {
-        LLTemplateMessageReader* pReader = NULL;
-        LLTemplateMessageDispatcher t(*pReader);
+        LLTemplateMessageReader& reader = *reinterpret_cast<LLTemplateMessageReader*>(sReaderStorage);
+        LLTemplateMessageDispatcher t(reader);
         gValidateMessage = true;
         std::vector<U8> vector_data;
         fillVector(vector_data, gBinaryTemplateData);
@@ -133,8 +145,8 @@ namespace tut
     template<> template<>
     void object::test<3>()
     {
-        LLTemplateMessageReader* pReader = NULL;
-        LLTemplateMessageDispatcher t(*pReader);
+        LLTemplateMessageReader& reader = *reinterpret_cast<LLTemplateMessageReader*>(sReaderStorage);
+        LLTemplateMessageDispatcher t(reader);
         std::vector<U8> vector_data;
         fillVector(vector_data, gBinaryTemplateData);
         mMessage["body"]["binary-template-data"] = vector_data;
@@ -147,8 +159,8 @@ namespace tut
     template<> template<>
     void object::test<4>()
     {
-        LLTemplateMessageReader* pReader = NULL;
-        LLTemplateMessageDispatcher t(*pReader);
+        LLTemplateMessageReader& reader = *reinterpret_cast<LLTemplateMessageReader*>(sReaderStorage);
+        LLTemplateMessageDispatcher t(reader);
         gValidateMessage = true;
         std::vector<U8> vector_data;
         fillVector(vector_data, gBinaryTemplateData);
