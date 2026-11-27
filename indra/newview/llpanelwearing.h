@@ -98,7 +98,7 @@ private:
     void onWearableItemsListRightClick(LLUICtrl* ctrl, S32 x, S32 y);
     void onTempAttachmentsListRightClick(LLUICtrl* ctrl, S32 x, S32 y);
 
-    LL::Task<void> getAttachmentLimitsCoro(std::string url);
+    LL::Task<void> getAttachmentLimitsCoro(std::string url, LLHandle<LLPanel> panel_handle);
 
     // <FS:Ansariel> FIRE-22484: Double-click wear in outfits list
     void onDoubleClick();
