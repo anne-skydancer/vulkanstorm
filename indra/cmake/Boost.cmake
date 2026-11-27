@@ -16,20 +16,6 @@ use_prebuilt_binary(boost)
 # with the address size.
 set(addrsfx "-x${ADDRESS_SIZE}")
 
-find_library(BOOST_CONTEXT_LIBRARY
-    NAMES
-    boost_context
-    boost_context-mt
-    boost_context-mt${addrsfx}
-    PATHS "${ARCH_PREBUILT_DIRS_RELEASE}" REQUIRED NO_DEFAULT_PATH)
-
-find_library(BOOST_FIBER_LIBRARY
-    NAMES
-    boost_fiber
-    boost_fiber-mt
-    boost_fiber-mt${addrsfx}
-    PATHS "${ARCH_PREBUILT_DIRS_RELEASE}" REQUIRED NO_DEFAULT_PATH)
-
 find_library(BOOST_FILESYSTEM_LIBRARY
     NAMES
     boost_filesystem
@@ -68,8 +54,6 @@ find_library(BOOST_WAVE_LIBRARY
 # </FS:Ansariel>
 
 target_link_libraries(ll::boost INTERFACE
-    ${BOOST_FIBER_LIBRARY}
-    ${BOOST_CONTEXT_LIBRARY}
     ${BOOST_FILESYSTEM_LIBRARY}
     ${BOOST_PROGRAMOPTIONS_LIBRARY}
     ${BOOST_THREAD_LIBRARY}

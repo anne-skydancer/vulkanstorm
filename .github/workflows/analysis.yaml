@@ -128,9 +128,8 @@ jobs:
       TARGETS: ${{ needs.plan.outputs.targets }}
       # Sanitizer reports never change a test's exit code (exitcode=0) and the run goes on after one
       # (halt_on_error=0, built with -fsanitize-recover=address), so the report, not the first failure, says what is
-      # wrong. One report file per process. detect_stack_use_after_return=0: Boost.Fiber and ucontext switch
-      # stacks, which that check reports as false use-after-return.
-      ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=0:halt_on_error=0:allow_user_segv_handler=0:exitcode=0:log_path=${{ github.workspace }}/san/report
+      # wrong. One report file per process.
+      ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:halt_on_error=0:allow_user_segv_handler=0:exitcode=0:log_path=${{ github.workspace }}/san/report
       LSAN_OPTIONS: exitcode=0:log_path=${{ github.workspace }}/san/report
       UBSAN_OPTIONS: print_stacktrace=1:log_path=${{ github.workspace }}/san/report
       # AGENTS.md: compiled fixture and integration tests use the repository's .fixture-tmp folder
@@ -231,8 +230,7 @@ jobs:
         run: |
           mkdir -p analysis-out san "$TMPDIR"
           python scripts/ci_analysis.py canary --mode tsan --dir build-tsan --out analysis-out
-      # Every test of the library except the deny list (.github/analysis/tsan/<lib>-deny.txt): Boost.Fiber is
-      # prebuilt without TSan fibre annotations, so coroutine tests would report races that are not there.
+      # Every test of the library except the deny list (.github/analysis/tsan/<lib>-deny.txt).
       # Two jobs at a time: TSan slows threads enough that timing-based tests are flaky under more load.
       - name: Build the library and run its tests
         timeout-minutes: 90
