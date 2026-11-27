@@ -662,7 +662,7 @@ LL::Task<void> LLWebRTCVoiceClient::voiceConnectionCoro()
             // execution time.
             // Could help with voice updates making for smoother
             // voice when we're busy.
-            co_await llcoro::co::suspendUntilTimeout(UPDATE_THROTTLE_SECONDS);
+            co_await llcoro::suspendUntilTimeout(UPDATE_THROTTLE_SECONDS);
             if (sShuttingDown) co_return; // 'this' migh already be invalid
             bool voiceEnabled = mVoiceEnabled;
 

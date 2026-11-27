@@ -14,8 +14,7 @@
  * Two rules:
  * - A Task is awaited by the task that started it. A task runs in the record of the task it was started in (name,
  *   status, local storage), and that record goes when that task ends: a task that another task awaited later would
- *   resume in a record that may be gone. The Task remembers its starter's record and the awaiter checks it (the rule
- *   the fibres had: a call in progress cannot change fibre).
+ *   resume in a record that may be gone. The Task remembers its starter's record and the awaiter checks it.
  * - Parameters of a coroutine returning a Task are taken BY VALUE: a reference would dangle once the caller returns.
  *   A lambda that is itself a coroutine and captures is safe only through LLCoros::launch() and Executor::launch(),
  *   which keep the lambda alive in the task's root frame; anywhere else its captures dangle after the first
@@ -139,8 +138,8 @@ public:
     bool done() const noexcept { return mHandle && mHandle.done(); }
     explicit operator bool() const noexcept { return bool(mHandle); }
 
-    /// The result of a finished task, rethrowing what it threw. For code that is not itself a coroutine (the fibre
-    /// bridge, tests): a coroutine uses co_await.
+    /// The result of a finished task, rethrowing what it threw. For code that is not itself a coroutine
+    /// (tests): a coroutine uses co_await.
     T get()
     {
         assert(done());

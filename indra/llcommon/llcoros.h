@@ -32,32 +32,14 @@
 #include "llexception.h"
 #include "llexecutor.h"
 #include "lltask.h"
-#include <boost/fiber/fss.hpp>
+#include "llsingleton.h"
 #include <boost/fiber/future/future.hpp>
 #include <boost/fiber/future/promise.hpp>
 #include <boost/fiber/recursive_mutex.hpp>
 #include "mutex.h"
-#include "llsingleton.h"
-#include "llinstancetracker.h"
-#include <functional>
-#include <memory>
 #include <string>
 #include <type_traits>
-#include <exception>
-#include <queue>
 #include <utility>
-
-/**
- * The build switch of the coroutine migration (doc/clean/plan.md, "Coroutines"), which back end the co_await forms of
- * the llcoro:: primitives (llcoro::co in lleventcoro.h) and LLCoros::launch() of a Task callable use:
- * - 0, the fibre bridge: a Task is launched in a fibre as before and every co_await blocks that fibre. Nothing
- *   suspends at the C++20 level, so the run order is today's whichever code is converted.
- * - 1, the native executor: a Task is a coroutine on LL::Executor and co_await really suspends.
- * Both back ends are always compiled and tested; the switch only picks what the viewer calls.
- */
-#ifndef LL_CORO_NATIVE
-#define LL_CORO_NATIVE 0
-#endif
 
 // e.g. #include LLCOROS_MUTEX_HEADER
 // NOLINTNEXTLINE(bugprone-macro-parentheses): the replacement is a header name, which cannot be parenthesised
@@ -65,12 +47,12 @@
 // NOLINTNEXTLINE(bugprone-macro-parentheses): the replacement is a header name, which cannot be parenthesised
 #define LLCOROS_CONDVAR_HEADER <boost/fiber/condition_variable.hpp>
 
-
-    namespace boost::fibers {
-        class mutex;
-        enum class cv_status;
-        class condition_variable;
-    }
+namespace boost::fibers
+{
+class mutex;
+enum class cv_status;
+class condition_variable;
+}
 
 class LL_COMMON_API LLCoros: public LLSingleton<LLCoros>
 {
@@ -80,10 +62,10 @@ class LL_COMMON_API LLCoros: public LLSingleton<LLCoros>
     void cleanupSingleton() override;
 public:
     /// Once the app is quitting (every waiting coroutine has had Stopping
-    /// queued), let the executor's tasks run out and pump the fibre scheduler
-    /// up to 10 times so the stopped coroutines unwind while the systems they
-    /// use still exist. Logs the active coroutines before and after. Safe to
-    /// call more than once. Main fibre only.
+    /// queued), pump the executor up to 10 times so the stopped coroutines
+    /// unwind while the systems they use still exist, then log and destroy
+    /// the ones that are still waiting. Logs the active coroutines before and
+    /// after. Safe to call more than once. Main thread only.
     void drain(const std::string& when);
 
     // For debugging, return true if on the main coroutine for the current thread
@@ -96,101 +78,47 @@ public:
     // llassert(LLCoros::on_main_thread_main_coro())
     static bool on_main_thread_main_coro();
 
-    /// The viewer's use of the term "coroutine" became deeply embedded before
-    /// the industry term "fiber" emerged to distinguish userland threads from
-    /// simpler, more transient kinds of coroutines. Semantically they've
-    /// always been fibers. But at this point in history, we're pretty much
-    /// stuck with the term "coroutine."
-    using coro = boost::fibers::fiber;
-    /// Canonical callable type
-    using callable_t = std::function<void()>;
-
     /**
      * Create and start running a new coroutine with specified name. The name
      * string you pass is a suggestion; it will be tweaked for uniqueness. The
      * actual name is returned to you.
      *
-     * Usage looks like this, for (e.g.) two coroutine parameters:
+     * A coroutine is an LL::Task (lltask.h) running on the main loop's
+     * executor. @a callable is nullary and returns the Task of the coroutine,
+     * which takes its parameters BY VALUE (reference parameters dangle once
+     * the coroutine suspends). Usage looks like this, for (e.g.) two
+     * coroutine parameters:
      * @code
      * class MyClass
      * {
      * public:
      *     ...
-     *     // Do NOT NOT NOT accept reference params!
-     *     // Pass by value only!
-     *     void myCoroutineMethod(std::string, LLSD);
+     *     LL::Task<void> myCoroutineMethod(std::string, LLSD);
      *     ...
      * };
      * ...
      * std::string name = LLCoros::instance().launch(
-     *    "mycoro", boost::bind(&MyClass::myCoroutineMethod, this,
-     *                          "somestring", LLSD(17));
+     *    "mycoro", [this] { return myCoroutineMethod("somestring", LLSD(17)); });
      * @endcode
      *
-     * Your function/method can accept any parameters you want -- but ONLY BY
-     * VALUE! Reference parameters are a BAD IDEA! You Have Been Warned. See
-     * DEV-32777 comments for an explanation.
-     *
-     * Pass a nullary callable. It works to directly pass a nullary free
-     * function (or static method); for other cases use a lambda expression,
-     * std::bind() or boost::bind(). Of course, for a non-static class method,
-     * the first parameter must be the class instance. Any other parameters
-     * should be passed via the enclosing expression.
+     * The callable should be a plain function, or a lambda that is NOT itself
+     * the coroutine, returning the Task of a by-value coroutine. A lambda
+     * that is itself a coroutine and captures is safe only here, because the
+     * launch keeps it alive for the life of the task (see lltask.h).
      *
      * launch() tweaks the suggested name so it won't collide with any
-     * existing coroutine instance, creates the coroutine instance, registers
-     * it with the tweaked name and runs it until its first wait. At that
-     * point it returns the tweaked name.
-     */
-    std::string launch(const std::string& prefix, const callable_t& callable);
-
-    /**
-     * Launch a coroutine that is an LL::Task: @a callable returns the Task. Everything said above applies, and so
-     * does the rule for parameters: the callable should be a plain function (or a lambda that is NOT itself the
-     * coroutine) that returns the Task of a coroutine taking its parameters by value, for example
-     * <tt>[this, url] { return fooCoro(url); }</tt>. A lambda that is itself a coroutine and captures is safe only
-     * here, because the launch keeps it alive for the life of the task (see lltask.h).
-     *
-     * With LL_CORO_NATIVE the task runs on the executor (launchNative), without it in a fibre that blocks at every
-     * co_await (launchBridged). Both are always compiled and tested; the macro only picks which one this calls.
+     * existing coroutine instance, creates the coroutine, registers it with
+     * the tweaked name and runs it until its first wait. It does not run
+     * other ready coroutines: those run when the main loop pumps the executor
+     * once per frame (LL::Executor::pump()). At the first wait it returns the
+     * tweaked name.
      */
     template<typename F>
         requires LL::TaskFactory<std::decay_t<F>>
     std::string launch(const std::string& prefix, F&& callable)
     {
-        if constexpr (LL_CORO_NATIVE)
-        {
-            return launchNative(prefix, std::forward<F>(callable));
-        }
-        else
-        {
-            return launchBridged(prefix, std::forward<F>(callable));
-        }
-    }
-
-    /// launch() of a Task callable on the executor
-    template<typename F>
-        requires LL::TaskFactory<std::decay_t<F>>
-    std::string launchNative(const std::string& prefix, F&& callable)
-    {
         const std::string name(generateDistinctName(prefix));
         mExecutor.launch(name, std::decay_t<F>(std::forward<F>(callable)));
-        return name;
-    }
-
-    /// launch() of a Task callable in a fibre: every co_await of llcoro::bridge blocks the fibre, so the task has
-    /// run to its end when the callable returns
-    template<typename F>
-        requires LL::TaskFactory<std::decay_t<F>>
-    std::string launchBridged(const std::string& prefix, F&& callable)
-    {
-        const std::string name(generateDistinctName(prefix));
-        auto shared = std::make_shared<std::decay_t<F>>(std::forward<F>(callable));
-        launchFiber(name, [shared]()
-        {
-            LL::Task<void> task = (*shared)();
-            finishBridged(task);
-        });
         return name;
     }
 
@@ -215,15 +143,15 @@ public:
     static std::string getName();
 
     /**
-     * rethrow() is called by the thread's main fiber to propagate an
-     * exception from any coroutine into the main fiber, where it can engage
-     * the normal unhandled-exception machinery, up to and including crash
-     * reporting.
+     * rethrow() is called by the main loop, after it pumps the executor, to
+     * propagate an exception from any coroutine into the main loop, where it
+     * can engage the normal unhandled-exception machinery, up to and
+     * including crash reporting.
      *
-     * LLCoros maintains a queue of otherwise-uncaught exceptions from
-     * terminated coroutines. Each call to rethrow() pops the first of those
-     * and rethrows it. When the queue is empty (normal case), rethrow() is a
-     * no-op.
+     * The executor keeps a queue of otherwise-uncaught exceptions from
+     * terminated coroutines (Stop and LLContinueError are only logged). Each
+     * call to rethrow() pops the first of those and rethrows it. When the
+     * queue is empty (normal case), rethrow() is a no-op.
      */
     void rethrow();
 
@@ -234,18 +162,8 @@ public:
      */
     static std::string logname();
 
-    /**
-     * For delayed initialization. To be clear, this will only affect
-     * coroutines launched @em after this point. The underlying facility
-     * provides no way to alter the stack size of any running coroutine.
-     */
-    void setStackSize(S32 stacksize);
-
     /// diagnostic
     void printActiveCoroutines(const std::string& when=std::string());
-
-    /// get the current coro::id for those who really really care
-    static coro::id get_self();
 
     /**
      * Most coroutines, most of the time, don't "consume" the events for which
@@ -338,10 +256,7 @@ public:
     static void checkStop();
 
     /**
-     * Aliases for promise and future. An older underlying future implementation
-     * required us to wrap future; that's no longer needed. However -- if it's
-     * important to restore kill() functionality, we might need to provide a
-     * proxy, so continue using the aliases.
+     * Aliases for promise and future (still used by WorkQueue::waitForResult()).
      */
     template <typename T>
     using Promise = boost::fibers::promise<T>;
@@ -350,14 +265,9 @@ public:
     template <typename T>
     static Future<T> getFuture(Promise<T>& promise) { return promise.get_future(); }
 
-    // use mutex, lock, condition_variable suitable for coroutines
+    // use mutex, lock, condition_variable suitable for coroutines (until the standard ones replace them)
     using Mutex = boost::fibers::mutex;
     using RMutex = boost::fibers::recursive_mutex;
-    // With C++17, LockType is deprecated: at this point we can directly
-    // declare 'std::unique_lock lk(some_mutex)' without explicitly stating
-    // the mutex type. Sadly, making LockType an alias template for
-    // std::unique_lock doesn't work the same way: Class Template Argument
-    // Deduction only works for class templates, not alias templates.
     using LockType = std::unique_lock<Mutex>;
     using cv_status = boost::fibers::cv_status;
     using ConditionVariable = boost::fibers::condition_variable;
@@ -368,38 +278,10 @@ public:
 
 private:
     std::string generateDistinctName(const std::string& prefix) const;
-    std::string launchFiber(const std::string& name, const callable_t& callable);
-    static void finishBridged(LL::Task<void>& task);
-    void toplevel(std::string name, callable_t callable);
     using CoroData = LL::CoroData;
-    static CoroData& get_CoroData(const std::string& caller);
-    void saveException(const std::string& name, const std::exception_ptr& exc);
+    static CoroData& get_CoroData();
 
-    struct ExceptionData
-    {
-        ExceptionData(std::string nm, std::exception_ptr exc):
-            name(std::move(nm)),
-            exception(std::move(exc))
-        {}
-        // name of coroutine that originally threw this exception
-        std::string name;
-        // the thrown exception
-        std::exception_ptr exception;
-    };
-    std::queue<ExceptionData> mExceptionQueue;
-
-    // MAINT-2724: default coroutine stack size too small on Windows.
-    // Previously we used
-    // boost::context::guarded_stack_allocator::default_stacksize();
-    // empirically this is insufficient.
-    S32 mStackSize{1024*1024};
-
-    // Identify the current fibre's CoroData (a task's is Executor::currentRecord()). This pointer isn't static
-    // because it's a member of an LLSingleton, and we rely on it being
-    // cleaned up in proper dependency order.
-    boost::fibers::fiber_specific_ptr<CoroData> mCurrent;
-
-    // Runs the tasks. Declared after mCurrent so that it is destroyed first.
+    // Runs the tasks; the main loop pumps it once per frame.
     LL::Executor mExecutor;
 };
 

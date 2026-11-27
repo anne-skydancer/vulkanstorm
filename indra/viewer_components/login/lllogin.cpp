@@ -171,10 +171,10 @@ LL::Task<void> LLLogin::Impl::loginCoro(std::string uri, LLSD login_params)
             // returns. Subsequent responses, of course, must be awaited
             // without posting again.
             for (mAuthResponse = validateResponse(loginReplyPump.getName(),
-                                                  co_await llcoro::co::postAndSuspend(request, xmlrpcPump, loginReplyPump, "reply"));
+                                                  co_await llcoro::postAndSuspend(request, xmlrpcPump, loginReplyPump, "reply"));
                  mAuthResponse["status"].asString() == "Downloading";
                  mAuthResponse = validateResponse(loginReplyPump.getName(),
-                                                  co_await llcoro::co::suspendUntilEventOn(loginReplyPump)))
+                                                  co_await llcoro::suspendUntilEventOn(loginReplyPump)))
             {
                 // Still Downloading -- send progress update.
                 sendProgressEvent("offline", "downloading");

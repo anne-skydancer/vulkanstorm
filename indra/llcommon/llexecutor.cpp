@@ -93,6 +93,18 @@ std::uint64_t newLocalKey() noexcept
     return sNext.fetch_add(1, std::memory_order_relaxed);
 }
 
+CoroData& currentOrThreadRecord()
+{
+    if (CoroData* task = sRecord)
+    {
+        return *task;
+    }
+    // Each thread gets its own record, with a distinct LLInstanceTracker key: the tracker's map spans all threads.
+    static std::atomic<int> which_thread(0);
+    static thread_local CoroData sMain(which_thread++);
+    return sMain;
+}
+
 namespace detail
 {
 const void* currentTaskOwner() noexcept

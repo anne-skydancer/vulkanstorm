@@ -315,7 +315,7 @@ namespace Details
                         << ", sender: " << mSenderIp << LL_ENDL;
                         // </FS:Beq>
 
-                    co_await llcoro::co::suspendUntilTimeout(waitToRetry);
+                    co_await llcoro::suspendUntilTimeout(waitToRetry);
 
                     if (mDone || gDisconnected)
                         break;

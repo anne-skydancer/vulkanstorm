@@ -2,11 +2,9 @@
 # Boost.Fiber is prebuilt without TSan fibre annotations, so a test that switches fibres (coroutines) would report
 # races that are not there; the tests that start child processes are left out for the same reason (TSan and fork).
 # A name here that is no test of the library is a warning in the plan job's summary.
-lleventcoro
 llcond
 workqueue
 llleap
 llprocess
 llprocessstdin
 llsdserialize
-llcoros_order

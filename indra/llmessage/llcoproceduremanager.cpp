@@ -35,8 +35,7 @@
 #include <limits>
 #include <stdexcept>
 
-#include <boost/fiber/buffered_channel.hpp>
-
+#include "llchannel.h"
 #include "llexception.h"
 #include "stringize.h"
 
@@ -114,24 +113,21 @@ private:
         CoProcedure_t mProc;
     };
 
-    // we use a buffered_channel here rather than unbuffered_channel since we want to be able to
-    // push values without blocking,even if there's currently no one calling a pop operation (due to
-    // fiber running right now)
-    typedef boost::fibers::buffered_channel<QueuedCoproc::ptr_t>  CoprocQueue_t;
+    // a buffered channel: we want to be able to push values without blocking, even if there's currently no
+    // invoker waiting in a pop operation (because it is running a coprocedure)
+    typedef LL::Channel<QueuedCoproc::ptr_t>  CoprocQueue_t;
     // Use shared_ptr to control the lifespan of our CoprocQueue_t instance
     // because the consuming coroutine might outlive this LLCoprocedurePool
     // instance.
     typedef std::shared_ptr<CoprocQueue_t> CoprocQueuePtr;
     static size_t                          checkedQueueSize(size_t capacity, size_t workers)
     {
-        // buffered_channel requires a power of two and reserves one slot.
-        // count() exposes S32: bound capacity so pending + active fits that API,
-        // and an extreme capacity cannot overflow Boost's slot-array allocation.
-        if (!workers || capacity <= workers || capacity < 2 || (capacity & (capacity - 1)))
+        // The queue must be able to fit the pool. count() exposes S32: bound capacity so pending + active fits
+        // that API.
+        if (!workers || capacity <= workers)
             throw std::invalid_argument("Invalid coprocedure queue capacity or worker count");
-        if (capacity > size_t(std::numeric_limits<S32>::max()) ||
-            capacity > size_t(std::numeric_limits<std::ptrdiff_t>::max()) / sizeof(CoprocQueue_t::value_type) - 1)
-            throw std::length_error("Coprocedure queue capacity exceeds count or allocation range");
+        if (capacity > size_t(std::numeric_limits<S32>::max()))
+            throw std::length_error("Coprocedure queue capacity exceeds count range");
         return capacity;
     }
 
@@ -159,10 +155,6 @@ LLCoprocedureManager::~LLCoprocedureManager()
     try
     {
         close();
-    }
-    catch (const boost::fibers::fiber_error&)
-    {
-        LL_WARNS() << "Fiber error during ~LLCoprocedureManager()" << LL_ENDL;
     }
     catch (const std::exception& e)
     {
@@ -405,10 +397,6 @@ LLCoprocedurePool::~LLCoprocedurePool()
         mPendingCoprocs.reset();
         mCoroMapping.clear();
     }
-    catch (const boost::fibers::fiber_error&)
-    {
-        LL_WARNS() << "Fiber error during ~LLCoprocedurePool() " << mPoolName << LL_ENDL;
-    }
     catch (const std::exception& e)
     {
         // Shutting down, just log it
@@ -442,14 +430,14 @@ LLUUID LLCoprocedurePool::enqueueCoprocedure(const std::string &name, LLCoproced
                               << mPending << LL_ENDL;
     }
     auto pushed = mPendingCoprocs->try_push(std::make_shared<QueuedCoproc>(name, id, proc));
-    if (pushed == boost::fibers::channel_op_status::success)
+    if (pushed == LL::ChannelStatus::success)
     {
         ++mPending;
         return id;
     }
 
     // Here we didn't succeed in pushing. Shutdown could be the reason.
-    if (pushed == boost::fibers::channel_op_status::closed)
+    if (pushed == LL::ChannelStatus::closed)
     {
         LL_WARNS("CoProcMgr") << "Discarding coprocedure '" << name << "' because shutdown" << LL_ENDL;
         return {};
@@ -467,35 +455,27 @@ LL::Task<void> LLCoprocedurePool::coprocedureInvokerCoro(
 {
     for (;;)
     {
-        // It is VERY IMPORTANT that we instantiate a new ptr_t just before
-        // the pop_wait_for() call below. When this ptr_t was declared at
-        // function scope (outside the for loop), NickyD correctly diagnosed a
-        // mysterious hang condition due to:
-        // - the second time through the loop, the ptr_t held the last pointer
-        //   to the previous QueuedCoproc, which indirectly held the last
-        //   LLPointer to an LLInventoryCallback instance
-        // - while holding the lock on pendingCoprocs, pop_wait_for() assigned
-        //   the popped value to the ptr_t variable
-        // - assignment destroyed the previous value of that variable, which
-        //   indirectly destroyed the LLInventoryCallback
-        // - whose destructor called ~LLRequestServerAppearanceUpdateOnDestroy()
-        // - which called LLAppearanceMgr::requestServerAppearanceUpdate()
-        // - which called enqueueCoprocedure()
-        // - which tried to acquire the lock on pendingCoprocs... alas.
-        // Using a fresh, clean ptr_t ensures that no previous value is
-        // destroyed during pop_wait_for().
+        // Take each popped value into a fresh ptr_t, so that the last pointer to the previous QueuedCoproc is gone
+        // before the next pop. (That pointer indirectly holds the last LLPointer to an LLInventoryCallback, whose
+        // destructor calls enqueueCoprocedure(): it once deadlocked on the queue's lock when it was destroyed by
+        // the pop's assignment. LL::Channel never destroys a value under its lock, but the habit is cheap.)
         QueuedCoproc::ptr_t coproc;
-        boost::fibers::channel_op_status status;
+        LL::ChannelStatus status;
         {
             LLCoros::TempStatus st("waiting for work for 10s");
-            status = pendingCoprocs->pop_wait_for(coproc, std::chrono::seconds(10));
+            auto popped = co_await pendingCoprocs->pop_wait_for(std::chrono::seconds(10));
+            status = popped.status;
+            if (popped.value)
+            {
+                coproc = std::move(*popped.value);
+            }
         }
-        if (status == boost::fibers::channel_op_status::closed)
+        if (status == LL::ChannelStatus::closed)
         {
             break;
         }
 
-        if(status == boost::fibers::channel_op_status::timeout)
+        if (status == LL::ChannelStatus::timeout)
         {
             LL_DEBUGS_ONCE("CoProcMgr") << "pool '" << mPoolName << "' waiting." << LL_ENDL;
             continue;

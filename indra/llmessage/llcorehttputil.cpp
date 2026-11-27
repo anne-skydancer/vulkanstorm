@@ -781,7 +781,7 @@ LL::Task<LLSD> HttpCoroutineAdapter::postAndSuspend_(LLCore::HttpRequest::ptr_t 
     }
 
     saveState(hhandle, request, handler);
-    LLSD results = co_await llcoro::co::suspendUntilEventOn(handler->getReplyPump());
+    LLSD results = co_await llcoro::suspendUntilEventOn(handler->getReplyPump());
     cleanState();
 
     co_return results;
@@ -904,7 +904,7 @@ LL::Task<LLSD> HttpCoroutineAdapter::postAndSuspend_(LLCore::HttpRequest::ptr_t 
     }
 
     saveState(hhandle, request, handler);
-    LLSD results = co_await llcoro::co::suspendUntilEventOn(handler->getReplyPump());
+    LLSD results = co_await llcoro::suspendUntilEventOn(handler->getReplyPump());
     cleanState();
 
     co_return results;
@@ -962,7 +962,7 @@ LL::Task<LLSD> HttpCoroutineAdapter::putAndSuspend_(LLCore::HttpRequest::ptr_t r
     }
 
     saveState(hhandle, request, handler);
-    LLSD results = co_await llcoro::co::suspendUntilEventOn(handler->getReplyPump());
+    LLSD results = co_await llcoro::suspendUntilEventOn(handler->getReplyPump());
     cleanState();
 
     co_return results;
@@ -988,7 +988,7 @@ LL::Task<LLSD> HttpCoroutineAdapter::putAndSuspend_(LLCore::HttpRequest::ptr_t r
     }
 
     saveState(hhandle, request, handler);
-    LLSD results = co_await llcoro::co::suspendUntilEventOn(handler->getReplyPump());
+    LLSD results = co_await llcoro::suspendUntilEventOn(handler->getReplyPump());
     cleanState();
 
     co_return results;
@@ -1044,7 +1044,7 @@ LL::Task<LLSD> HttpCoroutineAdapter::getAndSuspend_(LLCore::HttpRequest::ptr_t r
     }
 
     saveState(hhandle, request, handler);
-    LLSD results = co_await llcoro::co::suspendUntilEventOn(handler->getReplyPump());
+    LLSD results = co_await llcoro::suspendUntilEventOn(handler->getReplyPump());
     cleanState();
 
     co_return results;
@@ -1090,7 +1090,7 @@ LL::Task<LLSD> HttpCoroutineAdapter::deleteAndSuspend_(LLCore::HttpRequest::ptr_
     }
 
     saveState(hhandle, request, handler);
-    LLSD results = co_await llcoro::co::suspendUntilEventOn(handler->getReplyPump());
+    LLSD results = co_await llcoro::suspendUntilEventOn(handler->getReplyPump());
     cleanState();
 
     co_return results;
@@ -1128,7 +1128,7 @@ LL::Task<LLSD> HttpCoroutineAdapter::patchAndSuspend_(LLCore::HttpRequest::ptr_t
     }
 
     saveState(hhandle, request, handler);
-    LLSD results = co_await llcoro::co::suspendUntilEventOn(handler->getReplyPump());
+    LLSD results = co_await llcoro::suspendUntilEventOn(handler->getReplyPump());
     cleanState();
 
     co_return results;
@@ -1170,7 +1170,7 @@ LL::Task<LLSD> HttpCoroutineAdapter::copyAndSuspend_(LLCore::HttpRequest::ptr_t 
     }
 
     saveState(hhandle, request, handler);
-    LLSD results = co_await llcoro::co::suspendUntilEventOn(handler->getReplyPump());
+    LLSD results = co_await llcoro::suspendUntilEventOn(handler->getReplyPump());
     cleanState();
 
     co_return results;
@@ -1212,7 +1212,7 @@ LL::Task<LLSD> HttpCoroutineAdapter::moveAndSuspend_(LLCore::HttpRequest::ptr_t 
     }
 
     saveState(hhandle, request, handler);
-    LLSD results = co_await llcoro::co::suspendUntilEventOn(handler->getReplyPump());
+    LLSD results = co_await llcoro::suspendUntilEventOn(handler->getReplyPump());
     cleanState();
 
     co_return results;

@@ -139,7 +139,7 @@ namespace
         LLEventMailDrop pump(pump_prefix + "." + LLUUID::generateNewID().asString(), true);
         std::string pump_name = pump.getName();
         kickoff(pump_name);
-        LLSD result = co_await llcoro::co::suspendUntilEventOnWithTimeout(
+        LLSD result = co_await llcoro::suspendUntilEventOnWithTimeout(
             pump, timeout, LLSD().with("timeout", true));
         if (result.has("timeout"))
         {
@@ -2137,7 +2137,7 @@ LL::Task<LLSD> LLScriptEditorWSServer::handleObjectItemCreate(std::string method
     }
 
     // Wait for inventory change callback
-    LLSD event = co_await llcoro::co::suspendUntilEventOnWithTimeout(result_pump, ITEM_CREATE_TIMEOUT, LLSD().with("timeout", true));
+    LLSD event = co_await llcoro::suspendUntilEventOnWithTimeout(result_pump, ITEM_CREATE_TIMEOUT, LLSD().with("timeout", true));
 
     if (event.has("timeout"))
     {

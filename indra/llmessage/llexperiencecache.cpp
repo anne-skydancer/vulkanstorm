@@ -437,7 +437,7 @@ LL::Task<void> LLExperienceCache::idleCoro()
             self->requestExperiences();
         }
 
-        co_await llcoro::co::suspendUntilTimeout(SECS_BETWEEN_REQUESTS);
+        co_await llcoro::suspendUntilTimeout(SECS_BETWEEN_REQUESTS);
 
     } while (!sShutdown);
 

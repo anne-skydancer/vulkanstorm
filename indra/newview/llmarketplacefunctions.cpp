@@ -1113,7 +1113,7 @@ LL::Task<void> LLMarketplaceData::updateSLMListingCoro(LLUUID folderId, S32 list
         LL_INFOS("SLM") << "Received an empty response for listing " << listingId << " folder " << folderId << LL_ENDL;
         // Try to get listing more directly after a delay
         const float FORCE_UPDATE_TIMEOUT = 5.0;
-        co_await llcoro::co::suspendUntilTimeout(FORCE_UPDATE_TIMEOUT);
+        co_await llcoro::suspendUntilTimeout(FORCE_UPDATE_TIMEOUT);
         if (!LLApp::isExiting() && LLMarketplaceData::instanceExists())
         {
             getSLMListing(listingId);

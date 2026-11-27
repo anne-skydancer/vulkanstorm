@@ -991,7 +991,6 @@ bool LLAppViewer::init()
     LL_INFOS("InitInfo") << "Configuration initialized." << LL_ENDL ;
     //set the max heap size.
     initMaxHeapSize() ;
-    LLCoros::instance().setStackSize(gSavedSettings.getS32("CoroutineStackSize"));
 
     // Although initLoggingAndGetLastDuration() is the right place to mess with
     // setFatalFunction(), we can't query gSavedSettings until after
@@ -1733,8 +1732,8 @@ bool LLAppViewer::doFrame()
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_APP("df suspend");
                 pingMainloopTimeout("df suspend");
-                // give listeners a chance to run
-                llcoro::suspend();
+                // give listeners a chance to run: this is the one place the coroutines run
+                LLCoros::instance().executor().pump();
                 // if one of our coroutines threw an uncaught exception, rethrow it now
                 LLCoros::instance().rethrow();
             }

@@ -257,7 +257,7 @@ LL::Task<void> LLFloaterPermsDefault::updateCapCoro(std::string url)
                 LLNotificationsUtil::add("DefaultObjectPermissions", args);
             }
 
-            co_await llcoro::co::suspendUntilTimeout(RETRY_TIMEOUT);
+            co_await llcoro::suspendUntilTimeout(RETRY_TIMEOUT);
             if (retryCount < MAX_HTTP_RETRIES)
                 continue;
 

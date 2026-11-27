@@ -2,14 +2,11 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 /**
  * @file   lltask_test.cpp
- * @brief  Test of LL::Task, LL::Executor, the native awaiters and LL::Channel, with no fibre involved.
+ * @brief  Test of LL::Task, LL::Executor, the awaiters and LL::Channel.
  *
- * Tests 1 to 8 are the scenarios of the run-order oracle (llcoros_order_test.cpp, written against today's
- * Boost.Fiber LLCoros) on a fake pump: frame() is doFrame's pump, the main thread's own code plays the main loop. The
- * expected strings are the oracle's, except scenarios 3 and 4, which follow the decision that wake-ups run only at the
+ * Tests 1 to 8 are the scenarios of the run-order oracle (llcoros_order_test.cpp, which runs them through LLCoros) on
+ * a test executor: frame() is doFrame's pump, the main thread's own code plays the main loop. Wake-ups run only at the
  * frame's pump (doc/clean/plan.md, "Coroutines"): a launch runs the new task to its first wait and returns.
- *
- * The test uses no fibre, so ThreadSanitizer runs it (it is not on the deny list).
  */
 
 #include "linden_common.h"
@@ -66,7 +63,7 @@ LL::LocalPtr<Counted> sLocal;
 // A task that waits for one event on the named pump and returns a number derived from it.
 LL::Task<int> addEvent(std::string pump, int base)
 {
-    LLSD event = co_await llcoro::native::suspendUntilEventOn(pump);
+    LLSD event = co_await llcoro::suspendUntilEventOn(pump);
     co_return base + event.asInteger();
 }
 
@@ -79,7 +76,7 @@ LL::Task<int> addTwice(std::string pump, int base)
 
 LL::Task<void> throwAfterEvent(std::string pump)
 {
-    co_await llcoro::native::suspendUntilEventOn(pump);
+    co_await llcoro::suspendUntilEventOn(pump);
     throw std::runtime_error("throwAfterEvent");
 }
 
@@ -153,16 +150,16 @@ void object::test<1>()
     LLEventStream pa("order_pa", true), pb("order_pb", true), pc("order_pc", true);
     exec.launch("order_A", [&pa]() -> LL::Task<void>
         {
-            mark("A0"); co_await llcoro::native::suspendUntilEventOn(pa); mark("A1");
-            co_await llcoro::native::suspend(); mark("A2");
+            mark("A0"); co_await llcoro::suspendUntilEventOn(pa); mark("A1");
+            co_await llcoro::suspend(); mark("A2");
         });
     exec.launch("order_B", [&pb, &pc]() -> LL::Task<void>
         {
-            mark("B0"); co_await llcoro::native::suspendUntilEventOn(pb); mark("B1"); pc.post(LLSD()); mark("B2");
+            mark("B0"); co_await llcoro::suspendUntilEventOn(pb); mark("B1"); pc.post(LLSD()); mark("B2");
         });
     exec.launch("order_C", [&pc]() -> LL::Task<void>
         {
-            mark("C0"); co_await llcoro::native::suspendUntilEventOn(pc); mark("C1");
+            mark("C0"); co_await llcoro::suspendUntilEventOn(pc); mark("C1");
         });
     mark("M:post");
     pb.post(LLSD());
@@ -181,7 +178,7 @@ void object::test<2>()
     settle();
     exec.launch("order_T", []() -> LL::Task<void>
         {
-            mark("T0"); co_await llcoro::native::suspendUntilTimeout(0.001f); mark("T1");
+            mark("T0"); co_await llcoro::suspendUntilTimeout(0.001f); mark("T1");
         });
     std::this_thread::sleep_for(20ms);
     mark("f1"); frame();
@@ -191,7 +188,7 @@ void object::test<2>()
 }
 
 // 3. MODEL-DIFF. A launch from the main loop runs the new task to its first wait and returns: the task that was already
-//    ready waits for the pump. (Today's fibres: "P0 L0 P1 M:afterL f1".)
+//    ready waits for the pump.
 template<> template<>
 void object::test<3>()
 {
@@ -200,12 +197,12 @@ void object::test<3>()
     LLEventStream pp("order_pp", true), pl("order_pl", true);
     exec.launch("order_P", [&pp]() -> LL::Task<void>
         {
-            mark("P0"); co_await llcoro::native::suspendUntilEventOn(pp); mark("P1");
+            mark("P0"); co_await llcoro::suspendUntilEventOn(pp); mark("P1");
         });
     pp.post(LLSD());
     exec.launch("order_L", [&pl]() -> LL::Task<void>
         {
-            mark("L0"); co_await llcoro::native::suspendUntilEventOn(pl); mark("L1");
+            mark("L0"); co_await llcoro::suspendUntilEventOn(pl); mark("L1");
         });
     mark("M:afterL");
     mark("f1"); frame();
@@ -213,7 +210,6 @@ void object::test<3>()
 }
 
 // 4. MODEL-DIFF. A launch from inside a task returns after the new task's first wait: the launcher continues at once.
-//    (Today's fibres: "Q0 F0 Q1 R0 F1 Q2 F2".)
 template<> template<>
 void object::test<4>()
 {
@@ -224,11 +220,11 @@ void object::test<4>()
     exec.launch("order_Q", [e, &pq, &pr]() -> LL::Task<void>
         {
             mark("Q0");
-            co_await llcoro::native::suspendUntilEventOn(pq);
+            co_await llcoro::suspendUntilEventOn(pq);
             mark("Q1");
             e->launch("order_R", [&pr]() -> LL::Task<void>
                 {
-                    mark("R0"); co_await llcoro::native::suspendUntilEventOn(pr);
+                    mark("R0"); co_await llcoro::suspendUntilEventOn(pr);
                 });
             mark("Q2");
         });
@@ -254,12 +250,12 @@ void object::test<5>()
     LLEventStream pe("order_pe", true);
     exec.launch("order_E", [&pe]() -> LL::Task<void>
         {
-            LLSD v = co_await llcoro::native::suspendUntilEventOn(pe); mark("E:" + v.asString());
+            LLSD v = co_await llcoro::suspendUntilEventOn(pe); mark("E:" + v.asString());
         });
     exec.launch("order_K", [&pe]() -> LL::Task<void>
         {
             LLCoros::OverrideConsuming consuming(true);
-            LLSD v = co_await llcoro::native::suspendUntilEventOn(pe); mark("K:" + v.asString());
+            LLSD v = co_await llcoro::suspendUntilEventOn(pe); mark("K:" + v.asString());
         });
     std::string late;
     LLTempBoundListener tail(pe.listen("order_tail", [&late](const LLSD& v) { late += v.asString(); return false; }));
@@ -280,13 +276,13 @@ void object::test<6>()
     LLEventStream pw("order_pw", true);
     exec.launch("order_W1", [&pw]() -> LL::Task<void>
         {
-            LLSD v = co_await llcoro::native::suspendUntilEventOnWithTimeout(pw, 10.f, "timeout");
+            LLSD v = co_await llcoro::suspendUntilEventOnWithTimeout(pw, 10.f, "timeout");
             mark("W1:" + v.asString());
         });
     exec.launch("order_W2", []() -> LL::Task<void>
         {
             LLEventStream never("order_never", true);
-            LLSD v = co_await llcoro::native::suspendUntilEventOnWithTimeout(never, 0.001f, "timeout");
+            LLSD v = co_await llcoro::suspendUntilEventOnWithTimeout(never, 0.001f, "timeout");
             mark("W2:" + v.asString());
         });
     pw.post("event");
@@ -305,7 +301,7 @@ void object::test<7>()
     LLEventStream ps("order_ps", true);
     exec.launch("order_S", [&ps]() -> LL::Task<void>
         {
-            try { co_await llcoro::native::suspendUntilEventOn(ps); mark("S:event"); }
+            try { co_await llcoro::suspendUntilEventOn(ps); mark("S:event"); }
             catch (const LLCoros::Stopping&) { mark("S:stopping"); throw; }
         });
     TaskTestApp::status(LLApp::APP_STATUS_QUITTING);
@@ -316,7 +312,7 @@ void object::test<7>()
 }
 
 // 8. An exception that is not LLContinueError is stashed and rethrown on the main loop after the pump (on every
-//    platform: Windows terminated in the fibre).
+//    platform).
 template<> template<>
 void object::test<8>()
 {
@@ -325,7 +321,7 @@ void object::test<8>()
     LLEventStream px("order_px", true);
     exec.launch("order_X", [&px]() -> LL::Task<void>
         {
-            co_await llcoro::native::suspendUntilEventOn(px); throw std::runtime_error("order_X");
+            co_await llcoro::suspendUntilEventOn(px); throw std::runtime_error("order_X");
         });
     px.post(LLSD());
     std::string what;
@@ -335,7 +331,7 @@ void object::test<8>()
     // an LLContinueError is logged, not rethrown
     exec.launch("order_Y", [&px]() -> LL::Task<void>
         {
-            co_await llcoro::native::suspendUntilEventOn(px); LLTHROW(LLContinueError("order_Y"));
+            co_await llcoro::suspendUntilEventOn(px); LLTHROW(LLContinueError("order_Y"));
         });
     px.post(LLSD());
     frame();
@@ -379,7 +375,7 @@ void object::test<10>()
     {
         auto* mine = new Counted;
         sLocal.reset(mine);
-        co_await llcoro::native::suspendUntilEventOn(pl);
+        co_await llcoro::suspendUntilEventOn(pl);
         mark(tag + (sLocal.get() == mine ? ":mine" : ":WRONG"));
     };
     exec.launch("order_L1", [body]() { return body("one"); });
@@ -406,14 +402,14 @@ void object::test<11>()
     exec.launch("order_D1", [&pd]() -> LL::Task<void>
         {
             Sentinel sentinel;
-            co_await llcoro::native::suspendUntilEventOn(pd);
+            co_await llcoro::suspendUntilEventOn(pd);
             mark("D1:resumed");
         });
     // woken, but not yet run when the shutdown comes
     exec.launch("order_D2", [&pq]() -> LL::Task<void>
         {
             Sentinel sentinel;
-            co_await llcoro::native::suspendUntilEventOn(pq);
+            co_await llcoro::suspendUntilEventOn(pq);
             mark("D2:resumed");
         });
     pq.post(LLSD());
@@ -441,7 +437,7 @@ void object::test<12>()
                 ensure("still waiting", ! dropped.done());
             }
             mark("dropped");
-            co_await llcoro::native::suspendUntilEventOn(pg);
+            co_await llcoro::suspendUntilEventOn(pg);
             mark("G:event");
         });
     pg.post(5);
@@ -577,7 +573,7 @@ void object::test<17>()
         {
             mark(LLCoros::getName());
             LLCoros::checkStop();
-            co_await llcoro::native::suspendUntilEventOn(pr);
+            co_await llcoro::suspendUntilEventOn(pr);
             mark(LLCoros::getStatus().empty() ? "status cleared" : "STATUS LEFT");
         });
     LL::CoroData* record = LL::CoroData::getInstance("order_NAME").get();
@@ -709,7 +705,7 @@ void object::test<22>()
     LLEventStream pw("order_pw22", true);
     exec.launch("order_W22", [&pw]() -> LL::Task<void>
         {
-            LLSD v = co_await llcoro::native::suspendUntilEventOnWithTimeout(pw, 0.001f, "timeout");
+            LLSD v = co_await llcoro::suspendUntilEventOnWithTimeout(pw, 0.001f, "timeout");
             mark("W:" + v.asString());
         });
     std::this_thread::sleep_for(20ms);
@@ -730,12 +726,12 @@ void object::test<23>()
     LLTempBoundListener tail(pw.listen("order_zz23", [&late](const LLSD& v) { late += v.asString(); return false; }));
     exec.launch("order_W23", [&pw]() -> LL::Task<void>
         {
-            LLSD v = co_await llcoro::native::suspendUntilEventOnWithTimeout(pw, 0.001f, "timeout");
+            LLSD v = co_await llcoro::suspendUntilEventOnWithTimeout(pw, 0.001f, "timeout");
             mark("W:" + v.asString());
         });
     exec.launch("order_X23", [&px, &pw]() -> LL::Task<void>
         {
-            co_await llcoro::native::suspendUntilEventOn(px);
+            co_await llcoro::suspendUntilEventOn(px);
             mark("X");
             pw.post("event");
         });
@@ -761,7 +757,7 @@ void object::test<24>()
     exec.launch("order_Y24", []() -> LL::Task<void>
         {
             Sentinel sentinel;
-            co_await llcoro::native::suspend();
+            co_await llcoro::suspend();
             mark("resumed");
         });
     ensure_equals("destroyed", exec.shutdown(0), 1u);
@@ -770,17 +766,17 @@ void object::test<24>()
     ensure_equals(sTrace, "destroyed");
 }
 
-// 25. LLCoros::launchNative runs a Task callable on LLCoros' executor, under the name it returns.
+// 25. LLCoros::launch runs a Task callable on LLCoros' executor, under the name it returns.
 template<> template<>
 void object::test<25>()
 {
-    set_test_name("LLCoros::launchNative");
+    set_test_name("LLCoros::launch");
     settle();
     LLEventStream pn("order_pn25", true);
-    std::string name = LLCoros::instance().launchNative("order_NATIVE", [&pn]() -> LL::Task<void>
+    std::string name = LLCoros::instance().launch("order_NATIVE", [&pn]() -> LL::Task<void>
         {
             mark("first " + LLCoros::getName());
-            co_await llcoro::native::suspendUntilEventOn(pn);
+            co_await llcoro::suspendUntilEventOn(pn);
             mark("second");
         });
     ensure("distinct name", name.rfind("order_NATIVE", 0) == 0);

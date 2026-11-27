@@ -7,9 +7,8 @@
  * doc/clean/plan.md ("Coroutines", stage 4): the AIS parse (AISUpdate::parseUpdate and the nine functions below it,
  * llaisapi.cpp) is a recursion over an LLSD tree that became a chain of Task coroutines. Every call of the chain
  * allocates a coroutine frame, takes its LLSD parameter by value (const) and, at each parseEmbedded, tests the
- * timers inline and awaits checkTimeout only when a timer expired. This test measures what that costs per node, in
- * the fibre bridge (nothing in the tree suspends, so every task runs to its end at once, as the AIS parse does
- * unless its time budget runs out).
+ * timers inline and awaits checkTimeout only when a timer expired. This test measures what that costs per node when
+ * nothing suspends, so every task runs to its end at once, as the AIS parse does unless its time budget runs out.
  *
  * Three variants walk the same tree, interleaved round by round (so that a loaded machine hits all three alike):
  * - plain: ordinary recursion over const LLSD&;
@@ -198,7 +197,7 @@ void object::test<1>()
         std::ofstream out(summary, std::ios::app);
         if (out)
         {
-            out << "### AIS-style recursion micro-benchmark (fibre bridge, ns per node)\n\n"
+            out << "### AIS-style recursion micro-benchmark (ns per node)\n\n"
                 << "| tree | plain median | task median | task+check median | plain min | task min | task+check min |\n"
                 << "|---|---|---|---|---|---|---|\n"
                 << line << "\n\n";

@@ -2,7 +2,7 @@
 // Copyright (C) 2026, Anne Skydancer (Vulkanstorm)
 /**
  * @file   llchannel.h
- * @brief  LL::Channel<T>: a bounded queue that tasks wait on, replacing boost::fibers::buffered_channel.
+ * @brief  LL::Channel<T>: a bounded queue that tasks wait on, replacing the Boost.Fiber channel.
  *
  * The semantics the coprocedure pools rely on, kept:
  * - try_push() never blocks: it hands the value to the first waiting consumer, or queues it, or fails because the

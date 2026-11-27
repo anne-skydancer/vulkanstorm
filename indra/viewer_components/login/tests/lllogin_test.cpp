@@ -117,7 +117,8 @@ public:
             }
             // haven't yet received the new call, nor have we timed out --
             // just wait
-            llcoro::suspend();
+            // the login coroutine runs at the main loop's pump
+            LLCoros::instance().executor().pump();
         }
         // oh good, we've gotten at least one new call! Return its event.
         return lastEvent();
@@ -273,7 +274,7 @@ namespace tut
         credentials["passwd"] = "badpasswd";
 
         login.connect("login.bar.com", credentials);
-        llcoro::suspend();
+        LLCoros::instance().executor().pump();
 
         ensure_equals("Auth state", listener.lastEvent()["change"].asString(), "authenticating");
 
@@ -319,7 +320,7 @@ namespace tut
         credentials["passwd"] = "matter";
 
         login.connect("login.bar.com", credentials);
-        llcoro::suspend();
+        LLCoros::instance().executor().pump();
 
         ensure_equals("Auth state", listener.lastEvent()["change"].asString(), "authenticating");
 

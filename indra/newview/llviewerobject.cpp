@@ -3194,7 +3194,7 @@ void LLViewerObject::fetchInventoryDelayed(const F64 &time_seconds)
 //static
 LL::Task<void> LLViewerObject::fetchInventoryDelayedCoro(const LLUUID task_inv, const F64 time_seconds)
 {
-    co_await llcoro::co::suspendUntilTimeout((float)time_seconds);
+    co_await llcoro::suspendUntilTimeout((float)time_seconds);
     LLViewerObject *obj = gObjectList.findObject(task_inv);
     if (obj)
     {

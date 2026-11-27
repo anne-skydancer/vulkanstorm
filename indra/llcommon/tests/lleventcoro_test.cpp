@@ -33,8 +33,10 @@
 
 #include "linden_common.h"
 
+#include <chrono>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <typeinfo>
 
 #include "../test/lltut.h"
@@ -45,8 +47,7 @@
 #include "llcoros.h"
 #include "lleventfilter.h"
 #include "lleventcoro.h"
-#include "../test/debug.h"
-#include "../test/sync.h"
+#include "lltask.h"
 
 using namespace llcoro;
 
@@ -60,9 +61,8 @@ using namespace llcoro;
 class ImmediateAPI
 {
 public:
-    ImmediateAPI(Sync& sync):
-        mPump("immediate", true),
-        mSync(sync)
+    ImmediateAPI():
+        mPump("immediate", true)
     {
         mPump.listen("API", boost::bind(&ImmediateAPI::operator(), this, _1));
     }
@@ -74,7 +74,6 @@ public:
     // ["reply"]: Name of LLEventPump on which to send response.
     bool operator()(const LLSD& event) const
     {
-        mSync.bump();
         LLSD::Integer value(event["value"]);
         LLEventPumps::instance().obtain(event["reply"]).post(value + 1);
         return false;
@@ -82,8 +81,13 @@ public:
 
 private:
     LLEventStream mPump;
-    Sync& mSync;
 };
+
+/// The main loop's part: one frame's pass over the ready coroutines (doFrame's pump)
+static void frame()
+{
+    LLCoros::instance().executor().pump();
+}
 
 /*****************************************************************************
 *   TUT
@@ -92,170 +96,106 @@ namespace tut
 {
     struct test_data
     {
-        Sync mSync;
-        ImmediateAPI immediateAPI{mSync};
-        std::string replyName, errorName, threw, stringdata;
-        LLSD result, errordata;
-        int which;
+        ImmediateAPI immediateAPI;
+        std::string replyName;
+        LLSD result;
         LLTestApp testApp;
 
-        void explicit_wait(std::shared_ptr<LLCoros::Promise<std::string>>& cbp);
-        void waitForEventOn1();
-        void coroPump();
-        void postAndWait1();
-        void coroPumpPost();
+        LL::Task<void> waitForEventOn1();
+        LL::Task<void> coroPump();
+        LL::Task<void> postAndWait1();
+        LL::Task<void> coroPumpPost();
     };
     typedef test_group<test_data> coroutine_group;
     typedef coroutine_group::object object;
     coroutine_group coroutinegrp("coroutine");
 
-    void test_data::explicit_wait(std::shared_ptr<LLCoros::Promise<std::string>>& cbp)
+    LL::Task<void> test_data::waitForEventOn1()
     {
-        BEGIN
-        {
-            mSync.bump();
-            // The point of this test is to verify / illustrate suspending a
-            // coroutine for something other than an LLEventPump. In other
-            // words, this shows how to adapt to any async operation that
-            // provides a callback-style notification (and prove that it
-            // works).
-
-            // Perhaps we would send a request to a remote server and arrange
-            // for cbp->set_value() to be called on response.
-            // For test purposes, instead of handing 'callback' (or an
-            // adapter) off to some I/O subsystem, we'll just pass it back to
-            // our caller.
-            cbp = std::make_shared<LLCoros::Promise<std::string>>();
-            LLCoros::Future<std::string> future = LLCoros::getFuture(*cbp);
-
-            // calling get() on the future causes us to suspend
-            debug("about to suspend");
-            stringdata = future.get();
-            mSync.bump();
-            ensure_equals("Got it", stringdata, "received");
-        }
-        END
+        result = co_await suspendUntilEventOn("source");
     }
 
     template<> template<>
     void object::test<1>()
     {
-        set_test_name("explicit_wait");
-        DEBUG;
-
-        // Construct the coroutine instance that will run explicit_wait.
-        std::shared_ptr<LLCoros::Promise<std::string>> respond;
-        LLCoros::instance().launch("test<1>",
-                                   [this, &respond](){ explicit_wait(respond); });
-        mSync.bump();
-        // When the coroutine waits for the future, it returns here.
-        debug("about to respond");
-        // Now we're the I/O subsystem delivering a result. This should make
-        // the coroutine ready.
-        respond->set_value("received");
-        // but give it a chance to wake up
-        mSync.yield();
-        // ensure the coroutine ran and woke up again with the intended result
-        ensure_equals(stringdata, "received");
+        set_test_name("waitForEventOn1");
+        LLCoros::instance().launch("test<1>", [this](){ return waitForEventOn1(); });
+        // the coroutine is waiting for the event
+        LLEventPumps::instance().obtain("source").post("received");
+        // a wake-up runs at the pump, not before
+        ensure("should not have run before the pump", result.isUndefined());
+        frame();
+        ensure_equals(result.asString(), "received");
     }
 
-    void test_data::waitForEventOn1()
+    LL::Task<void> test_data::coroPump()
     {
-        BEGIN
-        {
-            mSync.bump();
-            result = suspendUntilEventOn("source");
-            mSync.bump();
-        }
-        END
+        LLCoroEventPump waiter;
+        replyName = waiter.getName();
+        result = co_await waiter.suspend();
     }
 
     template<> template<>
     void object::test<2>()
     {
-        set_test_name("waitForEventOn1");
-        DEBUG;
-        LLCoros::instance().launch("test<2>", [this](){ waitForEventOn1(); });
-        mSync.bump();
-        debug("about to send");
-        LLEventPumps::instance().obtain("source").post("received");
-        // give waitForEventOn1() a chance to run
-        mSync.yield();
-        debug("back from send");
+        set_test_name("coroPump");
+        LLCoros::instance().launch("test<2>", [this](){ return coroPump(); });
+        LLEventPumps::instance().obtain(replyName).post("received");
+        // give coroPump() a chance to run
+        frame();
         ensure_equals(result.asString(), "received");
     }
 
-    void test_data::coroPump()
+    LL::Task<void> test_data::postAndWait1()
     {
-        BEGIN
-        {
-            mSync.bump();
-            LLCoroEventPump waiter;
-            replyName = waiter.getName();
-            result = waiter.suspend();
-            mSync.bump();
-        }
-        END
+        result = co_await postAndSuspend(LLSDMap("value", 17),       // request event
+                                         immediateAPI.getPump(),     // requestPump
+                                         "reply1",                   // replyPump
+                                         "reply");                   // request["reply"] = name
     }
 
     template<> template<>
     void object::test<3>()
     {
-        set_test_name("coroPump");
-        DEBUG;
-        LLCoros::instance().launch("test<3>", [this](){ coroPump(); });
-        mSync.bump();
-        debug("about to send");
-        LLEventPumps::instance().obtain(replyName).post("received");
-        // give coroPump() a chance to run
-        mSync.yield();
-        debug("back from send");
-        ensure_equals(result.asString(), "received");
+        set_test_name("postAndWait1");
+        // the reply comes while the request is posted: the coroutine does not even suspend
+        LLCoros::instance().launch("test<3>", [this](){ return postAndWait1(); });
+        ensure_equals(result.asInteger(), 18);
     }
 
-    void test_data::postAndWait1()
+    LL::Task<void> test_data::coroPumpPost()
     {
-        BEGIN
-        {
-            mSync.bump();
-            result = postAndSuspend(LLSDMap("value", 17),       // request event
-                                 immediateAPI.getPump(),     // requestPump
-                                 "reply1",                   // replyPump
-                                 "reply");                   // request["reply"] = name
-            mSync.bump();
-        }
-        END
+        LLCoroEventPump waiter;
+        result = co_await waiter.postAndSuspend(LLSDMap("value", 17),
+                                                immediateAPI.getPump(), "reply");
     }
 
     template<> template<>
     void object::test<4>()
     {
-        set_test_name("postAndWait1");
-        DEBUG;
-        LLCoros::instance().launch("test<4>", [this](){ postAndWait1(); });
-        ensure_equals(result.asInteger(), 18);
-    }
-
-    void test_data::coroPumpPost()
-    {
-        BEGIN
-        {
-            mSync.bump();
-            LLCoroEventPump waiter;
-            result = waiter.postAndSuspend(LLSDMap("value", 17),
-                                        immediateAPI.getPump(), "reply");
-            mSync.bump();
-        }
-        END
-    }
-
-    template<> template<>
-    void object::test<5>()
-    {
         set_test_name("coroPumpPost");
-        DEBUG;
-        LLCoros::instance().launch("test<5>", [this](){ coroPumpPost(); });
+        LLCoros::instance().launch("test<4>", [this](){ return coroPumpPost(); });
         ensure_equals(result.asInteger(), 18);
+    }
+
+    // Don't use ensure() from within a coroutine: ensure() failure throws tut::fail, which would not propagate out
+    // to the main test driver, which would result in an odd failure. The coroutine collects its data instead.
+    template <class PUMP>
+    LL::Task<void> listener(PUMP* pump, bool* running, LLSD* data)
+    {
+        // important for this test that we consume posted values
+        LLCoros::set_consuming(true);
+        // should immediately retrieve 'first' without waiting
+        LL_DEBUGS() << "listener coro waiting for first" << LL_ENDL;
+        data->append(co_await llcoro::suspendUntilEventOnWithTimeout(*pump, 0.1f, LLSD()));
+        // Wait for 'second' because it's not already pending.
+        LL_DEBUGS() << "listener coro waiting for second" << LL_ENDL;
+        data->append(co_await llcoro::suspendUntilEventOnWithTimeout(*pump, 0.1f, LLSD()));
+        // and wait for 'third', which should involve no further waiting
+        LL_DEBUGS() << "listener coro waiting for third" << LL_ENDL;
+        data->append(co_await llcoro::suspendUntilEventOnWithTimeout(*pump, 0.1f, LLSD()));
+        LL_DEBUGS() << "listener coro done" << LL_ENDL;
+        *running = false;
     }
 
     template <class PUMP>
@@ -275,45 +215,30 @@ namespace tut
         running = true;
         LLCoros::instance().launch(
             "listener",
-            [&pump, &running, &data](){
-                // important for this test that we consume posted values
-                LLCoros::instance().set_consuming(true);
-                // should immediately retrieve 'first' without waiting
-                LL_DEBUGS() << "listener coro waiting for first" << LL_ENDL;
-                data.append(llcoro::suspendUntilEventOnWithTimeout(pump, 0.1f, LLSD()));
-                // Don't use ensure() from within the coro -- ensure() failure
-                // throws tut::fail, which won't propagate out to the main
-                // test driver, which will result in an odd failure.
-                // Wait for 'second' because it's not already pending.
-                LL_DEBUGS() << "listener coro waiting for second" << LL_ENDL;
-                data.append(llcoro::suspendUntilEventOnWithTimeout(pump, 0.1f, LLSD()));
-                // and wait for 'third', which should involve no further waiting
-                LL_DEBUGS() << "listener coro waiting for third" << LL_ENDL;
-                data.append(llcoro::suspendUntilEventOnWithTimeout(pump, 0.1f, LLSD()));
-                LL_DEBUGS() << "listener coro done" << LL_ENDL;
-                running = false;
-            });
+            [&pump, &running, &data]() { return listener(&pump, &running, &data); });
         // back from coro at the point where it's waiting for 'second'
         LL_DEBUGS() << "test() posting second" << LL_ENDL;
         LLSD second{llsd::map("desc", "second", "value", 1)};
         consumed = pump.post(second);
         ensure("should have consumed second", consumed);
         // This is a key point: even though we've post()ed the value for which
-        // the coroutine is waiting, it's actually still suspended until we
-        // pause for some other reason. The coroutine will only pick up one
+        // the coroutine is waiting, it's actually still suspended until the
+        // main loop pumps the coroutines. The coroutine will only pick up one
         // value at a time from our 'pump'. It's important to exercise the
         // case when we post() two values before it picks up either.
         LL_DEBUGS() << "test() posting third" << LL_ENDL;
         LLSD third{llsd::map("desc", "third", "value", 2)};
         consumed = pump.post(third);
         ensure("should NOT yet have consumed third", ! consumed);
-        // now just wait for coro to finish -- which it eventually will, given
+        // now just pump until the coro finishes -- which it eventually will, given
         // that all its suspend calls have short timeouts.
-        while (running)
+        for (int frames = 0; running && frames < 100; ++frames)
         {
             LL_DEBUGS() << "test() waiting for coro done" << LL_ENDL;
-            llcoro::suspendUntilTimeout(0.1f);
+            frame();
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
+        ensure("the coroutine did not finish", ! running);
         // okay, verify expected results
         ensure_equals("should have received three values", data,
                       llsd::array(first, second, third));
@@ -321,14 +246,14 @@ namespace tut
     }
 
     template<> template<>
-    void object::test<6>()
+    void object::test<5>()
     {
         set_test_name("LLEventMailDrop");
         tut::test<LLEventMailDrop>();
     }
 
     template<> template<>
-    void object::test<7>()
+    void object::test<6>()
     {
         set_test_name("LLEventLogProxyFor<LLEventMailDrop>");
         tut::test< LLEventLogProxyFor<LLEventMailDrop> >();

@@ -76,126 +76,16 @@ private:
     boost::optional<LLEventPump&> mPump;
 };
 
+/**
+ * The suspension primitives of a coroutine, for a coroutine that returns an LL::Task: <tt>co_await</tt> each one.
+ * Each checks LLCoros::checkStop() first, sets the coroutine's status while it waits, lets the first event win (a
+ * later event is not delivered and not consumed), and turns a status other than "running" on "LLApp" into
+ * LLCoros::Stopping. An awaiter is not movable and unlinks every listener, timer and queue entry in its destructor,
+ * so a destroyed frame is never resumed.
+ *
+ * A task runs on the main loop's executor, so nothing may block it: use these, never a blocking wait.
+ */
 namespace llcoro
-{
-
-/**
- * Yield control from a coroutine for one "mainloop" tick. If your coroutine
- * runs without suspending for nontrivial time, sprinkle in calls to this
- * function to avoid stalling the rest of the viewer processing.
- */
-void suspend();
-
-/**
- * Yield control from a coroutine for at least the specified number of seconds
- */
-void suspendUntilTimeout(float seconds);
-
-/**
- * Yield control from a coroutine until the next mainloop's newFrame event.
- */
-void suspendUntilNextFrame();
-
-/**
- * Post specified LLSD event on the specified LLEventPump, then suspend for a
- * response on specified other LLEventPump. This is more than mere
- * convenience: the difference between this function and the sequence
- * @code
- * requestPump.post(myEvent);
- * LLSD reply = suspendUntilEventOn(replyPump);
- * @endcode
- * is that the sequence above fails if the reply is posted immediately on
- * @a replyPump, that is, before <tt>requestPump.post()</tt> returns. In the
- * sequence above, the running coroutine isn't even listening on @a replyPump
- * until <tt>requestPump.post()</tt> returns and @c suspendUntilEventOn() is
- * entered. Therefore, the coroutine completely misses an immediate reply
- * event, making it suspend indefinitely.
- *
- * By contrast, postAndSuspend() listens on the @a replyPump @em before posting
- * the specified LLSD event on the specified @a requestPump.
- *
- * @param event LLSD data to be posted on @a requestPump
- * @param requestPump an LLEventPump on which to post @a event. Pass either
- * the LLEventPump& or its string name. However, if you pass a
- * default-constructed @c LLEventPumpOrPumpName, we skip the post() call.
- * @param replyPump an LLEventPump on which postAndSuspend() will listen for a
- * reply. Pass either the LLEventPump& or its string name. The calling
- * coroutine will suspend until that reply arrives. (If you're concerned about a
- * reply that might not arrive, please see also LLEventTimeout.)
- * @param replyPumpNamePath specifies the location within @a event in which to
- * store <tt>replyPump.getName()</tt>. This is a strictly optional convenience
- * feature; obviously you can store the name in @a event "by hand" if desired.
- * @a replyPumpNamePath can be specified in any of four forms:
- * * @c isUndefined() (default-constructed LLSD object): do nothing. This is
- *   the default behavior if you omit @a replyPumpNamePath.
- * * @c isInteger(): @a event is an array. Store <tt>replyPump.getName()</tt>
- *   in <tt>event[replyPumpNamePath.asInteger()]</tt>.
- * * @c isString(): @a event is a map. Store <tt>replyPump.getName()</tt> in
- *   <tt>event[replyPumpNamePath.asString()]</tt>.
- * * @c isArray(): @a event has several levels of structure, e.g. map of
- *   maps, array of arrays, array of maps, map of arrays, ... Store
- *   <tt>replyPump.getName()</tt> in
- *   <tt>event[replyPumpNamePath[0]][replyPumpNamePath[1]]...</tt> In other
- *   words, examine each array entry in @a replyPumpNamePath in turn. If it's an
- *   <tt>LLSD::String</tt>, the current level of @a event is a map; step down to
- *   that map entry. If it's an <tt>LLSD::Integer</tt>, the current level of @a
- *   event is an array; step down to that array entry. The last array entry in
- *   @a replyPumpNamePath specifies the entry in the lowest-level structure in
- *   @a event into which to store <tt>replyPump.getName()</tt>.
- */
-LLSD postAndSuspend(const LLSD& event, const LLEventPumpOrPumpName& requestPump,
-                 const LLEventPumpOrPumpName& replyPump, const LLSD& replyPumpNamePath=LLSD());
-
-/// Wait for the next event on the specified LLEventPump. Pass either the
-/// LLEventPump& or its string name.
-inline
-LLSD suspendUntilEventOn(const LLEventPumpOrPumpName& pump)
-{
-    // This is now a convenience wrapper for postAndSuspend().
-    return postAndSuspend(LLSD(), LLEventPumpOrPumpName(), pump);
-}
-
-/// Like postAndSuspend(), but if we wait longer than @a timeout seconds,
-/// stop waiting and return @a timeoutResult instead.
-LLSD postAndSuspendWithTimeout(const LLSD& event,
-                               const LLEventPumpOrPumpName& requestPump,
-                               const LLEventPumpOrPumpName& replyPump,
-                               const LLSD& replyPumpNamePath,
-                               F32 timeout, const LLSD& timeoutResult);
-
-/// Suspend the coroutine until an event is fired on the identified pump
-/// or the timeout duration has elapsed.  If the timeout duration
-/// elapses the specified LLSD is returned.
-inline
-LLSD suspendUntilEventOnWithTimeout(const LLEventPumpOrPumpName& suspendPumpOrName,
-                                    F32 timeoutin, const LLSD &timeoutResult)
-{
-    return postAndSuspendWithTimeout(LLSD(),                  // event
-                                     LLEventPumpOrPumpName(), // requestPump
-                                     suspendPumpOrName,       // replyPump
-                                     LLSD(),                  // replyPumpNamePath
-                                     timeoutin,
-                                     timeoutResult);
-}
-
-} // namespace llcoro
-
-/**
- * The co_await forms of the primitives above (doc/clean/plan.md, "Coroutines"): the same names and semantics, for a
- * coroutine that returns an LL::Task. Each checks LLCoros::checkStop() first, sets the coroutine's status while it
- * waits, lets the first event win (a later event is not delivered and not consumed), and turns a status other than
- * "running" on "LLApp" into LLCoros::Stopping. An awaiter is not movable and unlinks every listener, timer and queue
- * entry in its destructor, so a destroyed frame is never resumed.
- *
- * A task must use these forms, never the blocking ones above: a blocking form blocks the hosting fibre, and a task is
- * not a fibre but runs on the main loop. The blocking forms abort when a task calls one.
- *
- * <tt>llcoro::co</tt> is the back end LL_CORO_NATIVE picks (llcoros.h): llcoro::native really suspends the task on
- * the executor, llcoro::bridge blocks the hosting fibre with the function above (nothing suspends at the C++20
- * level). Both are always built and tested. The change that removes the fibres makes llcoro::native the only one and
- * deletes the blocking functions above; callers then lose no more than the "co::".
- */
-namespace llcoro::native
 {
 
 /// Waits for one event on a pump (optionally after posting a request, optionally with a timeout), or for a timeout
@@ -261,104 +151,90 @@ private:
     bool mResumed{false};
 };
 
-/// co_await llcoro::native::suspend(); yields for one tick
+/**
+ * Yield control from a coroutine for one "mainloop" tick: <tt>co_await llcoro::suspend();</tt> The task runs again at
+ * the next pump. If your coroutine runs without suspending for nontrivial time, sprinkle in calls to this function to
+ * avoid stalling the rest of the viewer processing.
+ */
 [[nodiscard]] inline SuspendAwaiter suspend() { return {}; }
 
-/// Wait for at least @a seconds
+/// Yield control from a coroutine for at least @a seconds
 [[nodiscard]] LL_COMMON_API EventAwaiter suspendUntilTimeout(float seconds);
 
-/// Wait for the next "mainloop" event, once per frame
+/// Yield control from a coroutine until the next mainloop's newFrame event.
 [[nodiscard]] LL_COMMON_API EventAwaiter suspendUntilNextFrame();
 
-/// LLSD reply = co_await llcoro::native::postAndSuspend(...)
+/**
+ * Post specified LLSD event on the specified LLEventPump, then suspend for a
+ * response on specified other LLEventPump. This is more than mere
+ * convenience: the difference between this function and the sequence
+ * @code
+ * requestPump.post(myEvent);
+ * LLSD reply = co_await suspendUntilEventOn(replyPump);
+ * @endcode
+ * is that the sequence above fails if the reply is posted immediately on
+ * @a replyPump, that is, before <tt>requestPump.post()</tt> returns. In the
+ * sequence above, the running coroutine isn't even listening on @a replyPump
+ * until <tt>requestPump.post()</tt> returns and @c suspendUntilEventOn() is
+ * entered. Therefore, the coroutine completely misses an immediate reply
+ * event, making it suspend indefinitely.
+ *
+ * By contrast, postAndSuspend() listens on the @a replyPump @em before posting
+ * the specified LLSD event on the specified @a requestPump (when the
+ * returned awaiter is co_awaited), and a reply delivered during that post
+ * completes the wait without suspending.
+ *
+ * @param event LLSD data to be posted on @a requestPump
+ * @param requestPump an LLEventPump on which to post @a event. Pass either
+ * the LLEventPump& or its string name. However, if you pass a
+ * default-constructed @c LLEventPumpOrPumpName, we skip the post() call.
+ * @param replyPump an LLEventPump on which postAndSuspend() will listen for a
+ * reply. Pass either the LLEventPump& or its string name. The calling
+ * coroutine will suspend until that reply arrives. (If you're concerned about a
+ * reply that might not arrive, please see also LLEventTimeout.)
+ * @param replyPumpNamePath specifies the location within @a event in which to
+ * store <tt>replyPump.getName()</tt>. This is a strictly optional convenience
+ * feature; obviously you can store the name in @a event "by hand" if desired.
+ * @a replyPumpNamePath can be specified in any of four forms:
+ * * @c isUndefined() (default-constructed LLSD object): do nothing. This is
+ *   the default behavior if you omit @a replyPumpNamePath.
+ * * @c isInteger(): @a event is an array. Store <tt>replyPump.getName()</tt>
+ *   in <tt>event[replyPumpNamePath.asInteger()]</tt>.
+ * * @c isString(): @a event is a map. Store <tt>replyPump.getName()</tt> in
+ *   <tt>event[replyPumpNamePath.asString()]</tt>.
+ * * @c isArray(): @a event has several levels of structure, e.g. map of
+ *   maps, array of arrays, array of maps, map of arrays, ... Store
+ *   <tt>replyPump.getName()</tt> in
+ *   <tt>event[replyPumpNamePath[0]][replyPumpNamePath[1]]...</tt> In other
+ *   words, examine each array entry in @a replyPumpNamePath in turn. If it's an
+ *   <tt>LLSD::String</tt>, the current level of @a event is a map; step down to
+ *   that map entry. If it's an <tt>LLSD::Integer</tt>, the current level of @a
+ *   event is an array; step down to that array entry. The last array entry in
+ *   @a replyPumpNamePath specifies the entry in the lowest-level structure in
+ *   @a event into which to store <tt>replyPump.getName()</tt>.
+ */
 [[nodiscard]] LL_COMMON_API EventAwaiter postAndSuspend(const LLSD& event, const LLEventPumpOrPumpName& requestPump,
                                                         const LLEventPumpOrPumpName& replyPump,
                                                         const LLSD& replyPumpNamePath = LLSD());
 
+/// Wait for the next event on the specified LLEventPump. Pass either the
+/// LLEventPump& or its string name.
 [[nodiscard]] LL_COMMON_API EventAwaiter suspendUntilEventOn(const LLEventPumpOrPumpName& pump);
 
+/// Like postAndSuspend(), but if we wait longer than @a timeout seconds,
+/// stop waiting and return @a timeoutResult instead.
 [[nodiscard]] LL_COMMON_API EventAwaiter postAndSuspendWithTimeout(const LLSD& event,
                                                                    const LLEventPumpOrPumpName& requestPump,
                                                                    const LLEventPumpOrPumpName& replyPump,
                                                                    const LLSD& replyPumpNamePath, F32 timeout,
                                                                    const LLSD& timeoutResult);
 
+/// Suspend the coroutine until an event is fired on the identified pump
+/// or the timeout duration has elapsed.  If the timeout duration
+/// elapses the specified LLSD is returned.
 [[nodiscard]] LL_COMMON_API EventAwaiter suspendUntilEventOnWithTimeout(const LLEventPumpOrPumpName& pump,
                                                                         F32 timeout, const LLSD& timeoutResult);
 
-} // namespace llcoro::native
-
-namespace llcoro::bridge
-{
-
-/// The fibre bridge: already "ready", and await_resume() calls the blocking function on the hosting fibre.
-template<typename F>
-class BridgeAwaiter
-{
-public:
-    explicit BridgeAwaiter(F fn): mFn(std::move(fn)) {}
-    bool await_ready() const noexcept { return true; }
-    void await_suspend(std::coroutine_handle<>) const noexcept {}
-    decltype(auto) await_resume() { return mFn(); }
-
-private:
-    F mFn;
-};
-
-[[nodiscard]] inline auto suspend()
-{
-    return BridgeAwaiter([] { llcoro::suspend(); });
-}
-
-[[nodiscard]] inline auto suspendUntilTimeout(float seconds)
-{
-    return BridgeAwaiter([seconds] { llcoro::suspendUntilTimeout(seconds); });
-}
-
-[[nodiscard]] inline auto suspendUntilNextFrame()
-{
-    return BridgeAwaiter([] { llcoro::suspendUntilNextFrame(); });
-}
-
-[[nodiscard]] inline auto postAndSuspend(const LLSD& event, const LLEventPumpOrPumpName& requestPump,
-                                         const LLEventPumpOrPumpName& replyPump,
-                                         const LLSD& replyPumpNamePath = LLSD())
-{
-    return BridgeAwaiter([=] { return llcoro::postAndSuspend(event, requestPump, replyPump, replyPumpNamePath); });
-}
-
-[[nodiscard]] inline auto suspendUntilEventOn(const LLEventPumpOrPumpName& pump)
-{
-    return BridgeAwaiter([=] { return llcoro::suspendUntilEventOn(pump); });
-}
-
-[[nodiscard]] inline auto postAndSuspendWithTimeout(const LLSD& event, const LLEventPumpOrPumpName& requestPump,
-                                                    const LLEventPumpOrPumpName& replyPump,
-                                                    const LLSD& replyPumpNamePath, F32 timeout,
-                                                    const LLSD& timeoutResult)
-{
-    return BridgeAwaiter([=]
-    {
-        return llcoro::postAndSuspendWithTimeout(event, requestPump, replyPump, replyPumpNamePath, timeout,
-                                                 timeoutResult);
-    });
-}
-
-[[nodiscard]] inline auto suspendUntilEventOnWithTimeout(const LLEventPumpOrPumpName& pump, F32 timeout,
-                                                         const LLSD& timeoutResult)
-{
-    return BridgeAwaiter([=] { return llcoro::suspendUntilEventOnWithTimeout(pump, timeout, timeoutResult); });
-}
-
-} // namespace llcoro::bridge
-
-namespace llcoro
-{
-#if LL_CORO_NATIVE
-namespace co = native;
-#else
-namespace co = bridge;
-#endif
 } // namespace llcoro
 
 /**
@@ -388,15 +264,15 @@ public:
     LLEventPump& getPump() { return mPump; }
 
     /**
-     * Wait for an event on this LLEventPump.
+     * Wait for an event on this LLEventPump: <tt>LLSD reply = co_await waiter.suspend();</tt>
      */
-    LLSD suspend()
+    [[nodiscard]] llcoro::EventAwaiter suspend()
     {
         return llcoro::suspendUntilEventOn(mPump);
     }
 
-    LLSD postAndSuspend(const LLSD& event, const LLEventPumpOrPumpName& requestPump,
-                     const LLSD& replyPumpNamePath=LLSD())
+    [[nodiscard]] llcoro::EventAwaiter postAndSuspend(const LLSD& event, const LLEventPumpOrPumpName& requestPump,
+                                                      const LLSD& replyPumpNamePath=LLSD())
     {
         return llcoro::postAndSuspend(event, requestPump, mPump, replyPumpNamePath);
     }

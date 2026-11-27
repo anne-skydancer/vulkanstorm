@@ -744,7 +744,7 @@ std::ostream& operator<<(std::ostream& out, const LLEventDispatcher& self)
 
 std::string LLEventDispatcher::getState() const
 {
-    // default value of fiber_specific_ptr is nullptr, and ~SetState() reverts
+    // default value of a LocalPtr is nullptr, and ~SetState() reverts
     // to that; infer empty string
     if (! mState.get())
         return {};

@@ -485,7 +485,7 @@ LL::Task<void> LLViewerAssetStorage::assetRequestCoro(
                     LLEventPumps::instance().obtain(pump_name).post(LLSD());
                 });
             F32Seconds timeout_seconds(LL_ASSET_STORAGE_TIMEOUT);
-            co_await llcoro::co::suspendUntilEventOnWithTimeout(region_init, timeout_seconds, LLSDMap("timeout", LLSD::Boolean(true)));
+            co_await llcoro::suspendUntilEventOnWithTimeout(region_init, timeout_seconds, LLSDMap("timeout", LLSD::Boolean(true)));
             gAgent.removeRegionChangedCallback(region_conn);
             region_conn.disconnect();
 
@@ -525,7 +525,7 @@ LL::Task<void> LLViewerAssetStorage::assetRequestCoro(
                 boost::bind(&LLViewerAssetStorage::capsRecvForRegion, this, _1, capsRecv.getName()));
 
         F32Seconds timeout_seconds(LL_ASSET_STORAGE_TIMEOUT); // from minutes to seconds, by default 5 minutes
-        LLSD result = co_await llcoro::co::suspendUntilEventOnWithTimeout(capsRecv, timeout_seconds, LLSDMap("timeout", LLSD::Boolean(true)));
+        LLSD result = co_await llcoro::suspendUntilEventOnWithTimeout(capsRecv, timeout_seconds, LLSDMap("timeout", LLSD::Boolean(true)));
         caps_conn.disconnect();
 
         if (LLApp::isExiting() || !gAssetStorage)

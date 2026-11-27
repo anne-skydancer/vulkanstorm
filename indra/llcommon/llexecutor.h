@@ -4,8 +4,8 @@
  * @file   llexecutor.h
  * @brief  The main-thread executor that runs LL::Task coroutines (doc/clean/plan.md, "Coroutines").
  *
- * It reproduces the run order of the Boost.Fiber scheduler LLCoros used, minus the quirks that ran coroutines inside
- * other main-thread code:
+ * It reproduces the run order of the Boost.Fiber scheduler LLCoros used before it, minus the quirks that ran
+ * coroutines inside other main-thread code:
  *
  * - One FIFO queue of ready entries. A wake-up (an event for a waiting task, a timer, a yield) appends at once, in the
  *   waker's context.
@@ -26,8 +26,6 @@
 #include "llinstancetracker.h"
 #include "lltask.h"
 #include "stdtypes.h"
-
-#include <boost/fiber/fss.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -52,7 +50,7 @@ class Executor;
 
 /**
  * The record of one coroutine: its name, status, "consuming" flag and local storage. LLCoros keeps one per launched
- * coroutine (a fibre today, a task on the executor) and one thread_local for the default coroutine of each thread.
+ * coroutine (a task on the executor) and one thread_local for the default coroutine of each thread.
  */
 class LL_COMMON_API CoroData: public LLInstanceTracker<CoroData, std::string>
 {
@@ -72,7 +70,7 @@ public:
     std::string mStatus;
     F64 mCreationTime; // since epoch
 
-    // For a task: the executor that runs it and the frame of its root wrapper. Unused for a fibre.
+    // For a task: the executor that runs it and the frame of its root wrapper. Unused for the thread record.
     Executor* mExecutor{nullptr};
     std::coroutine_handle<> mRoot;
 
@@ -94,11 +92,16 @@ private:
 /// the old one's values
 LL_COMMON_API std::uint64_t newLocalKey() noexcept;
 
+/// The record of the task running on this thread, or, when none is, the thread's own: the record of the thread's
+/// default coroutine (the one that was never launched), whose name is empty. One per thread, created on first use.
+LL_COMMON_API CoroData& currentOrThreadRecord();
+
 /**
- * Per-coroutine storage. On a task of the executor the value lives in that task's record; on a fibre, and on the
- * default coroutine of a thread, it lives in a fibre-specific pointer (the fibre branch goes with the fibres).
+ * Per-coroutine storage. On a task of the executor the value lives in that task's record; outside a task it lives in
+ * the record of the thread's default coroutine, so each thread has its own value.
  *
- * A LocalPtr is not copyable or movable. A task's value is deleted with its record.
+ * A LocalPtr is not copyable or movable. The value is deleted with its record: when the task ends, or the thread
+ * exits.
  */
 template<typename T>
 class LocalPtr
@@ -108,34 +111,17 @@ public:
     LocalPtr(const LocalPtr&) = delete;
     LocalPtr& operator=(const LocalPtr&) = delete;
 
-    T* get() const
-    {
-        if (CoroData* record = currentTaskRecord())
-        {
-            return static_cast<T*>(record->localGet(mKey));
-        }
-        return mFibre.get();
-    }
+    T* get() const { return static_cast<T*>(currentOrThreadRecord().localGet(mKey)); }
     T* operator->() const { return get(); }
     T& operator*() const { return *get(); }
     /// Adopt @a value for the running coroutine, deleting its old value; the argument may be null.
     void reset(T* value = nullptr)
     {
-        if (CoroData* record = currentTaskRecord())
-        {
-            record->localSet(mKey, value, [](void* p) { delete static_cast<T*>(p); });
-        }
-        else
-        {
-            mFibre.reset(value);
-        }
+        currentOrThreadRecord().localSet(mKey, value, [](void* p) { delete static_cast<T*>(p); });
     }
 
 private:
-    static CoroData* currentTaskRecord();
-
     const std::uint64_t mKey{newLocalKey()};
-    boost::fibers::fiber_specific_ptr<T> mFibre;
 };
 
 /// A claim on the one wake-up a waiter takes. Whoever calls claim() first (the event, the timer, a close) delivers the
@@ -269,12 +255,6 @@ private:
     };
     std::queue<Uncaught> mUncaught;
 };
-
-template<typename T>
-CoroData* LocalPtr<T>::currentTaskRecord()
-{
-    return Executor::currentRecord();
-}
 
 // A coroutine takes its parameters by value; @a fn is the copy that keeps the callable alive for the whole task.
 template<typename F>
