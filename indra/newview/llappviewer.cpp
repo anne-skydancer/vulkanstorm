@@ -2600,6 +2600,9 @@ bool LLAppViewer::cleanup()
 
     LLSplashScreen::hide();
 
+    // stop watching the log control file (logging itself keeps working)
+    LLError::cleanupForApplication();
+
     LL_INFOS() << "Goodbye!" << LL_ENDL;
 
     removeDumpDir();

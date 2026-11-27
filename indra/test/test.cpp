@@ -671,6 +671,7 @@ int main(int argc, char **argv)
     // needs no suppression for it.
     LLSingletonBase::deleteAll();
 
+    LLError::cleanupForApplication();
     ll_cleanup_apr();
 
     int retval = (success ? 0 : 1);

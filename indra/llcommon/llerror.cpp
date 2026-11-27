@@ -453,7 +453,7 @@ namespace
             file = app_dir + "/logcontrol.xml";
         }
         return * new LogControlFile(file);
-            // NB: This instance is never freed
+            // NB: the caller owns the instance (see sLogControlFile)
     }
 
     bool LogControlFile::loadFile()
@@ -747,6 +747,9 @@ namespace
     }
 
 
+    // Owner of the log-control file watcher; freed by cleanupForApplication().
+    std::unique_ptr<LogControlFile> sLogControlFile;
+
     void commonInit(const std::string& user_dir, const std::string& app_dir, bool log_to_stderr = true)
     {
         Globals::getInstance()->resetSettingsConfig();
@@ -767,7 +770,11 @@ namespace
         LLError::addRecorder(recordToWinDebug);
 #endif
 
-        LogControlFile& e = LogControlFile::fromDirectory(user_dir, app_dir);
+        // Replace any watcher left by an earlier call; destroy it first so
+        // two watchers never exist at once.
+        sLogControlFile.reset();
+        sLogControlFile.reset(&LogControlFile::fromDirectory(user_dir, app_dir));
+        LogControlFile& e = *sLogControlFile;
 
         // NOTE: We want to explicitly load the file before we add it to the event timer
         // that checks for changes to the file.  Else, we're not actually loading the file yet,
@@ -786,6 +793,13 @@ namespace LLError
     void initForApplication(const std::string& user_dir, const std::string& app_dir, bool log_to_stderr)
     {
         commonInit(user_dir, app_dir, log_to_stderr);
+    }
+
+    void cleanupForApplication()
+    {
+        // Stops watching the log control file (destroys its LLEventTimer).
+        // Logging itself keeps working with the settings loaded so far.
+        sLogControlFile.reset();
     }
 
     void setFatalFunction(const FatalFunction& f)
