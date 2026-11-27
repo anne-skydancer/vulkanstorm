@@ -553,7 +553,7 @@ void do_bulk_upload(std::vector<std::string> filenames, bool allow_2k, const LLU
 
         std::string name = gDirUtilp->getBaseFileName(filename, true);
         std::string asset_name = name;
-        LLStringUtil::replaceNonstandardASCII(asset_name, '?');
+        LLStringUtil::asciiFoldName(asset_name, '?');
         LLStringUtil::replaceChar(asset_name, '|', '?');
         LLStringUtil::stripNonprintable(asset_name);
         LLStringUtil::trim(asset_name);
@@ -1465,7 +1465,7 @@ void upload_done_callback(
     if(is_balance_sufficient && !next_file.empty())
     {
         std::string asset_name = gDirUtilp->getBaseFileName(next_file, true);
-        LLStringUtil::replaceNonstandardASCII( asset_name, '?' );
+        LLStringUtil::asciiFoldName(asset_name, '?');
         LLStringUtil::replaceChar(asset_name, '|', '?');
         LLStringUtil::stripNonprintable(asset_name);
         LLStringUtil::trim(asset_name);
