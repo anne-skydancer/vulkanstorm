@@ -33,6 +33,7 @@
 #include "llvector4a.h"
 #include "hbxxh.h"
 #include "llcontrol.h"
+#include <cmath>
 
 #ifdef LL_USESYSTEMLIBS
 # include <zlib.h>
@@ -52,6 +53,14 @@ std::string model_names[] =
 };
 
 const int MODEL_NAMES_LENGTH = sizeof(model_names) / sizeof(std::string);
+
+// Quantise value across [min, min + range] to 16 bits. A zero or non-finite range
+// (flat mesh axis, constant UVs) has no domain to spread over: write 0 rather than
+// casting the NaN of 0/0 to an integer, which is undefined behaviour.
+static U16 quantize16(F32 value, F32 min, F32 range)
+{
+    return (range > 0.f && std::isfinite(range)) ? (U16) (((value - min) / range) * 65535) : (U16) 0;
+}
 
 LLModel::LLModel(const LLVolumeParams& params, F32 detail)
     : LLVolume(params, detail),
@@ -951,7 +960,7 @@ LLSD LLModel::writeModel(
                     for (U32 k = 0; k < 3; ++k)
                     { //for each component
                         //convert to 16-bit normalized across domain
-                        U16 val = (U16) (((pos[k]-min_pos.mV[k])/pos_range.mV[k])*65535);
+                        U16 val = quantize16(pos[k], min_pos.mV[k], pos_range.mV[k]);
 
                         U8* buff = (U8*) &val;
                         //write to binary buffer
@@ -1001,7 +1010,7 @@ LLSD LLModel::writeModel(
                         for (U32 k = 0; k < 2; ++k)
                         { //for each component
                             //convert to 16-bit normalized
-                            U16 val = (U16) ((src_tc[k]-min_tc.mV[k])/tc_range.mV[k]*65535);
+                            U16 val = quantize16(src_tc[k], min_tc.mV[k], tc_range.mV[k]);
 
                             U8* buff = (U8*) &val;
                             //write to binary buffer
@@ -2105,7 +2114,7 @@ LLSD LLModel::Decomposition::asLLSD() const
                 for (U32 k = 0; k < 3; k++)
                 {
                     //convert to 16-bit normalized across domain
-                    U16 val = (U16) (((src[k]-min.mV[k])/range.mV[k])*65535);
+                    U16 val = quantize16(src[k], min.mV[k], range.mV[k]);
 
                     if(valid.size() < 3)
                     {
@@ -2150,7 +2159,7 @@ LLSD LLModel::Decomposition::asLLSD() const
             for (U32 k = 0; k < 3; k++)
             {
                 //convert to 16-bit normalized across domain
-                U16 val = (U16) (((v[k]-min.mV[k])/range.mV[k])*65535);
+                U16 val = quantize16(v[k], min.mV[k], range.mV[k]);
 
                 U8* buff = (U8*) &val;
                 //write to binary buffer
