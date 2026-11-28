@@ -4773,7 +4773,9 @@ U32 LLVOVolume::getLODTriangleCount(S32 lod)
     else if (isMesh())
     {
         LLVolume* ref = LLPrimitive::getVolumeManager()->refVolume(volume->getParams(), lod);
-        if (!ref->isMeshAssetLoaded() || ref->getNumVolumeFaces() == 0)
+        // this is polled: a mesh whose header ask was given up is not asked for again by it
+        if ((!ref->isMeshAssetLoaded() || ref->getNumVolumeFaces() == 0)
+            && !gMeshRepo.headerGaveUp(volume->getParams().getSculptID()))
         {
             gMeshRepo.loadMesh(this, volume->getParams(), lod);
         }

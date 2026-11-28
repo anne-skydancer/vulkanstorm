@@ -196,6 +196,8 @@ public:
     RequestStats() :mRetries(0) {};
 
     void updateTime();
+    // not before this many seconds from now (isDelayed() is true until then), without counting a retry
+    void delayFor(F32 seconds);
     bool canRetry() const;
     bool isDelayed() const;
     U32 getRetries() { return mRetries; }
@@ -466,15 +468,18 @@ public:
     {
     public:
         const LLVolumeParams mMeshParams;
+        // true for the header a physics shape or decomposition waits for (see requestPhysicsHeader): mMeshParams
+        // then only carries the mesh id, no LOD wish belongs to the request
+        const bool mPhysicsOnly;
 
-        HeaderRequest(const LLVolumeParams&  mesh_params)
-            : RequestStats(), mMeshParams(mesh_params)
+        HeaderRequest(const LLVolumeParams&  mesh_params, bool physics_only = false)
+            : RequestStats(), mMeshParams(mesh_params), mPhysicsOnly(physics_only)
         {
         }
 
         // a retry of a request that failed: carries the retry count and back-off of the failed one
-        HeaderRequest(const LLVolumeParams&  mesh_params, const RequestStats& stats)
-            : RequestStats(stats), mMeshParams(mesh_params)
+        HeaderRequest(const LLVolumeParams&  mesh_params, const RequestStats& stats, bool physics_only = false)
+            : RequestStats(stats), mMeshParams(mesh_params), mPhysicsOnly(physics_only)
         {
         }
 
@@ -575,12 +580,23 @@ public:
     typedef std::unordered_map<LLUUID, std::array<S32, LLModel::NUM_LODS> > pending_lod_map;
     pending_lod_map mPendingLOD;
 
-    // Meshes whose header could not be had after all the retries: mesh id and the time (LLTimer::getTotalSeconds)
-    // before which loadMeshLOD does not queue the header request again.  Guarded by mPendingMutex.
-    std::unordered_map<LLUUID, F64> mHeaderCooldown;
+    // The failed header asks of a mesh (index 0: the header a LOD wish waits for, 1: the header a physics shape or
+    // decomposition waits for): the consecutive failures so far, and whether the ask was given up (see
+    // LLMeshRetry).  Erased when the header arrives.  Guarded by mPendingMutex.
+    struct HeaderFailures
+    {
+        U32 mCount[2] = { 0, 0 };
+        bool mGaveUp[2] = { false, false };
+    };
+    std::unordered_map<LLUUID, HeaderFailures> mHeaderFailures;
 
-    // Physics shape and decomposition requests that ended without their data, oldest first, with the time
-    // (LLTimer::getTotalSeconds) from which they may be asked again.  Guarded by mLoadedMutex.
+    // Meshes whose header a physics shape or decomposition request waits for, with a header request of its own on
+    // its way (no LOD wish is attached to it).  Guarded by mPendingMutex.
+    std::unordered_set<LLUUID> mPhysicsHeaderWait;
+
+    // Physics shape and decomposition requests that ended without their data and may be asked again, with the time
+    // (LLTimer::getTotalSeconds) from which the main thread forgets the loading mark.  Not in time order (the
+    // wait has jitter).  Guarded by mLoadedMutex.
     struct FailedAsk
     {
         LLUUID mId;
@@ -588,6 +604,10 @@ public:
         F64 mAskAgainAt;
     };
     std::deque<FailedAsk> mFailedAskQ;
+
+    // Consecutive failed asks per mesh, [0] decompositions and [1] physics shapes; erased on success.  Guarded by
+    // mLoadedMutex.
+    std::unordered_map<LLUUID, U32> mAskFailures[2];
 
     // map of mesh ID to skin info (mirrors LLMeshRepository::mSkinMap)
     /// NOTE: LLMeshRepository::mSkinMap is accessed very frequently, so maintain a copy here to avoid mutex overhead
@@ -630,9 +650,12 @@ public:
     void loadMeshLOD(const LLVolumeParams& mesh_params, S32 lod);
 
     // stats: the retry state of the request being served, kept by the HTTP handler for a retry on failure
-    bool fetchMeshHeader(const LLVolumeParams& mesh_params, const RequestStats& stats);
+    bool fetchMeshHeader(const LLVolumeParams& mesh_params, const RequestStats& stats, bool physics_only = false);
     bool fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod, const RequestStats& stats);
-    EMeshProcessingResult headerReceived(const LLVolumeParams& mesh_params, U8* data, S32 data_size, U32 flags = 0);
+    // physics_only: the header was asked for by requestPhysicsHeader; mesh_params is then no LOD request and the
+    // LOD wishes parked in mPendingLOD stay for the header request that belongs to them
+    EMeshProcessingResult headerReceived(const LLVolumeParams& mesh_params, U8* data, S32 data_size, U32 flags = 0,
+                                         bool physics_only = false);
     EMeshProcessingResult lodReceived(const LLVolumeParams& mesh_params, S32 lod, U8* data, S32 data_size);
     bool skinInfoReceived(const LLUUID& mesh_id, U8* data, S32 data_size);
     bool decompositionReceived(const LLUUID& mesh_id, U8* data, S32 data_size);
@@ -644,16 +667,24 @@ public:
     bool headerPending(const LLUUID& mesh_id) const;
     // true once the main thread has stored at least one capability address (see constructUrl)
     bool hasCapabilities() const;
-    // The header can not be had: release everything waiting for the mesh (LODs and skin) as unavailable.
-    // permanent: the sim said there is no (usable) header; it is remembered as a 404 header so nothing asks again.
-    // Otherwise no header request is queued for the mesh again before HEADER_RETRY_COOLDOWN has passed.
-    void headerFailed(const LLVolumeParams& mesh_params, bool permanent);
-    // Thread: repo.  Make sure the header of the mesh is on its way, without any LOD wish.  true when it is
-    // pending or was queued now, false while the mesh is cooling down after a failed header.
-    bool requestHeader(const LLUUID& mesh_id);
-    // Thread: any.  A physics shape (physics = true) or decomposition request ended without its data: the loading
-    // mark is cleared by the main thread (notifyLoadedMeshes) after ASK_RETRY_COOLDOWN, so a later ask starts over.
-    void askFailed(const LLUUID& mesh_id, bool physics);
+    // Thread: repo.  A header request failed.  permanent: the sim said there is no (usable) header; it is
+    // remembered as a 404 header so nothing asks again, and everything waiting for the mesh (LODs and skin) is
+    // released as unavailable.  Otherwise the header is asked again, up to LLMeshRetry::MAX_REASKS times about
+    // 5 s apart, with the waiting LODs parked; after that it gives up with one warning and releases them.
+    // physics_only: the request was a requestPhysicsHeader one; nothing but its own wait is touched.
+    void headerFailed(const LLVolumeParams& mesh_params, bool permanent, bool physics_only = false);
+    // Thread: repo.  Make sure a header request is on its way for a physics shape or decomposition request, without
+    // any LOD wish (a LOD request makes its own, with its own parameters; at most one 4 KB GET is asked twice).
+    // true: the header is on its way (wait); false: the ask was given up (see headerFailed).
+    bool requestPhysicsHeader(const LLUUID& mesh_id);
+    // Thread: any.  true once the header ask of a LOD wish was given up for the mesh (until a new demand).
+    bool headerGaveUp(const LLUUID& mesh_id) const;
+    // Thread: any.  A physics shape (physics = true) or decomposition request ended without its data.  Unless
+    // final, a transient failure: the loading mark is cleared by the main thread (notifyLoadedMeshes) about 5 s
+    // later, so the next ask starts over, up to LLMeshRetry::MAX_REASKS times.  Then, and at once for a final
+    // failure (an answer that will not change, a parse failure), it gives up for the session with one warning:
+    // the mark stays, so nothing asks again.
+    void askFailed(const LLUUID& mesh_id, bool physics, bool final = false);
 
     void notifyLoadedMeshes();
     S32 getActualMeshLOD(const LLVolumeParams& mesh_params, S32 lod);
@@ -971,6 +1002,8 @@ public:
     bool hasPhysicsShape(const LLUUID& mesh_id);
     bool hasSkinInfo(const LLUUID& mesh_id);
     bool hasHeader(const LLUUID& mesh_id) const;
+    // the header ask of a LOD wish was given up (a new request for a LOD may start it again, polling must not)
+    bool headerGaveUp(const LLUUID& mesh_id) const;
 
     void buildHull(const LLVolumeParams& params, S32 detail);
     void buildPhysicsMesh(LLModel::Decomposition& decomp);
