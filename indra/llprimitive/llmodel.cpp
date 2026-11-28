@@ -1129,6 +1129,19 @@ LLSD LLModel::writeModel(
     return writeModelToStream(ostr, mdl, write_mode, as_slm);
 }
 
+thread_local U32 LLModel::sLodestarGridTestVariant = 0;
+
+// Devel-only grid test data: 64 distinguishable bytes.
+static LLSD::Binary lodestar_grid_bytes(U8 seed)
+{
+    LLSD::Binary bytes(64);
+    for (size_t i = 0; i < bytes.size(); ++i)
+    {
+        bytes[i] = static_cast<U8>(seed + i);
+    }
+    return bytes;
+}
+
 LLSD LLModel::writeModelToStream(std::ostream& ostr, LLSD& mdl, EWriteModelMode write_mode, bool as_slm)
 {
     std::string::size_type cur_offset = 0;
@@ -1138,6 +1151,15 @@ LLSD LLModel::writeModelToStream(std::ostream& ostr, LLSD& mdl, EWriteModelMode 
     if (as_slm && mdl.has("material_list"))
     { //save material binding names to header
         header["material_list"] = mdl["material_list"];
+    }
+
+    const U32 grid_variant = sLodestarGridTestVariant;
+    bool grid_variant2_done = false;
+
+    if (grid_variant == 1)
+    { // grid test: a top-level map (the high_lod key is added with its block below)
+        header["lodestar"]["version"] = 1;
+        header["lodestar"]["values"] = lodestar_grid_bytes(0x10);
     }
 
     std::string skin;
@@ -1181,14 +1203,45 @@ LLSD LLModel::writeModelToStream(std::ostream& ostr, LLSD& mdl, EWriteModelMode 
     {
         if (mdl.has(model_names[i]))
         {
-            out[i] = zip_llsd(mdl[model_names[i]]);
+            if (grid_variant == 2 && i == 0 && mdl[model_names[i]].isArray() && mdl[model_names[i]].size() > 0)
+            { // grid test: 64 bytes in the first face map of the Lowest block
+                LLSD block = mdl[model_names[i]];
+                block[0]["lodestar"] = lodestar_grid_bytes(0x20);
+                out[i] = zip_llsd(block);
+                grid_variant2_done = true;
+            }
+            else
+            {
+                out[i] = zip_llsd(mdl[model_names[i]]);
+            }
 
             U32 size = static_cast<U32>(out[i].size());
 
             header[model_names[i]]["offset"] = (LLSD::Integer) cur_offset;
             header[model_names[i]]["size"] = (LLSD::Integer) size;
+            if (grid_variant == 1 && model_names[i] == "high_lod")
+            { // grid test: a key inside the high_lod header entry
+                header[model_names[i]]["lodestar"]["version"] = 1;
+            }
             cur_offset += size;
         }
+    }
+
+    if (grid_variant == 2 && !grid_variant2_done)
+    {
+        LL_WARNS() << "Lodestar grid test: variant 2 requested but the model has no Lowest block; nothing was added" << LL_ENDL;
+    }
+
+    // grid test variant 3: a named 64-byte block after the LOD blocks, then 64 bytes nothing references
+    LLSD::Binary grid_block;
+    LLSD::Binary grid_trailer;
+    if (grid_variant == 3)
+    {
+        grid_block = lodestar_grid_bytes(0x30);
+        grid_trailer = lodestar_grid_bytes(0x40);
+        header["lodestar_block"]["offset"] = (LLSD::Integer) cur_offset;
+        header["lodestar_block"]["size"] = (LLSD::Integer) grid_block.size();
+        cur_offset += grid_block.size();
     }
 
     if (write_mode == WRITE_HUMAN)
@@ -1215,6 +1268,12 @@ LLSD LLModel::writeModelToStream(std::ostream& ostr, LLSD& mdl, EWriteModelMode 
             {
                 ostr.write((const char*) out[i].data(), header[model_names[i]]["size"].asInteger());
             }
+        }
+
+        if (grid_variant == 3)
+        {
+            ostr.write((const char*) grid_block.data(), grid_block.size());
+            ostr.write((const char*) grid_trailer.data(), grid_trailer.size());
         }
     }
 

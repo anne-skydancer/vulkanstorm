@@ -27,6 +27,7 @@
 #ifndef LL_MESH_REPOSITORY_H
 #define LL_MESH_REPOSITORY_H
 
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include "llassettype.h"
@@ -572,6 +573,7 @@ public:
 
     typedef std::unordered_set<LLCore::HttpHandler::ptr_t> http_request_set;
     http_request_set                    mHttpRequestSet;            // Outstanding HTTP requests
+    std::set<LLUUID>                    mGridDumpDone;              // devel-only grid test: assets already requested
 
     // <FS:Ansariel> [UDP Assets]
     std::string mLegacyGetMeshCapability;
@@ -593,6 +595,7 @@ public:
     bool fetchMeshHeader(const LLVolumeParams& mesh_params);
     bool fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod);
     EMeshProcessingResult headerReceived(const LLVolumeParams& mesh_params, U8* data, S32 data_size, U32 flags = 0);
+    void lodestarGridTestMaybeDump(const LLUUID& mesh_id, const LLSD& header_data); // devel-only grid test
     EMeshProcessingResult lodReceived(const LLVolumeParams& mesh_params, S32 lod, U8* data, S32 data_size);
     bool skinInfoReceived(const LLUUID& mesh_id, U8* data, S32 data_size);
     bool decompositionReceived(const LLUUID& mesh_id, U8* data, S32 data_size);

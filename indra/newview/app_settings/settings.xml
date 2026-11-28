@@ -8425,6 +8425,28 @@
     <key>Value</key>
     <real>0.5</real>
   </map>
+  <key>LodestarGridTestVariant</key>
+  <map>
+    <key>Comment</key>
+    <string>DEBUG (devel only, scripts/lodestar_grid): what the mesh upload adds. 0 = nothing (control), 1 = header keys, 2 = 64 bytes in the Lowest block, 3 = 64-byte named block plus 64 trailing bytes.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>U32</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
+  <key>LodestarGridTestDump</key>
+  <map>
+    <key>Comment</key>
+    <string>DEBUG (devel only, scripts/lodestar_grid): when a mesh header arrives for your own upload of the last 2 hours, fetch the whole asset and write it to logs/lodestar-grid-UUID.bin.</string>
+    <key>Persist</key>
+    <integer>0</integer>
+    <key>Type</key>
+    <string>Boolean</string>
+    <key>Value</key>
+    <integer>0</integer>
+  </map>
   <key>MeshUploadLogXML</key>
   <map>
     <key>Comment</key>

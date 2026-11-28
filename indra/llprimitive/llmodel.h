@@ -183,6 +183,10 @@ public:
         bool as_slm = false,
         int submodel_id = 0);
 
+    // Devel-only grid test (scripts/lodestar_grid): 0 writes today's bytes; 1-3 add test data to the upload.
+    // Set by the upload thread right before writeModel; read on the same thread.
+    static thread_local U32 sLodestarGridTestVariant;
+
     static LLSD writeModelToStream(
         std::ostream& ostr,
         LLSD& mdl,

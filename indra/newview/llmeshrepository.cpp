@@ -717,6 +717,40 @@ public:
 };
 
 
+// Devel-only grid test: sets the writeModel variant for one scope and always resets it to 0.
+struct LodestarGridVariantGuard
+{
+    explicit LodestarGridVariantGuard(U32 variant) { LLModel::sLodestarGridTestVariant = variant; }
+    ~LodestarGridVariantGuard() { LLModel::sLodestarGridTestVariant = 0; }
+    LodestarGridVariantGuard(const LodestarGridVariantGuard&) = delete;
+    LodestarGridVariantGuard& operator=(const LodestarGridVariantGuard&) = delete;
+};
+
+// Devel-only grid test (scripts/lodestar_grid): one whole-asset GET of the
+// agent's own fresh upload, written to logs/lodestar-grid-<uuid>.bin.
+//
+// Thread:  repo
+class LLMeshGridDumpHandler : public LLMeshHandlerBase
+{
+public:
+    LOG_CLASS(LLMeshGridDumpHandler);
+    explicit LLMeshGridDumpHandler(const LLUUID& id)
+        : LLMeshHandlerBase(0, 0),
+          mMeshID(id)
+    {}
+
+    LLMeshGridDumpHandler(const LLMeshGridDumpHandler&) = delete;
+    LLMeshGridDumpHandler& operator=(const LLMeshGridDumpHandler&) = delete;
+
+public:
+    virtual void processData(LLCore::BufferArray* body, S32 body_offset, U8* data, S32 data_size);
+    virtual void processFailure(LLCore::HttpStatus status);
+
+private:
+    LLUUID mMeshID;
+};
+
+
 // Subclass for LOD fetches.
 //
 // Thread:  repo
@@ -2302,6 +2336,72 @@ bool LLMeshRepoThread::fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod)
     return retval;
 }
 
+// Devel-only grid test: the header of one of the agent's own uploads of the
+// last 2 hours triggers one whole-asset fetch. Reads "creator" and "date" the way
+// the server writes them (a UUID, and an LLSD date or an ISO string).
+void LLMeshRepoThread::lodestarGridTestMaybeDump(const LLUUID& mesh_id, const LLSD& header_data)
+{
+    static LLCachedControl<bool> grid_dump(gSavedSettings, "LodestarGridTestDump", false);
+    if (!grid_dump || !header_data.has("creator") || !header_data.has("date"))
+    {
+        return;
+    }
+    const LLSD& creator = header_data["creator"];
+    if (!creator.isUUID() || creator.asUUID() != gAgentID)
+    {
+        return;
+    }
+    const LLSD& date_sd = header_data["date"];
+    LLDate date;
+    if (date_sd.isDate())
+    {
+        date = date_sd.asDate();
+    }
+    else if (date_sd.isString())
+    {
+        if (!date.fromString(date_sd.asString()))
+        {
+            return;
+        }
+    }
+    else
+    {
+        return;
+    }
+    // Allow clock skew between the server and this PC: reject only an asset more than
+    // 5 minutes in the future or more than 2 hours old.
+    const F64 age = LLDate::now().secondsSinceEpoch() - date.secondsSinceEpoch();
+    if (age < -300.0 || age > 2.0 * 60.0 * 60.0)
+    {
+        LL_INFOS(LOG_MESH) << "Lodestar grid test: own asset " << mesh_id << " not dumped, age "
+                           << age << " s is outside -300 s .. 2 h" << LL_ENDL;
+        return;
+    }
+    if (mGridDumpDone.count(mesh_id))
+    {
+        return;
+    }
+
+    std::string http_url;
+    int legacy_cap_version(0);
+    constructUrl(mesh_id, &http_url, &legacy_cap_version);
+    if (http_url.empty())
+    {
+        return;
+    }
+    LLMeshHandlerBase::ptr_t handler = std::make_shared<LLMeshGridDumpHandler>(mesh_id);
+    LLCore::HttpHandle handle = getByteRange(http_url, legacy_cap_version, 0, 0, handler);
+    if (LLCORE_HTTP_HANDLE_INVALID == handle)
+    {
+        LL_WARNS(LOG_MESH) << "Lodestar grid test: asset request failed for " << mesh_id
+                           << ", Reason:  " << mHttpStatus.toString() << LL_ENDL;
+        return;
+    }
+    mGridDumpDone.insert(mesh_id);
+    handler->mHttpHandle = handle;
+    mHttpRequestSet.insert(handler);
+}
+
 EMeshProcessingResult LLMeshRepoThread::headerReceived(const LLVolumeParams& mesh_params, U8* data, S32 data_size, U32 flags)
 {
     LL_PROFILE_ZONE_SCOPED;
@@ -2338,6 +2438,8 @@ EMeshProcessingResult LLMeshRepoThread::headerReceived(const LLVolumeParams& mes
         }
 
         header.fromLLSD(header_data);
+
+        lodestarGridTestMaybeDump(mesh_id, header_data);
 
         if (header.mVersion > MAX_MESH_VERSION)
         {
@@ -2862,6 +2964,7 @@ void LLMeshUploadThread::packModelIntance(
 
         decomp.mBaseHull = mHullMap[data.mBaseModel];
 
+        LodestarGridVariantGuard grid_variant_guard(llmin<U32>(gSavedSettings.getU32("LodestarGridTestVariant"), 3));
         LLSD mesh_header = LLModel::writeModel(
             ostr,
             data.mModel[LLModel::LOD_PHYSICS],
@@ -3935,6 +4038,32 @@ void LLMeshHeaderHandler::processData(LLCore::BufferArray * /* body */, S32 /* b
             }
         }
     }
+}
+
+void LLMeshGridDumpHandler::processFailure(LLCore::HttpStatus status)
+{
+    LL_WARNS(LOG_MESH) << "Lodestar grid test: asset fetch failed for " << mMeshID
+                       << ", Reason:  " << status.toString() << LL_ENDL;
+}
+
+void LLMeshGridDumpHandler::processData(LLCore::BufferArray* /* body */, S32 /* body_offset */,
+                                        U8* data, S32 data_size)
+{
+    if (!data || data_size <= 0)
+    {
+        return;
+    }
+    const std::string filename = gDirUtilp->getExpandedFilename(LL_PATH_LOGS,
+        "lodestar-grid-" + mMeshID.asString() + ".bin");
+    llofstream of(filename.c_str(), std::ios::binary);
+    of.write(reinterpret_cast<const char*>(data), data_size);
+    of.flush();
+    if (!of.good())
+    {
+        LL_WARNS(LOG_MESH) << "Lodestar grid test: writing " << filename << " failed" << LL_ENDL;
+        return;
+    }
+    LL_INFOS(LOG_MESH) << "Lodestar grid test: wrote " << data_size << " bytes to " << filename << LL_ENDL;
 }
 
 LLMeshLODHandler::~LLMeshLODHandler()
