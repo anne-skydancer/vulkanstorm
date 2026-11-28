@@ -158,6 +158,11 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llskinpalettecache_test.cpp -o "$RUNNER_TEMP/skin-palette-cache-test"
         "$RUNNER_TEMP/skin-palette-cache-test"
+    - name: Check the mesh repository's retry rule (final and transient answers, 3 asks 5 s apart)
+      shell: bash
+      run: |
+        g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llmeshretry_test.cpp -o "$RUNNER_TEMP/mesh-retry-test"
+        "$RUNNER_TEMP/mesh-retry-test"
     - name: Check the texture streaming fixes (fetch retry rules, and the source guards of every texture streaming fix of 2026-11-18)
       shell: bash
       run: |
