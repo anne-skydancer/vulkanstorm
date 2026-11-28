@@ -12,8 +12,14 @@
 //   gap N us: the broadcast follows the flag by N microseconds (the viewer: LLApp::isExiting is set when the
 //             quit starts, LLMeshRepository::shutdown -> cleanup() broadcasts much later, after the main loop ended)
 // and for the wait strategies: "legacy" (the old loop), "fixed" (wait on a predicate that checks the exit flag,
-// the flag set under the condition's mutex) and "real" (the loop of LLMeshRepoThread::run() now: a wake-pending flag
-// and the exit flag, both set under the condition's mutex; a wait with a 5 ms timeout while requests are in flight).
+// the flag set under the condition's mutex) and "real" (the loop of LLMeshRepoThread::run() now, and the viewer's
+// shutdown: a wake-pending flag and mShuttingDown, both set under the condition's mutex; the app's exit flag
+// (LLApp::isExiting) set with no lock and no notify, then cleanup()'s changeAndBroadcast after the gap; a wake()
+// running at the same moment as the thread leaves the loop; the thread's tail after the loop, which must leave the
+// condition's mutex free; a wait with a 5 ms timeout while requests are in flight).
+// NOTE: the "real" model mirrors the loop structure of LLMeshRepoThread::run() in indra/newview/llmeshrepository.cpp
+// (loop condition, predicate, wait / waitFor choice, the break after the wait, the tail).  Change this test whenever
+// run() changes.
 // "real" also checks that no wake-up is lost (every wake() leads to a pass within a second, 3 wakes at different
 // timings per run) and that the thread wakes by itself, with no wake(), while requests are in flight.
 //
@@ -82,22 +88,29 @@ struct Run
     bool mReal = false;
     // "real" model: mWakePending is guarded by mSignal's mutex
     bool mWakePending = false;
+    std::atomic<bool> mShuttingDown{false}; // written under mSignal's mutex (cleanup()), read in the predicate
     std::atomic<bool> mBusy{false};    // requests in flight
     std::atomic<int> mPasses{0};
 
     void wake() { mSignal.changeAndBroadcast([this] { mWakePending = true; }); }
-    void quit() { mSignal.changeAndBroadcast([this] { mExiting.store(true); }); }
+    // The viewer's quit: LLApp::isExiting() is set with no lock and no notify; cleanup() follows after the gap.
+    void quit(int gap_us = 0)
+    {
+        mExiting.store(true);
+        if (gap_us > 0) { spin_us(gap_us); }
+        mSignal.changeAndBroadcast([this] { mShuttingDown.store(true); });
+    }
 
     void thread_main()
     {
         std::mt19937 rng(std::random_device{}());
-        while (!mExiting.load())
+        while (!mExiting.load() && !(mReal && mShuttingDown.load()))
         {
             if (mReal)
             {
                 auto ready = [this]
                 {
-                    if (mExiting.load()) { return true; }
+                    if (mExiting.load() || mShuttingDown.load()) { return true; }
                     if (mWakePending) { mWakePending = false; return true; }
                     return false;
                 };
@@ -113,12 +126,13 @@ struct Run
             {
                 mSignal.wait();
             }
-            if (mExiting.load())
+            if (mExiting.load() || (mReal && mShuttingDown.load()))
             {
                 break;
             }
             spin_us(5 + (int)(rng() % 40)); // the loop body (http update, queues)
         }
+        // the tail of run(): no unlock of mSignal; quitThread() is not modelled
         mStopped.store(true);
     }
 };
@@ -156,9 +170,13 @@ int main(int argc, char** argv)
         spin_us((int)(rng() % 60));
 
         // quit: the flag, then (after gap_us) the one broadcast of cleanup()
+        std::thread waker;
         if (real)
         {
-            run.quit();
+            // a wake() at the same moment as the thread leaves the loop (the main loop's last frame)
+            const int wake_delay = (int)(rng() % 80);
+            waker = std::thread([&run, wake_delay] { spin_us(wake_delay); run.wake(); });
+            run.quit(gap_us);
         }
         else if (fixed)
         {
@@ -169,11 +187,14 @@ int main(int argc, char** argv)
         {
             run.mExiting.store(true);
         }
-        if (gap_us > 0)
+        if (!real)
         {
-            spin_us(gap_us);
+            if (gap_us > 0)
+            {
+                spin_us(gap_us);
+            }
+            run.mSignal.broadcast();
         }
-        run.mSignal.broadcast();
 
         // always join, with a timeout that reports a hang
         const auto deadline = clk::now() + std::chrono::seconds(2);
@@ -193,6 +214,20 @@ int main(int argc, char** argv)
             }
         }
         repo.join();
+        if (waker.joinable()) { waker.join(); }
+        if (real)
+        {
+            // the thread's tail must not leave the condition's mutex held
+            if (!run.mSignal.mMutex.try_lock())
+            {
+                ++hangs;
+                std::printf("mutex left locked at iteration %d\n", i);
+            }
+            else
+            {
+                run.mSignal.mMutex.unlock();
+            }
+        }
     }
 
     // "real" only: (1) no lost wake-up while idle, (2) the thread wakes by itself while requests are in flight
