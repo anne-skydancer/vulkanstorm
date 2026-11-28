@@ -27,6 +27,7 @@
 #ifndef LL_MESH_REPOSITORY_H
 #define LL_MESH_REPOSITORY_H
 
+#include <atomic>
 #include <unordered_map>
 #include <unordered_set>
 #include "llassettype.h"
@@ -959,8 +960,19 @@ public:
     static U32 sMeshRequestCount;               // Total request count, http or cached, all component types
     static U32 sHTTPRequestCount;               // Http GETs issued (not large)
     static U32 sHTTPLargeRequestCount;          // Http GETs issued for large requests
-    static U32 sHTTPRetryCount;                 // Total request retries whether successful or failed
+    static U32 sHTTPRetryCount;                 // llcorehttp-internal retries only; application re-asks show up as more gets and errors
     static U32 sHTTPErrorCount;                 // Requests ending in error
+    // Baseline counters, written by the repo thread (sMeshesLoaded: the main thread), read by the main thread (relaxed atomics).
+    // The error classes do not overlap and add up to sHTTPErrorCount: Transport (a curl easy or multi error), 429,
+    // Transient (403, 408, 425, 499, 500..599: 5xx is in here), Final (the other 4xx), Other (any other number:
+    // below 400, 600 and above, and the non-HTTP errors of llcorehttp itself).
+    enum EHttpErrorClass { ERR_TRANSPORT, ERR_HTTP_429, ERR_TRANSIENT, ERR_FINAL, ERR_OTHER, ERR_CLASS_COUNT };
+    static std::atomic<U32> sHTTPErrorsByClass[ERR_CLASS_COUNT];
+    // Cache-dependent: gets, retries, errors and mesh_headers (a mesh served from the cache needs no header GET).
+    // Cache-independent: meshes_loaded (volume LODs that reached "asset loaded"), so GETs per mesh = gets / meshes_loaded.
+    static std::atomic<U32> sHTTPHeadersReceived;                // Mesh headers that arrived over HTTP
+    static std::atomic<U32> sMeshesLoaded;                       // Volume LODs that reached "asset loaded", cache or HTTP
+    static void countHttpError(const LLCore::HttpStatus& status); // repo thread: ++sHTTPErrorCount and its class
     static U32 sLODPending;
     static U32 sLODProcessing;
     static U32 sCacheBytesRead;
