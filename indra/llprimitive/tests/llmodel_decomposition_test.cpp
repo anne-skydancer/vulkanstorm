@@ -175,4 +175,38 @@ namespace tut
         LLModel::Decomposition decoded(data);
         ensure("non-binary positions rejected", decoded.mHull.empty());
     }
+    template<> template<>
+    void model_decomposition_object::test<100>()
+    {
+        // Flat hull (zero range on Z): encoding must not hit 0/0 and decodes back exactly.
+        LLModel::Decomposition flat;
+        flat.mHull.resize(1);
+        flat.mHull[0] = {LLVector3(0.f, 0.f, 1.f), LLVector3(1.f, 0.f, 1.f), LLVector3(1.f, 1.f, 1.f), LLVector3(0.f, 1.f, 1.f)};
+        flat.mBaseHull = flat.mHull[0];
+        LLSD data = flat.asLLSD();
+        const LLSD::Binary& pos = data["Positions"].asBinary();
+        ensure_equals("positions size", pos.size(), size_t(24));
+        for (size_t v = 0; v < 4; ++v)
+        {
+            U16 xyz[3];
+            memcpy(xyz, pos.data() + v * 6, 6);
+            ensure_equals("flat axis encodes 0", xyz[2], U16(0));
+        }
+        LLModel::Decomposition decoded(data);
+        ensure_equals("decoded hull", decoded.mHull.size(), size_t(1));
+        ensure_equals("flat z restored", decoded.mHull[0][2].mV[2], 1.f);
+        ensure_equals("x max", decoded.mHull[0][2].mV[0], 1.f);
+
+        // Normal hull encodes as before: min -> 0, max -> 65535.
+        LLModel::Decomposition normal;
+        normal.mHull.resize(1);
+        normal.mHull[0] = {LLVector3(0.f, 0.f, 0.f), LLVector3(1.f, 2.f, 4.f), LLVector3(0.f, 1.f, 2.f)};
+        LLSD ndata = normal.asLLSD();
+        const LLSD::Binary& np = ndata["Positions"].asBinary();
+        U16 v0[3], v1[3];
+        memcpy(v0, np.data(), 6);
+        memcpy(v1, np.data() + 6, 6);
+        ensure_equals("min is 0", v0[1], U16(0));
+        ensure_equals("max is 65535", v1[2], U16(65535));
+    }
 }
