@@ -180,7 +180,7 @@
 //   LLMeshRepository::mMeshMutex
 //   LLMeshRepoThread::mMutex
 //   LLMeshRepoThread::mHeaderMutex
-//   LLMeshRepoThread::mSignal (LLCondition)
+//   LLMeshRepoThread::mSignal (LLCondition; its mutex guards mWakePending and the writes of mShuttingDown)
 //   LLPhysicsDecomp::mSignal (LLCondition)
 //   LLPhysicsDecomp::mMutex
 //   LLMeshUploadThread::mMutex
@@ -189,6 +189,9 @@
 //
 //   1.  LLMeshRepoThread::mMutex before LLMeshRepoThread::mHeaderMutex
 //   2.  LLMeshRepository::mMeshMutex before LLMeshRepoThread::mMutex
+//   3.  LLMeshRepoThread::mSignal's mutex is a leaf: never held together with mMutex, mHeaderMutex, mLoadedMutex or
+//       mPendingMutex.  Its wait predicate takes LLApp's status mutex (LLApp::isExiting) inside it, so nothing
+//       that holds the status mutex may take mSignal's.
 //   (There are more rules, haven't been extracted.)
 //
 // Data Member Access/Locking
@@ -286,6 +289,9 @@
 //     mGetMeshCapability       mMutex        rw.main.mMutex, ro.repo.mMutex (was:  [0])
 //     mGetMesh2Capability      mMutex        rw.main.mMutex, ro.repo.mMutex (was:  [0])
 //     mGetMeshVersion          mMutex        rw.main.mMutex, ro.repo.mMutex
+//     mShuttingDown            atomic        wo.main.mSignal (cleanup), ro.repo.mSignal (wait predicate), ro.repo.none,
+//                                            ro.pool.none
+//     mWakePending             mSignal       rw.main.mSignal (wake), rw.repo.mSignal (wait predicate)
 //     mHttp*                   none          rw.repo.none
 //
 //   LLMeshUploadThread:
