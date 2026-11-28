@@ -2822,6 +2822,15 @@ void LLVolume::copyVolumeFaces(const LLVolume* volume)
     mSculptLevel = 0;
 }
 
+void LLVolume::moveVolumeFaces(LLVolume* volume)
+{
+    // the faces (vertex buffers and rigging boxes) change owner, nothing is copied; the source is left without faces
+    llassert(volume != this);
+    mVolumeFaces = std::move(volume->mVolumeFaces);
+    volume->mVolumeFaces.clear();
+    mSculptLevel = 0;
+}
+
 bool LLVolume::cacheOptimize(bool gen_tangents)
 {
     for (S32 i = 0; i < mVolumeFaces.size(); ++i)

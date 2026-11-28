@@ -163,6 +163,12 @@ runs:
       run: |
         g++ -std=c++20 -O2 -Wall -Wextra -Werror -I indra/newview indra/newview/tests/llmeshretry_test.cpp -o "$RUNNER_TEMP/mesh-retry-test"
         "$RUNNER_TEMP/mesh-retry-test"
+    - name: Check the mesh repo thread's wait (no lost wake-up, no hang on quit, wakes by itself while requests are in flight)
+      shell: bash
+      run: |
+        g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread scripts/tests/mesh_repo_thread_stop_stress.cpp -o "$RUNNER_TEMP/mesh-wait-stress"
+        "$RUNNER_TEMP/mesh-wait-stress" 2000 0 real
+        "$RUNNER_TEMP/mesh-wait-stress" 2000 50 real
     - name: Check the texture streaming fixes (fetch retry rules, and the source guards of every texture streaming fix of 2026-11-18)
       shell: bash
       run: |

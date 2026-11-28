@@ -34,6 +34,8 @@
 #include "llmeshrepository.h"
 #include "llmeshretry.h"
 
+#include <algorithm>
+
 #include "llagent.h"
 #include "llappviewer.h"
 #include "llbufferstream.h"
@@ -178,7 +180,7 @@
 //   LLMeshRepository::mMeshMutex
 //   LLMeshRepoThread::mMutex
 //   LLMeshRepoThread::mHeaderMutex
-//   LLMeshRepoThread::mSignal (LLCondition)
+//   LLMeshRepoThread::mSignal (LLCondition; its mutex guards mWakePending and the writes of mShuttingDown)
 //   LLPhysicsDecomp::mSignal (LLCondition)
 //   LLPhysicsDecomp::mMutex
 //   LLMeshUploadThread::mMutex
@@ -187,6 +189,9 @@
 //
 //   1.  LLMeshRepoThread::mMutex before LLMeshRepoThread::mHeaderMutex
 //   2.  LLMeshRepository::mMeshMutex before LLMeshRepoThread::mMutex
+//   3.  LLMeshRepoThread::mSignal's mutex is a leaf: never held together with mMutex, mHeaderMutex, mLoadedMutex or
+//       mPendingMutex.  Its wait predicate takes LLApp's status mutex (LLApp::isExiting) inside it, so nothing
+//       that holds the status mutex may take mSignal's.
 //   (There are more rules, haven't been extracted.)
 //
 // Data Member Access/Locking
@@ -284,6 +289,9 @@
 //     mGetMeshCapability       mMutex        rw.main.mMutex, ro.repo.mMutex (was:  [0])
 //     mGetMesh2Capability      mMutex        rw.main.mMutex, ro.repo.mMutex (was:  [0])
 //     mGetMeshVersion          mMutex        rw.main.mMutex, ro.repo.mMutex
+//     mShuttingDown            atomic        wo.main.mSignal (cleanup), ro.repo.mSignal (wait predicate), ro.repo.none,
+//                                            ro.pool.none
+//     mWakePending             mSignal       rw.main.mSignal (wake), rw.repo.mSignal (wait predicate)
 //     mHttp*                   none          rw.repo.none
 //
 //   LLMeshUploadThread:
@@ -1121,25 +1129,40 @@ void LLMeshRepoThread::run()
         LL_WARNS(LOG_MESH) << "Convex decomposition unable to be loaded.  Expect severe problems." << LL_ENDL;
     }
 
-    while (!LLApp::isExiting())
+    while (!LLApp::isExiting() && !mShuttingDown)
     {
-        // *TODO:  Revise sleep/wake strategy and try to move away
-        // from polling operations in this thread.  We can sleep
-        // this thread hard when:
-        // * All Http requests are serviced
-        // * LOD request queue empty
-        // * Header request queue empty
-        // * Skin info request queue empty
-        // * Decomposition request queue empty
-        // * Physics shape request queue empty
-        // We wake the thread when any of the above become untrue.
-        // Will likely need a correctly-implemented condition variable to do this.
-        // On the other hand, this may actually be an effective and efficient scheme...
-
-        mSignal->wait();
+        // Sleep until the main thread asks for a pass (wake(), once per frame) or the thread is shut down.  The
+        // predicate is checked under the condition's mutex, and wake() and cleanup() set their flags under it,
+        // so a wake() or cleanup() cannot be lost.  Items that the pool threads push to the queues wait for the
+        // next frame's wake() when nothing is runnable, and LLApp::isExiting() has no notify of its own: the
+        // quit is taken up by cleanup()'s broadcast.  While work can run now the thread also wakes by itself,
+        // so the HTTP answers and the queues are served whatever the frame rate (and while the window is
+        // minimised).  Delayed back-off requests and requests waiting for capabilities wait for the next wake().
+        static constexpr std::chrono::milliseconds IN_FLIGHT_WAKE{5};
+        const auto ready = [this]
+        {
+            if (mShuttingDown || LLApp::isExiting())
+            {
+                return true;
+            }
+            if (mWakePending)
+            {
+                mWakePending = false;
+                return true;
+            }
+            return false;
+        };
+        if (hasRunnableWork())
+        {
+            mSignal->waitFor(IN_FLIGHT_WAKE, ready);
+        }
+        else
+        {
+            mSignal->wait(ready);
+        }
         LL_PROFILE_ZONE_NAMED("mesh_thread_loop")
 
-        if (LLApp::isExiting())
+        if (LLApp::isExiting() || mShuttingDown)
         {
             break;
         }
@@ -1239,7 +1262,7 @@ void LLMeshRepoThread::run()
                 if (req.isDelayed())
                 {
                     // failed to load before, wait a bit
-                    incomplete.push_front(req);
+                    incomplete.push_back(req);
                 }
                 else if (!fetchMeshLOD(req.mMeshParams, req.mLOD, req))
                 {
@@ -1247,7 +1270,7 @@ void LLMeshRepoThread::run()
                     {
                         // failed, resubmit
                         req.updateTime();
-                        incomplete.push_front(req);
+                        incomplete.push_back(req);
                     }
                     else
                     {
@@ -1287,7 +1310,7 @@ void LLMeshRepoThread::run()
                 if (req.isDelayed())
                 {
                     // failed to load before, wait a bit
-                    incomplete.push_front(req);
+                    incomplete.push_back(req);
                 }
                 else if (!fetchMeshHeader(req.mMeshParams, req, req.mPhysicsOnly))
                 {
@@ -1295,7 +1318,7 @@ void LLMeshRepoThread::run()
                     {
                         //failed, resubmit
                         req.updateTime();
-                        incomplete.push_front(req);
+                        incomplete.push_back(req);
                     }
                     else
                     {
@@ -1431,10 +1454,8 @@ void LLMeshRepoThread::run()
         // llassert_always(mHttpRequestSet.size() <= sRequestHighWater);
     }
 
-    if (mSignal->isLocked())
-    { //make sure to let go of the mutex associated with the given signal before shutting down
-        mSignal->unlock();
-    }
+    // No unlock of mSignal here: wait(), waitFor() and changeAndBroadcast() lock it with scoped locks, so this thread
+    // never holds it outside them, and an unlock now could release a hold of the main thread (wake(), cleanup()).
 
     res = LLConvexDecomposition::quitThread();
     if (res != LLCD_OK && LLConvexDecomposition::isFunctional())
@@ -1442,10 +1463,38 @@ void LLMeshRepoThread::run()
         LL_WARNS(LOG_MESH) << "Convex decomposition unable to be quit." << LL_ENDL;
     }
 }
+
+void LLMeshRepoThread::wake()
+{
+    mSignal->changeAndBroadcast([this] { mWakePending = true; });
+}
+
+bool LLMeshRepoThread::hasRunnableWork()
+{
+    if (!mHttpRequestSet.empty())
+    {
+        return true;
+    }
+    // Every queue is only served once a capability address is known, and a delayed (back-off) request is not
+    // served before its time: neither is work that can run now.  A queue is judged by its first request (the
+    // pass rotates the delayed ones to the back); a request that waits for its header counts, which is an
+    // over-count for a short while.
+    if (!hasCapabilities())
+    {
+        return false;
+    }
+    const auto ready = [](const RequestStats& req) { return !req.isDelayed(); };
+    LLMutexLock lock(mMutex);
+    return (!mLODReqQ.empty() && ready(mLODReqQ.front()))
+        || (!mHeaderReqQ.empty() && ready(mHeaderReqQ.front()))
+        || std::any_of(mSkinRequests.begin(), mSkinRequests.end(), ready)
+        || std::any_of(mDecompositionRequests.begin(), mDecompositionRequests.end(), ready)
+        || std::any_of(mPhysicsShapeRequests.begin(), mPhysicsShapeRequests.end(), ready);
+}
+
 void LLMeshRepoThread::cleanup()
 {
-    mShuttingDown = true;
-    mSignal->broadcast();
+    mSignal->changeAndBroadcast([this] { mShuttingDown = true; });
     mMeshThreadPool->close();
 }
 
@@ -5117,9 +5166,11 @@ void LLMeshRepository::notifyLoadedMeshes()
                 std::partial_sort(mPendingRequests.begin(), mPendingRequests.begin() + push_count,
                                   mPendingRequests.end(), PendingRequestBase::CompareScoreGreater());
             }
-            while (!mPendingRequests.empty() && push_count > 0)
+            // the requests dealt with here are the first 'done' of the vector: they are removed in one step below
+            size_t done = 0;
+            while (done < mPendingRequests.size() && push_count > 0)
             {
-                std::shared_ptr<PendingRequestBase>& req_p = mPendingRequests.front();
+                std::shared_ptr<PendingRequestBase>& req_p = mPendingRequests[done];
                 if (!req_p->hasTrackedData())
                 {
                     // Nothing waits for it any more (its waiting volumes were all unregistered): do not forward it
@@ -5128,7 +5179,7 @@ void LLMeshRepository::notifyLoadedMeshes()
                     {
                         LLMeshRepository::sLODPending--;
                     }
-                    mPendingRequests.erase(mPendingRequests.begin());
+                    ++done;
                     continue;
                 }
                 switch (req_p->getRequestType())
@@ -5151,9 +5202,10 @@ void LLMeshRepository::notifyLoadedMeshes()
                     LL_ERRS() << "Unknown request type in LLMeshRepository::notifyLoadedMeshes" << LL_ENDL;
                     break;
                 }
-                mPendingRequests.erase(mPendingRequests.begin());
+                ++done;
                 push_count--;
             }
+            mPendingRequests.erase(mPendingRequests.begin(), mPendingRequests.begin() + static_cast<std::ptrdiff_t>(done));
         }
 
         //send decomposition requests
@@ -5173,7 +5225,7 @@ void LLMeshRepository::notifyLoadedMeshes()
         mThread->notifyLoadedMeshes();
     }
 
-    mThread->mSignal->signal();
+    mThread->wake();
 }
 
 void LLMeshRepository::notifySkinInfoReceived(LLMeshSkinInfo* info)
@@ -5260,7 +5312,10 @@ void LLMeshRepository::notifyMeshLoaded(const LLVolumeParams& mesh_params, LLVol
             LLVolume* sys_volume = LLPrimitive::getVolumeManager()->refVolume(mesh_params, detail);
             if (sys_volume)
             {
-                sys_volume->copyVolumeFaces(volume);
+                // The decoded volume belongs to this thread alone: the repo thread's last reference went when it
+                // queued it, and the queue was swapped out under mLoadedMutex.  Its faces, with the rigging boxes
+                // the pool computed for them, move into the system volume.
+                sys_volume->moveVolumeFaces(volume);
                 sys_volume->setMeshAssetLoaded(true);
                 LLPrimitive::getVolumeManager()->unrefVolume(sys_volume);
             }

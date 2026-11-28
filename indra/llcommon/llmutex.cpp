@@ -335,6 +335,30 @@ void LLCondition::wait()
     mCond.wait(lock);
 }
 
+void LLCondition::wait(const std::function<bool()>& pred)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
+    std::unique_lock< std::mutex > lock(mMutex);
+    mCond.wait(lock, pred);
+}
+
+bool LLCondition::waitFor(std::chrono::milliseconds timeout, const std::function<bool()>& pred)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
+    std::unique_lock< std::mutex > lock(mMutex);
+    return mCond.wait_for(lock, timeout, pred);
+}
+
+void LLCondition::changeAndBroadcast(const std::function<void()>& change)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;
+    {
+        std::unique_lock< std::mutex > lock(mMutex);
+        change();
+    }
+    mCond.notify_all();
+}
+
 void LLCondition::signal()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_THREAD;

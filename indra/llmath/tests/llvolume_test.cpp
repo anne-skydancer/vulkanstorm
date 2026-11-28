@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file llvolume_test.cpp
- * @brief Characterisation tests for LLVolume::unpackVolumeFaces on malformed mesh blobs.
+ * @brief Tests for LLVolume::unpackVolumeFaces (malformed mesh blobs) and LLVolume::moveVolumeFaces.
  */
 
 #include "linden_common.h"
@@ -131,5 +131,66 @@ namespace tut
             // Heap-exact copy so that a read past the end is visible to the debug heap / ASan.
             ensure_equals("unpack survives", unpack(f), 3);
         }
+    }
+
+    template<> template<>
+    void llvolume_test_object_t::test<7>()
+    {
+        set_test_name("moveVolumeFaces hands the faces and their rigging boxes over without copying");
+        LLSD mdl = LLSD::emptyArray();
+        mdl.append(face(3 * 6, 3 * 6, 3 * 4, {0, 1, 2}));
+        mdl.append(face(4 * 6, 4 * 6, 4 * 4, {0, 1, 2, 2, 1, 3}));
+        std::string z = zip_llsd(mdl);
+
+        LLVolumeParams params;
+        LLPointer<LLVolume> src = new LLVolume(params, 1.f);
+        ensure("unpack", src->unpackVolumeFaces(reinterpret_cast<U8*>(z.data()), static_cast<S32>(z.size())));
+        ensure_equals("source faces", src->getNumVolumeFaces(), 2);
+
+        // rigging boxes, as the pool computes them
+        LLVolumeFace& f0 = src->getVolumeFace(0);
+        f0.mJointRiggingInfoTab.resize(4);
+        f0.mJointRiggingInfoTab[2].setIsRiggedTo(true);
+        f0.mJointRiggingInfoTab[2].getRiggedExtents()[0].set(-1.f, -2.f, -3.f, 0.f);
+        f0.mJointRiggingInfoTab[2].getRiggedExtents()[1].set(1.f, 2.f, 3.f, 0.f);
+
+        // what the faces hold, to compare with after the move
+        const S32 indices0 = f0.mNumIndices;
+        const S32 indices1 = src->getVolumeFace(1).mNumIndices;
+        const S32 verts1 = src->getVolumeFace(1).mNumVertices;
+        const LLVector4a* positions0 = f0.mPositions;
+        const LLVector4a* positions1 = src->getVolumeFace(1).mPositions;
+        const LLVector4a min0 = f0.mExtents[0];
+        const LLVector4a max0 = f0.mExtents[1];
+        const LLVector3 scale0 = f0.mNormalizedScale;
+
+        LLPointer<LLVolume> dst = new LLVolume(params, 1.f);
+        dst->moveVolumeFaces(src);
+
+        ensure_equals("moved faces", dst->getNumVolumeFaces(), 2);
+        ensure_equals("source left empty", src->getNumVolumeFaces(), 0);
+        ensure_equals("face 0 indices", dst->getVolumeFace(0).mNumIndices, indices0);
+        ensure_equals("face 1 indices", dst->getVolumeFace(1).mNumIndices, indices1);
+        ensure_equals("face 1 vertices", dst->getVolumeFace(1).mNumVertices, verts1);
+        ensure("face 0 buffer moved, not copied", dst->getVolumeFace(0).mPositions == positions0);
+        ensure("face 1 buffer moved, not copied", dst->getVolumeFace(1).mPositions == positions1);
+
+        // the extents and the normalised scale of the face come along
+        const LLVolumeFace& m0 = dst->getVolumeFace(0);
+        ensure("extents min kept", m0.mExtents[0].equals3(min0, 0.f));
+        ensure("extents max kept", m0.mExtents[1].equals3(max0, 0.f));
+        ensure("normalized scale kept", m0.mNormalizedScale == scale0);
+
+        // the source can go away without touching what was moved
+        src = nullptr;
+        ensure_equals("faces survive the source", dst->getNumVolumeFaces(), 2);
+        ensure("buffer survives the source", dst->getVolumeFace(0).mPositions == positions0);
+
+        LLJointRiggingInfoTab& tab = dst->getVolumeFace(0).mJointRiggingInfoTab;
+        ensure_equals("rigging boxes kept", tab.size(), 4);
+        ensure("joint 2 rigged", tab[2].isRiggedTo());
+        ensure("joint 1 not rigged", !tab[1].isRiggedTo());
+        ensure_equals("joint 2 min x", tab[2].getRiggedExtents()[0][0], -1.f);
+        ensure_equals("joint 2 max z", tab[2].getRiggedExtents()[1][2], 3.f);
     }
 }

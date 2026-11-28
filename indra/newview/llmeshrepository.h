@@ -645,6 +645,8 @@ public:
     virtual void run();
     void cleanup();
     bool isShuttingDown() { return mShuttingDown; }
+    // Tells the repo thread that there is something to do (main thread, once per frame).
+    void wake();
 
     void lockAndLoadMeshLOD(const LLVolumeParams& mesh_params, S32 lod);
     void loadMeshLOD(const LLVolumeParams& mesh_params, S32 lod);
@@ -751,7 +753,15 @@ private:
     U8* getDiskCacheBuffer(S32 size);
     S32 mDiskCacheBufferSize = 0;
     U8* mDiskCacheBuffer = nullptr;
-    bool mShuttingDown = false;
+    // Set by cleanup() under mSignal's mutex; read by the repo thread's wait and by the pool threads.
+    std::atomic<bool> mShuttingDown{false};
+    // A wake-up has been asked for and the repo thread has not run a pass since.  Guarded by mSignal's mutex.
+    bool mWakePending = false;
+
+    // Repo thread only.  True while a request is on the wire or a queued one can be sent now (capabilities known,
+    // not in back-off): the thread then wakes by itself every few milliseconds to serve the HTTP answers and the
+    // queues.
+    bool hasRunnableWork();
 };
 
 
