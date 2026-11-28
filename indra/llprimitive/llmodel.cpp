@@ -1154,6 +1154,7 @@ LLSD LLModel::writeModelToStream(std::ostream& ostr, LLSD& mdl, EWriteModelMode 
     }
 
     const U32 grid_variant = sLodestarGridTestVariant;
+    bool grid_variant2_done = false;
 
     if (grid_variant == 1)
     { // grid test: a top-level map (the high_lod key is added with its block below)
@@ -1207,6 +1208,7 @@ LLSD LLModel::writeModelToStream(std::ostream& ostr, LLSD& mdl, EWriteModelMode 
                 LLSD block = mdl[model_names[i]];
                 block[0]["lodestar"] = lodestar_grid_bytes(0x20);
                 out[i] = zip_llsd(block);
+                grid_variant2_done = true;
             }
             else
             {
@@ -1225,11 +1227,18 @@ LLSD LLModel::writeModelToStream(std::ostream& ostr, LLSD& mdl, EWriteModelMode 
         }
     }
 
+    if (grid_variant == 2 && !grid_variant2_done)
+    {
+        LL_WARNS() << "Lodestar grid test: variant 2 requested but the model has no Lowest block; nothing was added" << LL_ENDL;
+    }
+
     // grid test variant 3: a named 64-byte block after the LOD blocks, then 64 bytes nothing references
-    const LLSD::Binary grid_block = lodestar_grid_bytes(0x30);
-    const LLSD::Binary grid_trailer = lodestar_grid_bytes(0x40);
+    LLSD::Binary grid_block;
+    LLSD::Binary grid_trailer;
     if (grid_variant == 3)
     {
+        grid_block = lodestar_grid_bytes(0x30);
+        grid_trailer = lodestar_grid_bytes(0x40);
         header["lodestar_block"]["offset"] = (LLSD::Integer) cur_offset;
         header["lodestar_block"]["size"] = (LLSD::Integer) grid_block.size();
         cur_offset += grid_block.size();
