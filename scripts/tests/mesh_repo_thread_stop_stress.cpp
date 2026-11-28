@@ -11,11 +11,14 @@
 //   gap 0   : the exit flag and the only broadcast come back to back (worst case, an artificial one)
 //   gap N us: the broadcast follows the flag by N microseconds (the viewer: LLApp::isExiting is set when the
 //             quit starts, LLMeshRepository::shutdown -> cleanup() broadcasts much later, after the main loop ended)
-// and for the two wait strategies: "legacy" (as today) and "fixed" (wait on a predicate that checks the exit flag,
-// the flag set under the condition's mutex).
+// and for the wait strategies: "legacy" (the old loop), "fixed" (wait on a predicate that checks the exit flag,
+// the flag set under the condition's mutex) and "real" (the loop of LLMeshRepoThread::run() now: a wake-pending flag
+// and the exit flag, both set under the condition's mutex; a wait with a 5 ms timeout while requests are in flight).
+// "real" also checks that no wake-up is lost (every wake() leads to a pass within a second, 3 wakes at different
+// timings per run) and that the thread wakes by itself, with no wake(), while requests are in flight.
 //
 // Build:  g++ -O2 -std=c++17 mesh_repo_thread_stop_stress.cpp -o mesh_repo_thread_stop_stress   (or clang++)
-// Run:    mesh_repo_thread_stop_stress [iterations] [gap_us] [legacy|fixed]
+// Run:    mesh_repo_thread_stop_stress [iterations] [gap_us] [legacy|fixed|real]
 // Exit code: 0 no hang, 1 at least one hang, 2 usage.
 
 #include <atomic>
@@ -47,6 +50,19 @@ struct Condition
         std::unique_lock<std::mutex> lock(mMutex);
         mCond.wait(lock, pred);
     }
+    template <class Pred> bool waitFor(std::chrono::milliseconds timeout, Pred pred)
+    {
+        std::unique_lock<std::mutex> lock(mMutex);
+        return mCond.wait_for(lock, timeout, pred);
+    }
+    template <class Change> void changeAndBroadcast(Change change)
+    {
+        {
+            std::unique_lock<std::mutex> lock(mMutex);
+            change();
+        }
+        mCond.notify_all();
+    }
     void signal() { mCond.notify_one(); }
     void broadcast() { mCond.notify_all(); }
 };
@@ -63,13 +79,33 @@ struct Run
     std::atomic<bool> mExiting{false};
     std::atomic<bool> mStopped{false};
     bool mFixed = false;
+    bool mReal = false;
+    // "real" model: mWakePending is guarded by mSignal's mutex
+    bool mWakePending = false;
+    std::atomic<bool> mBusy{false};    // requests in flight
+    std::atomic<int> mPasses{0};
+
+    void wake() { mSignal.changeAndBroadcast([this] { mWakePending = true; }); }
+    void quit() { mSignal.changeAndBroadcast([this] { mExiting.store(true); }); }
 
     void thread_main()
     {
         std::mt19937 rng(std::random_device{}());
         while (!mExiting.load())
         {
-            if (mFixed)
+            if (mReal)
+            {
+                auto ready = [this]
+                {
+                    if (mExiting.load()) { return true; }
+                    if (mWakePending) { mWakePending = false; return true; }
+                    return false;
+                };
+                if (mBusy.load()) { mSignal.waitFor(std::chrono::milliseconds(5), ready); }
+                else { mSignal.wait(ready); }
+                mPasses.fetch_add(1);
+            }
+            else if (mFixed)
             {
                 mSignal.wait([this] { return mExiting.load(); });
             }
@@ -92,10 +128,11 @@ int main(int argc, char** argv)
 {
     const int iterations = argc > 1 ? std::atoi(argv[1]) : 2000;
     const int gap_us = argc > 2 ? std::atoi(argv[2]) : 0;
-    const bool fixed = argc > 3 && std::strcmp(argv[3], "fixed") == 0;
+    const bool real = argc > 3 && std::strcmp(argv[3], "real") == 0;
+    const bool fixed = real || (argc > 3 && std::strcmp(argv[3], "fixed") == 0);
     if (iterations <= 0 || gap_us < 0 || (argc > 3 && !fixed && std::strcmp(argv[3], "legacy") != 0))
     {
-        std::fprintf(stderr, "usage: %s [iterations] [gap_us] [legacy|fixed]\n", argv[0]);
+        std::fprintf(stderr, "usage: %s [iterations] [gap_us] [legacy|fixed|real]\n", argv[0]);
         return 2;
     }
 
@@ -105,6 +142,8 @@ int main(int argc, char** argv)
     {
         Run run;
         run.mFixed = fixed;
+        run.mReal = real;
+        run.mBusy.store(real && (i % 2 == 0)); // half of the runs quit with requests in flight
         std::thread repo([&run] { run.thread_main(); });
 
         // a few "frames": the main thread signals the repo thread
@@ -112,12 +151,16 @@ int main(int argc, char** argv)
         for (int f = 0; f < frames; ++f)
         {
             spin_us(10 + (int)(rng() % 50));
-            run.mSignal.signal();
+            if (real) { run.wake(); } else { run.mSignal.signal(); }
         }
         spin_us((int)(rng() % 60));
 
         // quit: the flag, then (after gap_us) the one broadcast of cleanup()
-        if (fixed)
+        if (real)
+        {
+            run.quit();
+        }
+        else if (fixed)
         {
             std::lock_guard<std::mutex> lock(run.mSignal.mMutex);
             run.mExiting.store(true);
@@ -151,6 +194,43 @@ int main(int argc, char** argv)
         }
         repo.join();
     }
-    std::printf("mode=%s gap_us=%d iterations=%d hangs=%d\n", fixed ? "fixed" : "legacy", gap_us, iterations, hangs);
-    return hangs ? 1 : 0;
+
+    // "real" only: (1) no lost wake-up while idle, (2) the thread wakes by itself while requests are in flight
+    int lost = 0;
+    int no_self_wake = 0;
+    if (real)
+    {
+        for (int i = 0; i < 200; ++i)
+        {
+            Run run;
+            run.mFixed = run.mReal = true;
+            std::thread repo([&run] { run.thread_main(); });
+            for (int k = 0; k < 3; ++k)
+            {
+                spin_us((int)(rng() % 200));
+                const int before = run.mPasses.load();
+                run.wake();
+                const auto deadline = clk::now() + std::chrono::seconds(1);
+                while (run.mPasses.load() == before && clk::now() < deadline) { std::this_thread::yield(); }
+                if (run.mPasses.load() == before) { ++lost; }
+            }
+            run.quit();
+            repo.join();
+        }
+        for (int i = 0; i < 5; ++i)
+        {
+            Run run;
+            run.mFixed = run.mReal = true;
+            run.mBusy.store(true);
+            std::thread repo([&run] { run.thread_main(); });
+            std::this_thread::sleep_for(std::chrono::milliseconds(120));
+            // 120 ms at 5 ms is about 24 passes with no wake(); be generous for a loaded machine
+            if (run.mPasses.load() < 5) { ++no_self_wake; }
+            run.quit();
+            repo.join();
+        }
+        std::printf("real: lost wake-ups=%d, runs without self wake=%d\n", lost, no_self_wake);
+    }
+    std::printf("mode=%s gap_us=%d iterations=%d hangs=%d\n", real ? "real" : fixed ? "fixed" : "legacy", gap_us, iterations, hangs);
+    return (hangs || lost || no_self_wake) ? 1 : 0;
 }

@@ -1121,25 +1121,37 @@ void LLMeshRepoThread::run()
         LL_WARNS(LOG_MESH) << "Convex decomposition unable to be loaded.  Expect severe problems." << LL_ENDL;
     }
 
-    while (!LLApp::isExiting())
+    while (!LLApp::isExiting() && !mShuttingDown)
     {
-        // *TODO:  Revise sleep/wake strategy and try to move away
-        // from polling operations in this thread.  We can sleep
-        // this thread hard when:
-        // * All Http requests are serviced
-        // * LOD request queue empty
-        // * Header request queue empty
-        // * Skin info request queue empty
-        // * Decomposition request queue empty
-        // * Physics shape request queue empty
-        // We wake the thread when any of the above become untrue.
-        // Will likely need a correctly-implemented condition variable to do this.
-        // On the other hand, this may actually be an effective and efficient scheme...
-
-        mSignal->wait();
+        // Sleep until the main thread asks for a pass (wake(), once per frame) or the thread is shut down.  The
+        // predicate is checked under the condition's mutex, and wake() and cleanup() set their flags under it,
+        // so no wake-up can be lost.  While requests are in flight the thread also wakes by itself, so the
+        // HTTP answers and the queues are served whatever the frame rate (and while the window is minimised).
+        static constexpr std::chrono::milliseconds IN_FLIGHT_WAKE{5};
+        const auto ready = [this]
+        {
+            if (mShuttingDown || LLApp::isExiting())
+            {
+                return true;
+            }
+            if (mWakePending)
+            {
+                mWakePending = false;
+                return true;
+            }
+            return false;
+        };
+        if (hasRequestsInFlight())
+        {
+            mSignal->waitFor(IN_FLIGHT_WAKE, ready);
+        }
+        else
+        {
+            mSignal->wait(ready);
+        }
         LL_PROFILE_ZONE_NAMED("mesh_thread_loop")
 
-        if (LLApp::isExiting())
+        if (LLApp::isExiting() || mShuttingDown)
         {
             break;
         }
@@ -1442,10 +1454,25 @@ void LLMeshRepoThread::run()
         LL_WARNS(LOG_MESH) << "Convex decomposition unable to be quit." << LL_ENDL;
     }
 }
+void LLMeshRepoThread::wake()
+{
+    mSignal->changeAndBroadcast([this] { mWakePending = true; });
+}
+
+bool LLMeshRepoThread::hasRequestsInFlight()
+{
+    if (!mHttpRequestSet.empty())
+    {
+        return true;
+    }
+    LLMutexLock lock(mMutex);
+    return !mLODReqQ.empty() || !mHeaderReqQ.empty() || !mSkinRequests.empty()
+        || !mDecompositionRequests.empty() || !mPhysicsShapeRequests.empty();
+}
+
 void LLMeshRepoThread::cleanup()
 {
-    mShuttingDown = true;
-    mSignal->broadcast();
+    mSignal->changeAndBroadcast([this] { mShuttingDown = true; });
     mMeshThreadPool->close();
 }
 
@@ -5176,7 +5203,7 @@ void LLMeshRepository::notifyLoadedMeshes()
         mThread->notifyLoadedMeshes();
     }
 
-    mThread->mSignal->signal();
+    mThread->wake();
 }
 
 void LLMeshRepository::notifySkinInfoReceived(LLMeshSkinInfo* info)

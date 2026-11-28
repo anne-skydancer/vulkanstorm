@@ -33,7 +33,9 @@
 #include "mutex.h"
 #include <shared_mutex>
 #include <unordered_map>
+#include <chrono>
 #include <condition_variable>
+#include <functional>
 
 //============================================================================
 
@@ -146,6 +148,14 @@ public:
     void wait();        // blocks
     void signal();
     void broadcast();
+
+    // Waits until pred() is true.  pred runs with the condition's mutex held, so state that a notifier sets under
+    // the same mutex (see changeAndBroadcast) cannot be missed between the check and the wait.
+    void wait(const std::function<bool()>& pred);
+    // The same, but gives up after the timeout.  Returns the last value of pred().
+    bool waitFor(std::chrono::milliseconds timeout, const std::function<bool()>& pred);
+    // Runs change() with the condition's mutex held, then wakes every waiter.
+    void changeAndBroadcast(const std::function<void()>& change);
 
 protected:
     std::condition_variable mCond;
