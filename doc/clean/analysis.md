@@ -67,10 +67,10 @@ Why GCC: the Linux build is GCC only, and GCC 15 has all of ASan, UBSan, LSan an
 | `-fsanitize-recover=address` and `halt_on_error=0` | an ASan error does not abort the test: one run lists every error. UBSan recovers by default |
 | `exitcode=0` | sanitizer reports never change a test's exit code; the report, not the first failing test, says what is wrong |
 | `log_path=san/report` | one report file per process |
-| `detect_stack_use_after_return=0` | Boost.Fiber and ucontext switch stacks, which this check reports as false use-after-return |
+| `detect_stack_use_after_return=1` | finds use of a returned function's stack; it was off while Boost.Fiber switched stacks, which this check reported as false errors |
 | `-U_FORTIFY_SOURCE` | fortified libc calls and ASan's own checks of the same calls do not mix |
 | `-fno-omit-frame-pointer`, `-O1` | readable stacks at a bearable cost |
-| TSan: only tests off the deny list | Boost.Fiber is prebuilt without TSan fibre annotations; a coroutine test would report races that are not there. A deny-list entry that is no test is a warning in the plan summary |
+| TSan: only tests off the deny list | TSan and `fork` do not mix, so the tests that start child processes are skipped. A deny-list entry that is no test is a warning in the plan summary |
 
 UBSan prints to the test's stderr, so it is in `build.log`, not in `san/`: the collector parses sanitizer text from both
 and counts one report once. A **canary** (a deliberately faulty program compiled with the build's own `CMAKE_CXX_FLAGS`
@@ -81,13 +81,10 @@ is deterministic (the worker thread writes, the main thread sleeps 20 ms, then w
 sanitizer stopped working, which a retry would hide. A `FATAL: ThreadSanitizer` line (the runtime stopped the program)
 is reported as its own cause.
 
-**What the TSan deny list leaves unchecked.** Boost.Fiber is prebuilt without TSan fibre annotations, and TSan and
-`fork` do not mix, so `.github/analysis/tsan/llcommon-deny.txt` skips the llcommon tests `lleventcoro`, `llcond`,
-`workqueue`, `llleap`, `llprocess`, `llprocessstdin`, `llsdserialize` and `llcoros_order` (the run-order oracle, which
-runs on fibres). Those include the tests of the threading
-primitives that part 2 of the cleanup changed (`LLCond`, `WorkQueue`, `LLThreadSafeQueue`): **TSan did not look at them.**
-A green TSan job says nothing about races in that code; ASan/UBSan/LSan do run those tests. `lltask`, the oracle's
-scenarios on `LL::Executor` with no fibre, is not on the list: it is the first coroutine test TSan can run.
+**What the TSan deny list leaves unchecked.** TSan and `fork` do not mix, so
+`.github/analysis/tsan/llcommon-deny.txt` skips the llcommon tests that start child processes: `llleap`, `llprocess`,
+`llprocessstdin` and `llsdserialize`. Since Boost.Fiber was removed (#617), TSan runs every coroutine and threading test,
+including `lleventcoro`, `llcond`, `workqueue`, `llcoros_order` (the run-order oracle) and `lltask`.
 
 A test target that fails is run once more; it is reported only if it fails again (a pass is listed as flaky in the
 summary). The TSan job runs two build jobs at a time because TSan makes timing-based tests flaky under load. Build and

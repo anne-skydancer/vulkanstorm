@@ -38,6 +38,9 @@ predates this rule and mixed the two.
 
 ## Coroutines (decided 2026-11-26)
 
+Done: the last part landed on `release-clean` on 2026-11-28 (#617). Boost.Fiber and Boost.Context are gone; the
+sections below record the plan as decided.
+
 Boost.Fiber and Boost.Context leave the C++: an in-house C++20 task type and main-thread executor replace `LLCoros`'
 fibers, every caller is converted, and the fiber-aware locks become `std::` ones. The work has its own branch,
 `clean/coroutines`, cut after `clean/llcommon` lands: the new core sits beside the fibers, the callers move library by
