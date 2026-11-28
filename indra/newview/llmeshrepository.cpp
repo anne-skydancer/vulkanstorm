@@ -241,6 +241,7 @@
 //     sHTTPLargeRequestCount          "
 //     sHTTPRetryCount                 "
 //     sHTTPErrorCount                 "
+//     sHTTPErrorsByClass, sHTTPHeadersReceived  atomics, rw.repo, ro.main (relaxed)
 //     sLODPending                     mMeshMutex [4]  rw.main.mMeshMutex
 //     sLODProcessing                  Repo::mMutex    rw.any.Repo::mMutex
 //     sCacheBytesRead                 none            rw.repo.none, ro.main.none [1]
@@ -438,6 +439,8 @@ U32 LLMeshRepository::sHTTPRequestCount = 0;
 U32 LLMeshRepository::sHTTPLargeRequestCount = 0;
 U32 LLMeshRepository::sHTTPRetryCount = 0;
 U32 LLMeshRepository::sHTTPErrorCount = 0;
+std::atomic<U32> LLMeshRepository::sHTTPErrorsByClass[LLMeshRepository::ERR_CLASS_COUNT] = {};
+std::atomic<U32> LLMeshRepository::sHTTPHeadersReceived = 0;
 U32 LLMeshRepository::sLODProcessing = 0;
 U32 LLMeshRepository::sLODPending = 0;
 
@@ -3958,7 +3961,7 @@ void LLMeshHandlerBase::onCompleted(LLCore::HttpHandle handle, LLCore::HttpRespo
     if (! status || MESH_HTTP_RESPONSE_FAILED)
     {
         processFailure(status);
-        ++LLMeshRepository::sHTTPErrorCount;
+        LLMeshRepository::countHttpError(status);
     }
     else
     {
@@ -4025,7 +4028,7 @@ void LLMeshHandlerBase::onCompleted(LLCore::HttpHandle handle, LLCore::HttpRespo
                                    << mOffset << ".." << (mOffset + mRequestedBytes - 1)
                                    << "])." << LL_ENDL;
                 processFailure(LLCore::HttpStatus(LLCore::HttpStatus::LLCORE, LLCore::HE_INV_CONTENT_RANGE_HDR));
-                ++LLMeshRepository::sHTTPErrorCount;
+                LLMeshRepository::countHttpError(LLCore::HttpStatus(LLCore::HttpStatus::LLCORE, LLCore::HE_INV_CONTENT_RANGE_HDR));
                 goto common_exit;
             }
 
@@ -4044,7 +4047,7 @@ void LLMeshHandlerBase::onCompleted(LLCore::HttpHandle handle, LLCore::HttpRespo
             {
                 LL_WARNS(LOG_MESH) << "Failed to allocate " << data_size - body_offset << " memory for mesh response" << LL_ENDL;
                 processFailure(LLCore::HttpStatus(LLCore::HttpStatus::LLCORE, LLCore::HE_BAD_ALLOC));
-                ++LLMeshRepository::sHTTPErrorCount;
+                LLMeshRepository::countHttpError(LLCore::HttpStatus(LLCore::HttpStatus::LLCORE, LLCore::HE_BAD_ALLOC));
                 goto common_exit; // the failure is reported, processData() has no data to work with
             }
         }
@@ -4108,6 +4111,7 @@ void LLMeshHeaderHandler::processData(LLCore::BufferArray * /* body */, S32 /* b
 {
     LL_PROFILE_ZONE_SCOPED;
     LLUUID mesh_id = mMeshParams.getSculptID();
+    LLMeshRepository::sHTTPHeadersReceived.fetch_add(1, std::memory_order_relaxed);
     bool success = (!MESH_HEADER_PROCESS_FAILED)
         && ((data != NULL) == (data_size > 0)); // if we have data but no size or have size but no data, something is wrong;
     llassert(success);
@@ -6856,6 +6860,64 @@ void LLMeshRepository::metricsProgress(unsigned int this_count)
     sQuiescentTimer.ringBell(0, this_count);
 }
 
+// Threading:  repo thread (HTTP completion).  Relaxed atomics: the counters are read once per quiescent line.
+// static
+void LLMeshRepository::countHttpError(const LLCore::HttpStatus& status)
+{
+    ++sHTTPErrorCount;
+    EHttpErrorClass cls = ERR_OTHER;
+    if (status.isHttpStatus())
+    {
+        const auto code = status.getType();
+        cls = (code == 429) ? ERR_HTTP_429
+            : (code >= 500) ? ERR_HTTP_5XX
+            : (code >= 400) ? ERR_HTTP_4XX
+            : ERR_OTHER;
+    }
+    else if (status.getType() == LLCore::HttpStatus::EXT_CURL_EASY || status.getType() == LLCore::HttpStatus::EXT_CURL_MULTI)
+    {
+        cls = ERR_TRANSPORT;
+    }
+    sHTTPErrorsByClass[cls].fetch_add(1, std::memory_order_relaxed);
+}
+
+namespace
+{
+// Threading:  main thread only.  Mesh volumes that still wait for the mesh asset or the skin, and how many of
+// them belong to the agent's own avatar.  A scan of the object list, run only when the quiescent line is logged.
+void countUnmetMeshWants(U32& all, U32& own)
+{
+    all = own = 0;
+    const S32 count = gObjectList.getNumObjects();
+    LLVOAvatar* self = gAgentAvatarp.get();
+    for (S32 i = 0; i < count; ++i)
+    {
+        LLViewerObject* obj = gObjectList.getObject(i);
+        if (!obj || obj->getPCode() != LL_PCODE_VOLUME)
+        {
+            continue;
+        }
+        LLVOVolume* vobj = static_cast<LLVOVolume*>(obj);
+        if (!vobj->isMesh())
+        {
+            continue;
+        }
+        const LLVolume* volume = vobj->getVolume();
+        const bool unmet = !volume
+            || (!volume->isMeshAssetLoaded() && !volume->isMeshAssetUnavaliable())
+            || (vobj->isRiggedMesh() && !vobj->getSkinInfo() && !vobj->isSkinInfoUnavaliable());
+        if (unmet)
+        {
+            ++all;
+            if (self && vobj->getAvatar() == self)
+            {
+                ++own;
+            }
+        }
+    }
+}
+}
+
 // Threading:  main thread only
 // static
 void LLMeshRepository::metricsUpdate()
@@ -6875,6 +6937,20 @@ void LLMeshRepository::metricsUpdate()
         metrics["teleports"] = LLSD::Integer(metrics_teleport_start_count);
         metrics["user_cpu"] = double(user_cpu) / 1.0e6;
         metrics["sys_cpu"] = double(sys_cpu) / 1.0e6;
+        // Stage 0 baseline: counters are totals since the viewer started; differences between two lines give a window
+        U32 unmet_all, unmet_own;
+        countUnmetMeshWants(unmet_all, unmet_own);
+        metrics["unmet"] = LLSD::Integer(unmet_all);
+        metrics["unmet_own"] = LLSD::Integer(unmet_own);
+        metrics["gets"] = LLSD::Integer(sHTTPRequestCount + sHTTPLargeRequestCount);
+        metrics["mesh_headers"] = LLSD::Integer(sHTTPHeadersReceived.load(std::memory_order_relaxed));
+        metrics["retries"] = LLSD::Integer(sHTTPRetryCount);
+        metrics["errors"] = LLSD::Integer(sHTTPErrorCount);
+        metrics["err_transport"] = LLSD::Integer(sHTTPErrorsByClass[ERR_TRANSPORT].load(std::memory_order_relaxed));
+        metrics["err_429"] = LLSD::Integer(sHTTPErrorsByClass[ERR_HTTP_429].load(std::memory_order_relaxed));
+        metrics["err_4xx"] = LLSD::Integer(sHTTPErrorsByClass[ERR_HTTP_4XX].load(std::memory_order_relaxed));
+        metrics["err_5xx"] = LLSD::Integer(sHTTPErrorsByClass[ERR_HTTP_5XX].load(std::memory_order_relaxed));
+        metrics["err_other"] = LLSD::Integer(sHTTPErrorsByClass[ERR_OTHER].load(std::memory_order_relaxed));
         LL_INFOS(LOG_MESH) << "EventMarker " << metrics << LL_ENDL;
     }
 }

@@ -961,6 +961,11 @@ public:
     static U32 sHTTPLargeRequestCount;          // Http GETs issued for large requests
     static U32 sHTTPRetryCount;                 // Total request retries whether successful or failed
     static U32 sHTTPErrorCount;                 // Requests ending in error
+    // Stage 0 measurements, written by the repo thread, read by the main thread (relaxed atomics).
+    enum EHttpErrorClass { ERR_TRANSPORT, ERR_HTTP_429, ERR_HTTP_4XX, ERR_HTTP_5XX, ERR_OTHER, ERR_CLASS_COUNT };
+    static std::atomic<U32> sHTTPErrorsByClass[ERR_CLASS_COUNT]; // sHTTPErrorCount split by status class
+    static std::atomic<U32> sHTTPHeadersReceived;                // Mesh headers that arrived over HTTP (one per mesh fetched)
+    static void countHttpError(const LLCore::HttpStatus& status); // repo thread: ++sHTTPErrorCount and its class
     static U32 sLODPending;
     static U32 sLODProcessing;
     static U32 sCacheBytesRead;
