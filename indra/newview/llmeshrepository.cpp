@@ -5260,7 +5260,10 @@ void LLMeshRepository::notifyMeshLoaded(const LLVolumeParams& mesh_params, LLVol
             LLVolume* sys_volume = LLPrimitive::getVolumeManager()->refVolume(mesh_params, detail);
             if (sys_volume)
             {
-                sys_volume->copyVolumeFaces(volume);
+                // The decoded volume belongs to this thread alone: the repo thread's last reference went when it
+                // queued it, and the queue was swapped out under mLoadedMutex.  Its faces, with the rigging boxes
+                // the pool computed for them, move into the system volume.
+                sys_volume->moveVolumeFaces(volume);
                 sys_volume->setMeshAssetLoaded(true);
                 LLPrimitive::getVolumeManager()->unrefVolume(sys_volume);
             }
