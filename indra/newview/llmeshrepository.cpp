@@ -372,6 +372,14 @@ constexpr long LARGE_MESH_XFER_TIMEOUT = 600L;              // Seconds to comple
 
 constexpr U32 DOWNLOAD_RETRY_LIMIT = 8;
 constexpr F32 DOWNLOAD_RETRY_DELAY = 0.5f; // seconds
+// Extra rounds for a request that was issued and failed over HTTP.  llcorehttp retries a retryable status itself
+// (5 times by default) before a failure reaches the handler, so every round here is up to 6 more attempts: two
+// rounds cover a service that recovers, without multiplying the traffic against one that does not.  Requests that
+// could not be issued (a full queue, no address) use the whole DOWNLOAD_RETRY_LIMIT: they have sent nothing.
+constexpr U32 HTTP_FAILURE_RETRY_LIMIT = 2;
+// After the header of a mesh failed for good (all retries), loadMeshLOD waits this long before it asks again, so
+// that polling callers (the object panel, the scene view) do not start a new request chain on every call.
+constexpr F64 HEADER_RETRY_COOLDOWN = 60.0; // seconds
 
 // Would normally like to retry on uploads as some
 // retryable failures would be recoverable.  Unfortunately,
@@ -549,12 +557,18 @@ void RequestStats::updateTime()
     U32 modifier = 1 << mRetries; // before ++
     mRetries++;
     mTimer.reset();
-    mTimer.setTimerExpirySec(DOWNLOAD_RETRY_DELAY * (F32)modifier); // up to 32s, 64 total wait
+    // the delay doubles with every retry: 0.5 s, 1 s ... 64 s for the eighth, 127.5 s in all
+    mTimer.setTimerExpirySec(DOWNLOAD_RETRY_DELAY * (F32)modifier);
 }
 
 bool RequestStats::canRetry() const
 {
     return mRetries < DOWNLOAD_RETRY_LIMIT;
+}
+
+bool RequestStats::canRetryAfterHttpFailure() const
+{
+    return mHttpFailures < HTTP_FAILURE_RETRY_LIMIT && canRetry();
 }
 
 bool RequestStats::isDelayed() const
@@ -661,14 +675,15 @@ public:
     typedef std::shared_ptr<LLMeshHandlerBase> ptr_t;
 
     LOG_CLASS(LLMeshHandlerBase);
-    LLMeshHandlerBase(U32 offset, U32 requested_bytes)
+    LLMeshHandlerBase(U32 offset, U32 requested_bytes, const RequestStats& stats = RequestStats())
         : LLCore::HttpHandler(),
           mMeshParams(),
           mProcessed(false),
           mHasDataOwnership(true),
           mHttpHandle(LLCORE_HTTP_HANDLE_INVALID),
           mOffset(offset),
-          mRequestedBytes(requested_bytes)
+          mRequestedBytes(requested_bytes),
+          mStats(stats)
         {}
 
     virtual ~LLMeshHandlerBase() = default;
@@ -688,7 +703,26 @@ public:
     U32 mOffset;
     U32 mRequestedBytes;
 
+    // Retry state of the request this handler serves.  A failure that may pass on another try (see
+    // HttpStatus::isRetryable) is queued again with the backed-off stats, at most HTTP_FAILURE_RETRY_LIMIT times,
+    // see retryStats().
+    RequestStats mStats;
+
 protected:
+    // true, with the stats for the new request filled in, if a request that failed with this status should be
+    // tried again (thread: repo)
+    bool retryStats(const LLCore::HttpStatus& status, RequestStats& stats) const
+    {
+        if (!status.isRetryable() || !mStats.canRetryAfterHttpFailure())
+        {
+            return false;
+        }
+        stats = mStats;
+        stats.countHttpFailure();
+        stats.updateTime();
+        return true;
+    }
+
     bool mHasDataOwnership = true;
 };
 
@@ -700,8 +734,8 @@ class LLMeshHeaderHandler : public LLMeshHandlerBase
 {
 public:
     LOG_CLASS(LLMeshHeaderHandler);
-    LLMeshHeaderHandler(const LLVolumeParams & mesh_params, U32 offset, U32 requested_bytes)
-        : LLMeshHandlerBase(offset, requested_bytes)
+    LLMeshHeaderHandler(const LLVolumeParams & mesh_params, U32 offset, U32 requested_bytes, const RequestStats& stats)
+        : LLMeshHandlerBase(offset, requested_bytes, stats)
     {
         mMeshParams = mesh_params;
         LLMeshRepoThread::incActiveHeaderRequests();
@@ -724,8 +758,8 @@ class LLMeshLODHandler : public LLMeshHandlerBase
 {
 public:
     LOG_CLASS(LLMeshLODHandler);
-    LLMeshLODHandler(const LLVolumeParams & mesh_params, S32 lod, U32 offset, U32 requested_bytes)
-        : LLMeshHandlerBase(offset, requested_bytes),
+    LLMeshLODHandler(const LLVolumeParams & mesh_params, S32 lod, U32 offset, U32 requested_bytes, const RequestStats& stats)
+        : LLMeshHandlerBase(offset, requested_bytes, stats),
           mLOD(lod)
     {
             mMeshParams = mesh_params;
@@ -755,8 +789,8 @@ class LLMeshSkinInfoHandler : public LLMeshHandlerBase
 {
 public:
     LOG_CLASS(LLMeshSkinInfoHandler);
-    LLMeshSkinInfoHandler(const LLUUID& id, U32 offset, U32 requested_bytes)
-        : LLMeshHandlerBase(offset, requested_bytes),
+    LLMeshSkinInfoHandler(const LLUUID& id, U32 offset, U32 requested_bytes, const RequestStats& stats)
+        : LLMeshHandlerBase(offset, requested_bytes, stats),
           mMeshID(id)
     {
         LLMeshRepoThread::incActiveSkinRequests();
@@ -1075,12 +1109,19 @@ void LLMeshRepoThread::run()
         }
         sRequestWaterLevel = static_cast<S32>(mHttpRequestSet.size());            // Stats data update
 
+        // Until the main thread has stored a capability address nothing can be asked from a simulator.  Header, LOD
+        // and skin requests then stay queued, and use up no retries: a request that is only waiting for the region
+        // to come up has not failed.  (Once an address is known, a request that still has none to use, because the
+        // region has no such capability, is not issued, backs off and ends in the normal retry limit.)
+        const bool have_caps = hasCapabilities();
+
         // NOTE: order of queue processing intentionally favors LOD and Skin requests over header requests
         // Todo: we are processing mLODReqQ, mHeaderReqQ, mSkinRequests, mDecompositionRequests and mPhysicsShapeRequests
         // in relatively similar manners, remake code to simplify/unify the process,
         // like processRequests(&requestQ, fetchFunction); which does same thing for each element
 
-        if (mHttpRequestSet.size() < sRequestHighWater
+        if (have_caps
+            && mHttpRequestSet.size() < sRequestHighWater
             && !mSkinRequests.empty())
         {
             if (!mSkinRequests.empty())
@@ -1097,7 +1138,14 @@ void LLMeshRepoThread::run()
                     {
                         incomplete.emplace_back(req);
                     }
-                    else if (!fetchMeshSkinInfo(req.mId))
+                    else if (!hasHeader(req.mId) && headerPending(req.mId))
+                    {
+                        // The skin can only be read through the header, which is still on its way (or in its own
+                        // back-off): wait for it without using up the retries.  When the header fails, headerFailed()
+                        // releases the skin and the request ends with the normal retries.
+                        incomplete.emplace_back(req);
+                    }
+                    else if (!fetchMeshSkinInfo(req.mId, req))
                     {
                         if (req.canRetry())
                         {
@@ -1108,7 +1156,7 @@ void LLMeshRepoThread::run()
                         {
                             LLMutexLock locker(mLoadedMutex);
                             mSkinUnavailableQ.push_back(req);
-                            LL_DEBUGS() << "mSkinReqQ failed: " << req.mId << LL_ENDL;
+                            LL_WARNS(LOG_MESH) << "mSkinReqQ failed: " << req.mId << LL_ENDL;
                         }
                     }
                 }
@@ -1124,7 +1172,7 @@ void LLMeshRepoThread::run()
             }
         }
 
-        if (!mLODReqQ.empty() && mHttpRequestSet.size() < sRequestHighWater)
+        if (have_caps && !mLODReqQ.empty() && mHttpRequestSet.size() < sRequestHighWater)
         {
             std::list<LODRequest> incomplete;
             while (!mLODReqQ.empty() && mHttpRequestSet.size() < sRequestHighWater)
@@ -1144,7 +1192,7 @@ void LLMeshRepoThread::run()
                     // failed to load before, wait a bit
                     incomplete.push_front(req);
                 }
-                else if (!fetchMeshLOD(req.mMeshParams, req.mLOD))
+                else if (!fetchMeshLOD(req.mMeshParams, req.mLOD, req))
                 {
                     if (req.canRetry())
                     {
@@ -1173,7 +1221,7 @@ void LLMeshRepoThread::run()
             }
         }
 
-        if (!mHeaderReqQ.empty() && mHttpRequestSet.size() < sRequestHighWater)
+        if (have_caps && !mHeaderReqQ.empty() && mHttpRequestSet.size() < sRequestHighWater)
         {
             std::list<HeaderRequest> incomplete;
             while (!mHeaderReqQ.empty() && mHttpRequestSet.size() < sRequestHighWater)
@@ -1192,7 +1240,7 @@ void LLMeshRepoThread::run()
                     // failed to load before, wait a bit
                     incomplete.push_front(req);
                 }
-                else if (!fetchMeshHeader(req.mMeshParams))
+                else if (!fetchMeshHeader(req.mMeshParams, req))
                 {
                     if (req.canRetry())
                     {
@@ -1202,7 +1250,9 @@ void LLMeshRepoThread::run()
                     }
                     else
                     {
-                        LL_DEBUGS() << "mHeaderReqQ failed: " << req.mMeshParams << LL_ENDL;
+                        // the header can not be had: nothing waiting for this mesh may be left waiting
+                        LL_WARNS(LOG_MESH) << "mHeaderReqQ failed: " << req.mMeshParams << ", skip" << LL_ENDL;
+                        headerFailed(req.mMeshParams, false);
                     }
                 }
             }
@@ -1374,32 +1424,56 @@ void LLMeshRepoThread::loadMeshLOD(const LLUUID& mesh_id, const LLVolumeParams& 
     }
     else
     {
-        LLMutexLock lock(mPendingMutex);
-        HeaderRequest req(mesh_params);
-        pending_lod_map::iterator pending = mPendingLOD.find(mesh_id);
-
-        if (pending != mPendingLOD.end())
+        bool cooling_down = false;
         {
-            //append this lod request to existing header request
-            if (lod < LLModel::NUM_LODS && lod >= 0)
+            LLMutexLock lock(mPendingMutex);
+            HeaderRequest req(mesh_params);
+            pending_lod_map::iterator pending = mPendingLOD.find(mesh_id);
+
+            if (pending != mPendingLOD.end())
             {
-                pending->second[lod]++;
+                //append this lod request to existing header request
+                if (lod < LLModel::NUM_LODS && lod >= 0)
+                {
+                    pending->second[lod]++;
+                }
+                else
+                {
+                    LL_WARNS(LOG_MESH) << "Invalid LOD request: " << lod << " for mesh " << mesh_id << LL_ENDL;
+                }
+                llassert_msg(lod < LLModel::NUM_LODS, "Requested lod is out of bounds");
             }
             else
             {
-                LL_WARNS(LOG_MESH) << "Invalid LOD request: " << lod << "for mesh" << mesh_id << LL_ENDL;
-            }
-            llassert_msg(lod < LLModel::NUM_LODS, "Requested lod is out of bounds");
-        }
-        else
-        {
-            //if no header request is pending, fetch header
-            auto& array = mPendingLOD[mesh_id];
-            std::fill(array.begin(), array.end(), 0);
-            array[lod]++;
+                auto cooldown = mHeaderCooldown.find(mesh_id);
+                if (cooldown != mHeaderCooldown.end() && LLTimer::getTotalSeconds() < cooldown->second)
+                {
+                    // the header of this mesh failed for good a moment ago: do not start another chain yet
+                    cooling_down = true;
+                }
+                else
+                {
+                    if (cooldown != mHeaderCooldown.end())
+                    {
+                        mHeaderCooldown.erase(cooldown);
+                    }
 
-            LLMutexLock lock(mMutex);
-            mHeaderReqQ.push(req);
+                    //if no header request is pending, fetch header
+                    auto& array = mPendingLOD[mesh_id];
+                    std::fill(array.begin(), array.end(), 0);
+                    array[lod]++;
+
+                    LLMutexLock lock(mMutex);
+                    mHeaderReqQ.push(req);
+                }
+            }
+        }
+
+        if (cooling_down)
+        {
+            // do not leave the volumes waiting for it (mPendingMutex is released, mLoadedMutex is taken alone)
+            LLMutexLock lock(mLoadedMutex);
+            mUnavailableQ.push_back(LODRequest(mesh_params, lod));
         }
     }
 }
@@ -1468,47 +1542,38 @@ void LLMeshRepoThread::constructUrl(LLUUID mesh_id, std::string * url, int * leg
     std::string res_url;
     int res_version(0); // <FS:Ansariel> [UDP Assets]
 
-    if (gAgent.getRegion())
+    // Only the capability strings the main thread stored (setGetMeshCap) are read: this runs on the repo
+    // thread, which must not look at gAgent or its region.
     {
+        LLMutexLock lock(mMutex);
+        // <FS:Ansariel> [UDP Assets]
+        //res_url = mGetMeshCapability;
+        if (!mGetMeshCapability.empty() && mLegacyGetMeshVersion == 0)
         {
-            LLMutexLock lock(mMutex);
-            // <FS:Ansariel> [UDP Assets]
-            //res_url = mGetMeshCapability;
-            if (!mGetMeshCapability.empty() && mLegacyGetMeshVersion == 0)
-            {
-                res_url = mGetMeshCapability;
-            }
-            else if (!mLegacyGetMesh2Capability.empty() && mLegacyGetMeshVersion > 1)
-            {
-                res_url = mLegacyGetMesh2Capability;
-                res_version = 2;
-            }
-            else
-            {
-                res_url = mLegacyGetMeshCapability;
-                res_version = 1;
-            }
-            // </FS:Ansariel> [UDP Assets]
+            res_url = mGetMeshCapability;
         }
-
-        if (!res_url.empty())
+        else if (!mLegacyGetMesh2Capability.empty() && mLegacyGetMeshVersion > 1)
         {
-            res_url += "/?mesh_id=";
-            res_url += mesh_id.asString().c_str();
+            res_url = mLegacyGetMesh2Capability;
+            res_version = 2;
         }
         else
         {
-            // <FS:Ansariel> [UDP Assets]
-            //LL_WARNS_ONCE(LOG_MESH) << "Current region does not have ViewerAsset capability!  Cannot load meshes. Region id: "
-            LL_WARNS_ONCE(LOG_MESH) << "Current region does not have ViewerAsset or GetMesh capability!  Cannot load "
-            // </FS:Ansariel> [UDP Assets
-                                    << gAgent.getRegion()->getRegionID() << LL_ENDL;
-            LL_DEBUGS_ONCE(LOG_MESH) << "Cannot load mesh " << mesh_id << " due to missing capability." << LL_ENDL;
+            res_url = mLegacyGetMeshCapability;
+            res_version = 1;
         }
+        // </FS:Ansariel> [UDP Assets]
+    }
+
+    if (!res_url.empty())
+    {
+        res_url += "/?mesh_id=";
+        res_url += mesh_id.asString().c_str();
     }
     else
     {
-        LL_WARNS_ONCE(LOG_MESH) << "Current region is not loaded so there is no capability to load from! Cannot load meshes." << LL_ENDL;
+        // The region is not loaded yet, or it has no ViewerAsset or GetMesh capability: the caller tries again later.
+        LL_WARNS_ONCE(LOG_MESH) << "No ViewerAsset or GetMesh capability known (the region is not loaded yet or does not have one)!  Cannot load meshes yet." << LL_ENDL;
         LL_DEBUGS_ONCE(LOG_MESH) << "Cannot load mesh " << mesh_id << " due to missing capability." << LL_ENDL;
     }
 
@@ -1577,7 +1642,7 @@ LLCore::HttpHandle LLMeshRepoThread::getByteRange(const std::string & url, int l
 }
 
 
-bool LLMeshRepoThread::fetchMeshSkinInfo(const LLUUID& mesh_id)
+bool LLMeshRepoThread::fetchMeshSkinInfo(const LLUUID& mesh_id, const RequestStats& stats)
 {
     LL_PROFILE_ZONE_SCOPED;
     if (!mHeaderMutex)
@@ -1723,7 +1788,7 @@ bool LLMeshRepoThread::fetchMeshSkinInfo(const LLUUID& mesh_id)
 
             if (!http_url.empty())
             {
-                LLMeshHandlerBase::ptr_t handler = std::make_shared<LLMeshSkinInfoHandler>(mesh_id, offset, size);
+                LLMeshHandlerBase::ptr_t handler = std::make_shared<LLMeshSkinInfoHandler>(mesh_id, offset, size, stats);
                 // <FS:Ansariel> [UDP Assets]
                 //LLCore::HttpHandle handle = getByteRange(http_url, offset, size, handler);
                 LLCore::HttpHandle handle = getByteRange(http_url, legacy_cap_version, offset, size, handler);
@@ -1734,6 +1799,7 @@ bool LLMeshRepoThread::fetchMeshSkinInfo(const LLUUID& mesh_id)
                                        << ".  Reason:  " << mHttpStatus.toString()
                                        << " (" << mHttpStatus.toTerseString() << ")"
                                        << LL_ENDL;
+                    handler->mProcessed = true; // not issued: the caller backs off
                     ret = false;
                 }
                 else
@@ -1744,8 +1810,8 @@ bool LLMeshRepoThread::fetchMeshSkinInfo(const LLUUID& mesh_id)
             }
             else
             {
-                LLMutexLock locker(mLoadedMutex);
-                mSkinUnavailableQ.emplace_back(mesh_id);
+                // no address to ask: not issued, so the caller backs off and gives up in the retry limit
+                ret = false;
             }
         }
         else
@@ -1756,7 +1822,10 @@ bool LLMeshRepoThread::fetchMeshSkinInfo(const LLUUID& mesh_id)
     }
     else
     {
+        // the header says there is no data for this mesh: release the volumes waiting for the skin
         mHeaderMutex->unlock();
+        LLMutexLock locker(mLoadedMutex);
+        mSkinUnavailableQ.emplace_back(mesh_id);
     }
 
     //early out was not hit, effectively fetched
@@ -1849,6 +1918,7 @@ bool LLMeshRepoThread::fetchMeshDecomposition(const LLUUID& mesh_id)
                                        << ".  Reason:  " << mHttpStatus.toString()
                                        << " (" << mHttpStatus.toTerseString() << ")"
                                        << LL_ENDL;
+                    handler->mProcessed = true; // not issued: the caller backs off
                     ret = false;
                 }
                 else
@@ -1856,6 +1926,11 @@ bool LLMeshRepoThread::fetchMeshDecomposition(const LLUUID& mesh_id)
                     handler->mHttpHandle = handle;
                     mHttpRequestSet.insert(handler);
                 }
+            }
+            else
+            {
+                // no address to ask: not issued, so the caller backs off
+                ret = false;
             }
         }
     }
@@ -1955,6 +2030,7 @@ bool LLMeshRepoThread::fetchMeshPhysicsShape(const LLUUID& mesh_id)
                                        << ".  Reason:  " << mHttpStatus.toString()
                                        << " (" << mHttpStatus.toTerseString() << ")"
                                        << LL_ENDL;
+                    handler->mProcessed = true; // not issued: the caller backs off
                     ret = false;
                 }
                 else
@@ -1962,6 +2038,11 @@ bool LLMeshRepoThread::fetchMeshPhysicsShape(const LLUUID& mesh_id)
                     handler->mHttpHandle = handle;
                     mHttpRequestSet.insert(handler);
                 }
+            }
+            else
+            {
+                // no address to ask: not issued, so the caller backs off
+                ret = false;
             }
         }
         else
@@ -2015,7 +2096,7 @@ void LLMeshRepoThread::decActiveSkinRequests()
 }
 
 //return false if failed to get header
-bool LLMeshRepoThread::fetchMeshHeader(const LLVolumeParams& mesh_params)
+bool LLMeshRepoThread::fetchMeshHeader(const LLVolumeParams& mesh_params, const RequestStats& stats)
 {
     LL_PROFILE_ZONE_SCOPED;
     ++LLMeshRepository::sMeshRequestCount;
@@ -2079,7 +2160,7 @@ bool LLMeshRepoThread::fetchMeshHeader(const LLVolumeParams& mesh_params)
         //within the first 4KB
         //NOTE -- this will break of headers ever exceed 4KB
 
-        LLMeshHandlerBase::ptr_t handler = std::make_shared<LLMeshHeaderHandler>(mesh_params, 0, MESH_HEADER_SIZE);
+        LLMeshHandlerBase::ptr_t handler = std::make_shared<LLMeshHeaderHandler>(mesh_params, 0, MESH_HEADER_SIZE, stats);
         // <FS:Ansariel> [UDP Assets]
         //LLCore::HttpHandle handle = getByteRange(http_url, 0, MESH_HEADER_SIZE, handler);
         LLCore::HttpHandle handle = getByteRange(http_url, legacy_cap_version, 0, MESH_HEADER_SIZE, handler);
@@ -2090,6 +2171,9 @@ bool LLMeshRepoThread::fetchMeshHeader(const LLVolumeParams& mesh_params)
                                << ".  Reason:  " << mHttpStatus.toString()
                                << " (" << mHttpStatus.toTerseString() << ")"
                                << LL_ENDL;
+            // Not issued: the caller backs off.  Without this the handler's destructor would queue a second,
+            // fresh header request on top of the caller's backed-off one.
+            handler->mProcessed = true;
             retval = false;
         }
         else
@@ -2098,12 +2182,18 @@ bool LLMeshRepoThread::fetchMeshHeader(const LLVolumeParams& mesh_params)
             mHttpRequestSet.insert(handler);
         }
     }
+    else
+    {
+        // no address to ask (the region's capabilities are not known yet): not issued, so the caller backs off
+        // and tries again, and gives up through headerFailed() when it never works
+        retval = false;
+    }
 
     return retval;
 }
 
 //return false if failed to get mesh lod.
-bool LLMeshRepoThread::fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod)
+bool LLMeshRepoThread::fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod, const RequestStats& stats)
 {
     LL_PROFILE_ZONE_SCOPED;
     if (!mHeaderMutex)
@@ -2262,7 +2352,7 @@ bool LLMeshRepoThread::fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod)
             {
                 LL_DEBUGS(LOG_MESH) << "Mesh/Cache: Mesh body for ID " << mesh_id << " - was retrieved from the simulator." << LL_ENDL;
 
-                LLMeshHandlerBase::ptr_t handler = std::make_shared<LLMeshLODHandler>(mesh_params, lod, offset, size);
+                LLMeshHandlerBase::ptr_t handler = std::make_shared<LLMeshLODHandler>(mesh_params, lod, offset, size, stats);
                 // <FS:Ansariel> [UDP Assets]
                 //LLCore::HttpHandle handle = getByteRange(http_url, offset, size, handler);
                 LLCore::HttpHandle handle = getByteRange(http_url, legacy_cap_version, offset, size, handler);
@@ -2273,6 +2363,8 @@ bool LLMeshRepoThread::fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod)
                                        << ".  Reason:  " << mHttpStatus.toString()
                                        << " (" << mHttpStatus.toTerseString() << ")"
                                        << LL_ENDL;
+                    // Not issued: the caller backs off (see fetchMeshHeader)
+                    handler->mProcessed = true;
                     retval = false;
                 }
                 else
@@ -2284,8 +2376,8 @@ bool LLMeshRepoThread::fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod)
             }
             else
             {
-                LLMutexLock lock(mLoadedMutex);
-                mUnavailableQ.push_back(LODRequest(mesh_params, lod));
+                // no address to ask: not issued, so the caller backs off and gives up in the retry limit
+                retval = false;
             }
         }
         else
@@ -2296,7 +2388,10 @@ bool LLMeshRepoThread::fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod)
     }
     else
     {
+        // the header says there is no data for this mesh (404): nothing to fetch, release the waiting volumes
         mHeaderMutex->unlock();
+        LLMutexLock lock(mLoadedMutex);
+        mUnavailableQ.push_back(LODRequest(mesh_params, lod));
     }
 
     return retval;
@@ -2439,6 +2534,8 @@ EMeshProcessingResult LLMeshRepoThread::headerReceived(const LLVolumeParams& mes
         //check for pending requests
         if (has_pending_lods)
         {
+            std::array<bool, LLModel::NUM_LODS> missing_lods{};
+            bool has_missing_lods = false;
             for (S32 i = 0; i < pending_lods.size(); ++i)
             {
                 if (pending_lods[i] > 1)
@@ -2470,6 +2567,25 @@ EMeshProcessingResult LLMeshRepoThread::headerReceived(const LLVolumeParams& mes
                         LODRequest req(mesh_params, i);
                         mLODReqQ.push(req);
                         LLMeshRepository::sLODProcessing++;
+                    }
+                }
+                else if (pending_lods[i] > 0 && i < LLVolumeLODGroup::NUM_LODS)
+                {
+                    // the mesh does not have this LOD (or no data at all): the volumes waiting for it must not
+                    // keep waiting, they pick the best LOD the header lists
+                    missing_lods[i] = true;
+                    has_missing_lods = true;
+                }
+            }
+
+            if (has_missing_lods)
+            {
+                LLMutexLock lock(mLoadedMutex);
+                for (S32 i = 0; i < LLVolumeLODGroup::NUM_LODS; ++i)
+                {
+                    if (missing_lods[i])
+                    {
+                        mUnavailableQ.push_back(LODRequest(mesh_params, i));
                     }
                 }
             }
@@ -3775,6 +3891,8 @@ void LLMeshHandlerBase::onCompleted(LLCore::HttpHandle handle, LLCore::HttpRespo
             {
                 LL_WARNS(LOG_MESH) << "Failed to allocate " << data_size - body_offset << " memory for mesh response" << LL_ENDL;
                 processFailure(LLCore::HttpStatus(LLCore::HttpStatus::LLCORE, LLCore::HE_BAD_ALLOC));
+                ++LLMeshRepository::sHTTPErrorCount;
+                goto common_exit; // the failure is reported, processData() has no data to work with
             }
         }
 
@@ -3810,17 +3928,28 @@ LLMeshHeaderHandler::~LLMeshHeaderHandler()
 
 void LLMeshHeaderHandler::processFailure(LLCore::HttpStatus status)
 {
+    RequestStats retry_stats;
+    if (retryStats(status, retry_stats))
+    {
+        LL_INFOS(LOG_MESH) << "Error during mesh header handling.  ID:  " << mMeshParams.getSculptID()
+                           << ", Reason:  " << status.toString()
+                           << " (" << status.toTerseString() << ").  Retrying."
+                           << LL_ENDL;
+
+        LLMeshRepoThread::HeaderRequest req(mMeshParams, retry_stats);
+        LLMutexLock lock(gMeshRepo.mThread->mMutex);
+        gMeshRepo.mThread->mHeaderReqQ.push(req);
+        return;
+    }
+
     LL_WARNS(LOG_MESH) << "Error during mesh header handling.  ID:  " << mMeshParams.getSculptID()
                        << ", Reason:  " << status.toString()
                        << " (" << status.toTerseString() << ").  Not retrying."
                        << LL_ENDL;
 
-    // Can't get the header so none of the LODs will be available
-    LLMutexLock lock(gMeshRepo.mThread->mLoadedMutex);
-    for (int i(0); i < LLVolumeLODGroup::NUM_LODS; ++i)
-    {
-        gMeshRepo.mThread->mUnavailableQ.push_back(LLMeshRepoThread::LODRequest(mMeshParams, i));
-    }
+    // Can't get the header so none of the LODs or the skin will be available.  An HTTP answer that is not
+    // retryable (404...) is final; a transport failure that used up its rounds is tried again later.
+    gMeshRepo.mThread->headerFailed(mMeshParams, status.isHttpStatus() && !status.isRetryable());
 }
 
 void LLMeshHeaderHandler::processData(LLCore::BufferArray * /* body */, S32 /* body_offset */,
@@ -3845,12 +3974,8 @@ void LLMeshHeaderHandler::processData(LLCore::BufferArray * /* body */, S32 /* b
                            << ", Reason: " << res << " Not retrying."
                            << LL_ENDL;
 
-        // Can't get the header so none of the LODs will be available
-        LLMutexLock lock(gMeshRepo.mThread->mLoadedMutex);
-        for (int i(0); i < LLVolumeLODGroup::NUM_LODS; ++i)
-        {
-            gMeshRepo.mThread->mUnavailableQ.push_back(LLMeshRepoThread::LODRequest(mMeshParams, i));
-        }
+        // Can't get the header so none of the LODs or the skin will be available (what the sim sent is not a header)
+        gMeshRepo.mThread->headerFailed(mMeshParams, true);
     }
     else if (data && data_size > 0)
     {
@@ -3927,12 +4052,8 @@ void LLMeshHeaderHandler::processData(LLCore::BufferArray * /* body */, S32 /* b
 
             gMeshRepo.mThread->mHeaderMutex->unlock();
 
-            // headerReceived() parsed header, but header's data is invalid so none of the LODs will be available
-            LLMutexLock lock(gMeshRepo.mThread->mLoadedMutex);
-            for (int i(0); i < LLVolumeLODGroup::NUM_LODS; ++i)
-            {
-                gMeshRepo.mThread->mUnavailableQ.push_back(LLMeshRepoThread::LODRequest(mMeshParams, i));
-            }
+            // headerReceived() parsed header, but header's data is invalid so none of the LODs or the skin will be available
+            gMeshRepo.mThread->headerFailed(mMeshParams, true);
         }
     }
 }
@@ -3952,6 +4073,21 @@ LLMeshLODHandler::~LLMeshLODHandler()
 
 void LLMeshLODHandler::processFailure(LLCore::HttpStatus status)
 {
+    RequestStats retry_stats;
+    if (retryStats(status, retry_stats))
+    {
+        LL_INFOS(LOG_MESH) << "Error during mesh LOD handling.  ID:  " << mMeshParams.getSculptID()
+                           << ", Reason:  " << status.toString()
+                           << " (" << status.toTerseString() << ").  Retrying."
+                           << LL_ENDL;
+
+        LLMeshRepoThread::LODRequest req(mMeshParams, mLOD, retry_stats);
+        LLMutexLock lock(gMeshRepo.mThread->mMutex);
+        gMeshRepo.mThread->mLODReqQ.push(req);
+        LLMeshRepository::sLODProcessing++;
+        return;
+    }
+
     LL_WARNS(LOG_MESH) << "Error during mesh LOD handling.  ID:  " << mMeshParams.getSculptID()
                        << ", Reason:  " << status.toString()
                        << " (" << status.toTerseString() << ").  Not retrying."
@@ -4073,12 +4209,25 @@ LLMeshSkinInfoHandler::~LLMeshSkinInfoHandler()
 
 void LLMeshSkinInfoHandler::processFailure(LLCore::HttpStatus status)
 {
+    RequestStats retry_stats;
+    if (retryStats(status, retry_stats))
+    {
+        LL_INFOS(LOG_MESH) << "Error during mesh skin info handling.  ID:  " << mMeshID
+                           << ", Reason:  " << status.toString()
+                           << " (" << status.toTerseString() << ").  Retrying."
+                           << LL_ENDL;
+
+        LLMutexLock lock(gMeshRepo.mThread->mMutex);
+        gMeshRepo.mThread->mSkinRequests.emplace_back(mMeshID, retry_stats);
+        return;
+    }
+
     LL_WARNS(LOG_MESH) << "Error during mesh skin info handling.  ID:  " << mMeshID
                        << ", Reason:  " << status.toString()
                        << " (" << status.toTerseString() << ").  Not retrying."
                        << LL_ENDL;
-        LLMutexLock lock(gMeshRepo.mThread->mLoadedMutex);
-        gMeshRepo.mThread->mSkinUnavailableQ.emplace_back(mMeshID);
+    LLMutexLock lock(gMeshRepo.mThread->mLoadedMutex);
+    gMeshRepo.mThread->mSkinUnavailableQ.emplace_back(mMeshID);
 }
 
 void LLMeshSkinInfoHandler::processSkin(U8* data, S32 data_size)
@@ -4457,6 +4606,8 @@ void LLMeshRepository::unregisterSkinInfo(const LLUUID& mesh_id, LLVOVolume* vob
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME;
 
     llassert(mesh_id.notNull());
+    // the repo thread adds entries to mLoadingSkins (headerReceived) under this mutex
+    LLMutexLock lock(mMeshMutex);
     auto skin_pair_iter = mLoadingSkins.find(mesh_id);
     if (skin_pair_iter != mLoadingSkins.end())
     {
@@ -4485,6 +4636,7 @@ void LLMeshRepository::unregisterAllMeshes()
     // Clear now and not in LLMeshRepository::shutdown because
     // LLMeshRepository::notifyLoadedMeshes could (depending on invocation
     // order) reference a pointer to an object after it has been deleted.
+    LLMutexLock lock(mMeshMutex);
     for (auto& lod : mLoadingMeshes)
     {
         lod.clear();
@@ -4790,34 +4942,32 @@ void LLMeshRepository::notifyLoadedMeshes()
         }
         hold_offs = 0;
 
-        if (gAgent.getRegion())
+        if (LLViewerRegion* region = gAgent.getRegion(); region && region->capabilitiesReceived())
         {
-            // Update capability urls
-            static std::string region_name("never name a region this");
-
-            if (gAgent.getRegion()->getName() != region_name && gAgent.getRegion()->capabilitiesReceived())
+            // Update capability urls.  Refreshed when the capability strings differ from the ones the repo thread
+            // holds (mMutex is held here), not when the region name differs: a region that is entered again, or
+            // whose capabilities change, with the same name must not leave the thread on old addresses.
+            // <FS:Ansariel> [UDP Assets]
+            const bool use_v1(gSavedSettings.getBOOL("MeshUseGetMesh1"));
+            const std::string mesh_cap(region->getViewerAssetUrl());
+            const std::string legacy_mesh1_cap(region->getCapability("GetMesh"));
+            const std::string legacy_mesh2_cap(region->getCapability("GetMesh2"));
+            const int version = ((mesh_cap.empty() && legacy_mesh2_cap.empty()) || use_v1) ? 1 : (!mesh_cap.empty() ? 0 : 2);
+            if (version != mThread->mLegacyGetMeshVersion
+                || mesh_cap != mThread->mGetMeshCapability
+                || legacy_mesh1_cap != mThread->mLegacyGetMeshCapability
+                || legacy_mesh2_cap != mThread->mLegacyGetMesh2Capability)
             {
-                region_name = gAgent.getRegion()->getName();
-                // <FS:Ansariel> [UDP Assets]
-                //const std::string mesh_cap(gAgent.getRegion()->getViewerAssetUrl());
-                //mThread->setGetMeshCap(mesh_cap);
-                //LL_DEBUGS(LOG_MESH) << "Retrieving caps for region '" << region_name
-                //                  << "', ViewerAsset cap:  " << mesh_cap
-                //                  << LL_ENDL;
-                const bool use_v1(gSavedSettings.getBOOL("MeshUseGetMesh1"));
-                const std::string mesh_cap(gAgent.getRegion()->getViewerAssetUrl());
-                const std::string legacy_mesh1_cap(gAgent.getRegion()->getCapability("GetMesh"));
-                const std::string legacy_mesh2_cap(gAgent.getRegion()->getCapability("GetMesh2"));
-                mLegacyGetMeshVersion = ((mesh_cap.empty() && legacy_mesh2_cap.empty()) || use_v1) ? 1 : (!mesh_cap.empty() ? 0 : 2);
+                mLegacyGetMeshVersion = version;
                 mThread->setGetMeshCap(mesh_cap, legacy_mesh1_cap, legacy_mesh2_cap, mLegacyGetMeshVersion);
-                LL_DEBUGS(LOG_MESH) << "Retrieving caps for region '" << region_name
+                LL_DEBUGS(LOG_MESH) << "Retrieving caps for region '" << region->getName()
                                     << "', ViewerAsset cap:  " << mesh_cap
                                     << ", GetMesh2 cap:  " << legacy_mesh2_cap
                                     << ", GetMesh cap:  " << legacy_mesh1_cap
                                     << ", using version:  " << mLegacyGetMeshVersion
                                     << LL_ENDL;
-                // <FS:Ansariel> [UDP Assets]
             }
+            // </FS:Ansariel> [UDP Assets]
         }
 
         //popup queued error messages from background threads
@@ -4839,7 +4989,8 @@ void LLMeshRepository::notifyLoadedMeshes()
         // Checking sRequestHighWater to keep queues at least somewhat populated
         // for faster transition into http
         S32 active_count = LLMeshRepoThread::sActiveHeaderRequests + LLMeshRepoThread::sActiveLODRequests + LLMeshRepoThread::sActiveSkinRequests;
-        active_count += (S32)(mThread->mLODReqQ.size() + mThread->mHeaderReqQ.size() + mThread->mSkinInfoQ.size());
+        // the queues of requests the repo thread has not started yet (mMutex is held here)
+        active_count += (S32)(mThread->mLODReqQ.size() + mThread->mHeaderReqQ.size() + mThread->mSkinRequests.size());
         if (active_count < LLMeshRepoThread::sRequestHighWater)
         {
             S32 push_count = LLMeshRepoThread::sRequestHighWater - active_count;
@@ -4863,8 +5014,17 @@ void LLMeshRepository::notifyLoadedMeshes()
             while (!mPendingRequests.empty() && push_count > 0)
             {
                 std::shared_ptr<PendingRequestBase>& req_p = mPendingRequests.front();
-                // todo: check hasTrackedData here and erase request if none
-                // since this is supposed to mean that request was removed
+                if (!req_p->hasTrackedData())
+                {
+                    // Nothing waits for it any more (its waiting volumes were all unregistered): do not forward it
+                    // and do not spend a slot on it.
+                    if (req_p->getRequestType() == MESH_REQUEST_LOD)
+                    {
+                        LLMeshRepository::sLODPending--;
+                    }
+                    mPendingRequests.erase(mPendingRequests.begin());
+                    continue;
+                }
                 switch (req_p->getRequestType())
                 {
                 case MESH_REQUEST_LOD:
@@ -5263,6 +5423,55 @@ bool LLMeshRepoThread::hasHeader(const LLUUID& mesh_id) const
     LLMutexLock lock(mHeaderMutex);
     mesh_header_map::const_iterator iter = mMeshHeader.find(mesh_id);
     return iter != mMeshHeader.end();
+}
+
+bool LLMeshRepoThread::headerPending(const LLUUID& mesh_id) const
+{
+    LLMutexLock lock(mPendingMutex);
+    return mPendingLOD.find(mesh_id) != mPendingLOD.end();
+}
+
+bool LLMeshRepoThread::hasCapabilities() const
+{
+    LLMutexLock lock(mMutex);
+    return !mGetMeshCapability.empty() || !mLegacyGetMesh2Capability.empty() || !mLegacyGetMeshCapability.empty();
+}
+
+// Thread: repo.  The header of the mesh can not be had (the request failed for good, or it could not be issued
+// in DOWNLOAD_RETRY_LIMIT tries).  Nothing may keep waiting for it: the parked LOD wishes are dropped, so that the
+// next request for the mesh asks for the header again (not before the cooldown, see below), and the volumes
+// waiting for a LOD or the skin are told they are unavailable.
+//
+// permanent: the simulator has no usable header for the mesh (404, not a header, invalid).  The mesh is then
+// recorded with the same stub header an empty answer makes (m404, no header size): hasHeader() is true, the LODs
+// are reported unavailable without a request, and nothing is drawn, as for any mesh without data.  An existing
+// header is never replaced.  Otherwise (retries used up) the mesh gets a cooldown for header requests.
+void LLMeshRepoThread::headerFailed(const LLVolumeParams& mesh_params, bool permanent)
+{
+    const LLUUID& mesh_id = mesh_params.getSculptID();
+    if (permanent)
+    {
+        LLMeshHeader stub;
+        stub.m404 = true;
+        LLMutexLock lock(mHeaderMutex);
+        mMeshHeader.try_emplace(mesh_id, stub);
+    }
+    {
+        LLMutexLock lock(mPendingMutex);
+        mPendingLOD.erase(mesh_id);
+        if (!permanent)
+        {
+            mHeaderCooldown[mesh_id] = LLTimer::getTotalSeconds() + HEADER_RETRY_COOLDOWN;
+        }
+    }
+
+    // mPendingMutex is released: it is never held together with mLoadedMutex
+    LLMutexLock lock(mLoadedMutex);
+    for (int i(0); i < LLVolumeLODGroup::NUM_LODS; ++i)
+    {
+        mUnavailableQ.push_back(LODRequest(mesh_params, i));
+    }
+    mSkinUnavailableQ.emplace_back(mesh_id);
 }
 
 // <FS:Ansariel> DAE export

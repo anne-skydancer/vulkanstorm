@@ -1496,12 +1496,25 @@ void LLVOVolume::notifyMeshLoaded()
     gPipeline.markRebuild(mDrawable, LLDrawable::REBUILD_GEOMETRY);
     LLShadowDirtyFeed::noteMeshLoaded(this); // <Vulkanstorm/> the projector shadow pool: a mesh arrived (REBUILD_GEOMETRY alone is not counted)
 
-    if (!mSkinInfo && !mSkinInfoUnavaliable)
+    if (!mSkinInfo)
     {
-        // Header was loaded, update skin info state from header
         LLUUID mesh_id = getVolume()->getParams().getSculptID();
-        if (!gMeshRepo.hasSkinInfo(mesh_id))
+        if (mSkinInfoUnavaliable)
         {
+            // The skin was given up on (for instance after a failed header, which a later request got) and the mesh
+            // has one: take it, or register to be given it when it arrives (notifySkinInfoLoaded).
+            if (gMeshRepo.hasSkinInfo(mesh_id))
+            {
+                mSkinInfoUnavaliable = false;
+                if (const LLMeshSkinInfo* skin = gMeshRepo.getSkinInfo(mesh_id, this))
+                {
+                    mSkinInfo = skin;
+                }
+            }
+        }
+        else if (!gMeshRepo.hasSkinInfo(mesh_id))
+        {
+            // Header was loaded, update skin info state from header
             mSkinInfoUnavaliable = true;
         }
     }
@@ -1911,16 +1924,7 @@ bool LLVOVolume::updateLOD()
 
     LL_PROFILE_ZONE_SCOPED_CATEGORY_VOLUME;
 
-    bool lod_changed = false;
-
-    if (!LLSculptIDSize::instance().isUnloaded(getVolume()->getParams().getSculptID()))
-    {
-        lod_changed = calcLOD();
-    }
-    else
-    {
-        return false;
-    }
+    bool lod_changed = calcLOD();
 
     if (lod_changed)
     {
