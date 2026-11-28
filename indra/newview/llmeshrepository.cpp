@@ -5205,7 +5205,7 @@ void LLMeshRepository::notifyLoadedMeshes()
                 ++done;
                 push_count--;
             }
-            mPendingRequests.erase(mPendingRequests.begin(), mPendingRequests.begin() + done);
+            mPendingRequests.erase(mPendingRequests.begin(), mPendingRequests.begin() + static_cast<std::ptrdiff_t>(done));
         }
 
         //send decomposition requests

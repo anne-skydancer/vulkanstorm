@@ -1107,7 +1107,7 @@ public:
     // NaCl End
 
     void copyVolumeFaces(const LLVolume* volume);
-    // Takes the faces of volume (the caller must be the only user of it; it keeps no faces).
+    // Takes the faces of volume (not this volume; the caller must be the only user of it; it keeps no faces).
     void moveVolumeFaces(LLVolume* volume);
     void copyFacesTo(std::vector<LLVolumeFace> &faces) const;
     void copyFacesFrom(const std::vector<LLVolumeFace> &faces);

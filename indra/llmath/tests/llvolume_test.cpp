@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file llvolume_test.cpp
- * @brief Characterisation tests for LLVolume::unpackVolumeFaces on malformed mesh blobs.
+ * @brief Tests for LLVolume::unpackVolumeFaces (malformed mesh blobs) and LLVolume::moveVolumeFaces.
  */
 
 #include "linden_common.h"
@@ -160,6 +160,9 @@ namespace tut
         const S32 verts1 = src->getVolumeFace(1).mNumVertices;
         const LLVector4a* positions0 = f0.mPositions;
         const LLVector4a* positions1 = src->getVolumeFace(1).mPositions;
+        const LLVector4a min0 = f0.mExtents[0];
+        const LLVector4a max0 = f0.mExtents[1];
+        const LLVector3 scale0 = f0.mNormalizedScale;
 
         LLPointer<LLVolume> dst = new LLVolume(params, 1.f);
         dst->moveVolumeFaces(src);
@@ -171,6 +174,17 @@ namespace tut
         ensure_equals("face 1 vertices", dst->getVolumeFace(1).mNumVertices, verts1);
         ensure("face 0 buffer moved, not copied", dst->getVolumeFace(0).mPositions == positions0);
         ensure("face 1 buffer moved, not copied", dst->getVolumeFace(1).mPositions == positions1);
+
+        // the extents and the normalised scale of the face come along
+        const LLVolumeFace& m0 = dst->getVolumeFace(0);
+        ensure("extents min kept", m0.mExtents[0].equals3(min0, 0.f));
+        ensure("extents max kept", m0.mExtents[1].equals3(max0, 0.f));
+        ensure("normalized scale kept", m0.mNormalizedScale == scale0);
+
+        // the source can go away without touching what was moved
+        src = nullptr;
+        ensure_equals("faces survive the source", dst->getNumVolumeFaces(), 2);
+        ensure("buffer survives the source", dst->getVolumeFace(0).mPositions == positions0);
 
         LLJointRiggingInfoTab& tab = dst->getVolumeFace(0).mJointRiggingInfoTab;
         ensure_equals("rigging boxes kept", tab.size(), 4);
