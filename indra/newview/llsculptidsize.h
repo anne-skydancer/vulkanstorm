@@ -116,19 +116,12 @@ public:
     void dec(const LLDrawable *pdrawable);
     void rem(const LLUUID &sculptId);
 
-    inline void addToUnloaded(const LLUUID &sculptId) { mMarkAsUnloaded.insert(sculptId); }
-    inline void remFromUnloaded(const LLUUID &sculptId) { mMarkAsUnloaded.erase(sculptId); }
-    inline bool isUnloaded(const LLUUID &sculptId) const { return mMarkAsUnloaded.end() != mMarkAsUnloaded.find(sculptId); }
-    inline void clearUnloaded() { mMarkAsUnloaded.clear(); }
-
     void resetSizeSum(const LLUUID &sculptId);
 
     inline const container & getSizeInfo() const { return mSizeInfo; }
 
 private:
     container mSizeInfo;
-    typedef std::set<LLUUID> std_LLUUID;
-    std_LLUUID mMarkAsUnloaded;
 };
 
 #endif

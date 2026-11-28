@@ -200,8 +200,14 @@ public:
     bool isDelayed() const;
     U32 getRetries() { return mRetries; }
 
+    // A request that was issued and then failed over HTTP (see LLMeshHandlerBase::retryStats) may be queued
+    // again a couple of times only: llcorehttp has already retried it before the failure got here.
+    bool canRetryAfterHttpFailure() const;
+    void countHttpFailure() { ++mHttpFailures; }
+
 private:
     U32 mRetries;
+    U32 mHttpFailures = 0;
     LLFrameTimer mTimer;
 };
 
@@ -465,6 +471,12 @@ public:
         {
         }
 
+        // a retry of a request that failed: carries the retry count and back-off of the failed one
+        HeaderRequest(const LLVolumeParams&  mesh_params, const RequestStats& stats)
+            : RequestStats(stats), mMeshParams(mesh_params)
+        {
+        }
+
         bool operator<(const HeaderRequest& rhs) const
         {
             return mMeshParams < rhs.mMeshParams;
@@ -481,6 +493,12 @@ public:
             : RequestStats(), mMeshParams(mesh_params), mLOD(lod)
         {
         }
+
+        // a retry of a request that failed: carries the retry count and back-off of the failed one
+        LODRequest(const LLVolumeParams&  mesh_params, S32 lod, const RequestStats& stats)
+            : RequestStats(stats), mMeshParams(mesh_params), mLOD(lod)
+        {
+        }
     };
 
     class UUIDBasedRequest : public RequestStats
@@ -490,6 +508,12 @@ public:
 
         UUIDBasedRequest(const LLUUID& id)
             : RequestStats(), mId(id)
+        {
+        }
+
+        // a retry of a request that failed: carries the retry count and back-off of the failed one
+        UUIDBasedRequest(const LLUUID& id, const RequestStats& stats)
+            : RequestStats(stats), mId(id)
         {
         }
 
@@ -550,6 +574,10 @@ public:
     typedef std::unordered_map<LLUUID, std::array<S32, LLModel::NUM_LODS> > pending_lod_map;
     pending_lod_map mPendingLOD;
 
+    // Meshes whose header could not be had after all the retries: mesh id and the time (LLTimer::getTotalSeconds)
+    // before which loadMeshLOD does not queue the header request again.  Guarded by mPendingMutex.
+    std::unordered_map<LLUUID, F64> mHeaderCooldown;
+
     // map of mesh ID to skin info (mirrors LLMeshRepository::mSkinMap)
     /// NOTE: LLMeshRepository::mSkinMap is accessed very frequently, so maintain a copy here to avoid mutex overhead
     typedef std::unordered_map<LLUUID, LLPointer<LLMeshSkinInfo>> skin_map;
@@ -590,8 +618,9 @@ public:
     void lockAndLoadMeshLOD(const LLVolumeParams& mesh_params, S32 lod);
     void loadMeshLOD(const LLVolumeParams& mesh_params, S32 lod);
 
-    bool fetchMeshHeader(const LLVolumeParams& mesh_params);
-    bool fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod);
+    // stats: the retry state of the request being served, kept by the HTTP handler for a retry on failure
+    bool fetchMeshHeader(const LLVolumeParams& mesh_params, const RequestStats& stats);
+    bool fetchMeshLOD(const LLVolumeParams& mesh_params, S32 lod, const RequestStats& stats);
     EMeshProcessingResult headerReceived(const LLVolumeParams& mesh_params, U8* data, S32 data_size, U32 flags = 0);
     EMeshProcessingResult lodReceived(const LLVolumeParams& mesh_params, S32 lod, U8* data, S32 data_size);
     bool skinInfoReceived(const LLUUID& mesh_id, U8* data, S32 data_size);
@@ -600,6 +629,14 @@ public:
     bool hasPhysicsShapeInHeader(const LLUUID& mesh_id) const;
     bool hasSkinInfoInHeader(const LLUUID& mesh_id) const;
     bool hasHeader(const LLUUID& mesh_id) const;
+    // true while a header request for the mesh is outstanding (LODs are parked in mPendingLOD)
+    bool headerPending(const LLUUID& mesh_id) const;
+    // true once the main thread has stored at least one capability address (see constructUrl)
+    bool hasCapabilities() const;
+    // The header can not be had: release everything waiting for the mesh (LODs and skin) as unavailable.
+    // permanent: the sim said there is no (usable) header; it is remembered as a 404 header so nothing asks again.
+    // Otherwise no header request is queued for the mesh again before HEADER_RETRY_COOLDOWN has passed.
+    void headerFailed(const LLVolumeParams& mesh_params, bool permanent);
 
     void notifyLoadedMeshes();
     S32 getActualMeshLOD(const LLVolumeParams& mesh_params, S32 lod);
@@ -610,7 +647,7 @@ public:
 
     //send request for skin info, returns true if header info exists
     //  (should hold onto mesh_id and try again later if header info does not exist)
-    bool fetchMeshSkinInfo(const LLUUID& mesh_id);
+    bool fetchMeshSkinInfo(const LLUUID& mesh_id, const RequestStats& stats);
 
     //send request for decomposition, returns true if header info exists
     //  (should hold onto mesh_id and try again later if header info does not exist)

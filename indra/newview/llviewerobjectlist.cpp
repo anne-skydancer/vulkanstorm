@@ -1655,6 +1655,17 @@ void LLViewerObjectList::killObjects(LLViewerRegion *regionp)
     LL_PROFILE_ZONE_SCOPED;
     LLViewerObject *objectp;
 
+    // The agent avatar and its attachments are never killed: they move to the agent's region.  Move them before
+    // the walk: an attachment that comes before the avatar in mObjects would otherwise still sit in this region
+    // when it is visited, and be killed with the region's objects.
+    if (gAgentAvatarp && gAgentAvatarp->mRegionp == regionp)
+    {
+        LLViewerRegion* agent_regionp = gAgent.getRegion();
+        if (agent_regionp && agent_regionp != regionp)
+        {
+            gAgentAvatarp->setRegion(agent_regionp);
+        }
+    }
 
     for (vobj_list_t::iterator iter = mObjects.begin(); iter != mObjects.end(); ++iter)
     {
