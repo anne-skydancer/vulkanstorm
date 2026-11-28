@@ -1426,6 +1426,7 @@ set(viewer_HEADER_FILES
     llmediadataclient.h
     llmenuoptionpathfindingrebakenavmesh.h
     llmeshrepository.h
+    llmeshretry.h
     llmimetypes.h
     llmodelpreview.h
     llmorphview.h

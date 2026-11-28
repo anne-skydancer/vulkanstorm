@@ -32,6 +32,7 @@
 #include "apr_dso.h"
 #include "llhttpconstants.h"
 #include "llmeshrepository.h"
+#include "llmeshretry.h"
 
 #include "llagent.h"
 #include "llappviewer.h"
@@ -706,24 +707,24 @@ public:
     U32 mOffset;
     U32 mRequestedBytes;
 
-    // Retry state of the request this handler serves.  A failure that may pass on another try (see
-    // HttpStatus::isRetryable) is queued again with the backed-off stats, at most HTTP_FAILURE_RETRY_LIMIT times,
-    // see retryStats().
+    // Retry state of the request this handler serves.  A transient failure (see isTransientFailure) is queued
+    // again with the backed-off stats, at most HTTP_FAILURE_RETRY_LIMIT times, see retryStats().
     RequestStats mStats;
 
 public:
-    // The simulator has no mesh data to give: 404 (not found) and 410 (gone) are the only HTTP answers that are
-    // final.  Any other HTTP failure (429, 403, 408, 503...) may pass, and must not be remembered as "no data".
+    // The simulator has no mesh data to give: 404 (not found), 410 (gone) and any other 4xx that is not in the
+    // transient list (see llmeshretry.h) are final.  A final failure is remembered as "no data" and not asked again.
     static bool isFinalHttpFailure(const LLCore::HttpStatus& status)
     {
-        return status.isHttpStatus() && (status.getType() == 404 || status.getType() == 410);
+        return status.isHttpStatus() && LLMeshRetry::isFinalHttpCode(status.getType());
     }
 
-    // a failure that may pass on another try: a transport problem, or any HTTP answer other than a final one
+    // A failure that may pass on another try: a transport problem or 5xx/499 (HttpStatus::isRetryable), and the
+    // HTTP answers 403, 408, 425 and 429.  Nothing else is transient.
     static bool isTransientFailure(const LLCore::HttpStatus& status)
     {
         return status.isRetryable()
-            || (status.isHttpStatus() && status.getType() >= 400 && !isFinalHttpFailure(status));
+            || (status.isHttpStatus() && LLMeshRetry::isTransientHttpCode(status.getType()));
     }
 
 protected:
@@ -4011,8 +4012,9 @@ void LLMeshHeaderHandler::processFailure(LLCore::HttpStatus status)
                        << " (" << status.toTerseString() << ").  Not retrying."
                        << LL_ENDL;
 
-    // Can't get the header so none of the LODs or the skin will be available.  Only 404 and 410
-    // are final; any other failure that used up its rounds is tried again later.
+    // Can't get the header so none of the LODs or the skin will be available.  A final answer (404, 410, any
+    // other 4xx that is not transient) is remembered as "no data"; any other failure that used up its rounds is
+    // tried again later.
     gMeshRepo.mThread->headerFailed(mMeshParams, isFinalHttpFailure(status));
 }
 

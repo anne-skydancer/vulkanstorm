@@ -200,8 +200,10 @@ public:
     bool isDelayed() const;
     U32 getRetries() { return mRetries; }
 
-    // A request that was issued and then failed over HTTP (see LLMeshHandlerBase::retryStats) may be queued
-    // again a couple of times only: llcorehttp has already retried it before the failure got here.
+    // A request that was issued and then failed over HTTP with a transient failure (see
+    // LLMeshHandlerBase::retryStats) may be queued again a couple of times only.  llcorehttp retries only the
+    // statuses HttpStatus::isRetryable lists (5xx, 499, transport errors) before the failure gets here; the
+    // other transient answers (403, 408, 425, 429) were not retried by it.
     bool canRetryAfterHttpFailure() const;
     void countHttpFailure() { ++mHttpFailures; }
 
