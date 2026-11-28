@@ -381,7 +381,7 @@ std::string LLEventPump::inventName(const std::string& pfx)
 
 void LLEventPump::clear()
 {
-    LLCoros::LockType lock(mConnectionListMutex);
+    std::unique_lock<std::mutex> lock(mConnectionListMutex);
     // Destroy the original LLStandardSignal instance, replacing it with a
     // whole new one.
     mSignal = std::make_shared<LLStandardSignal>();
@@ -393,7 +393,7 @@ void LLEventPump::reset()
 {
     // Resetting mSignal is supposed to disconnect everything on its own
     // But due to crash on 'reset' added explicit cleanup to get more data
-    LLCoros::LockType lock(mConnectionListMutex);
+    std::unique_lock<std::mutex> lock(mConnectionListMutex);
     auto iter = mConnections.begin();
     auto end = mConnections.end();
     while (iter!=end)
@@ -418,7 +418,7 @@ LLBoundListener LLEventPump::listen_impl(const std::string& name, const LLEventL
         return {};
     }
 
-    LLCoros::LockType lock(mConnectionListMutex);
+    std::unique_lock<std::mutex> lock(mConnectionListMutex);
 
     float nodePosition = 1.0;
 
@@ -581,7 +581,7 @@ LLBoundListener LLEventPump::listen_impl(const std::string& name, const LLEventL
 
 LLBoundListener LLEventPump::getListener(const std::string& name)
 {
-    LLCoros::LockType lock(mConnectionListMutex);
+    std::unique_lock<std::mutex> lock(mConnectionListMutex);
     auto found = mConnections.find(name);
     if (found != mConnections.end())
     {
@@ -593,7 +593,7 @@ LLBoundListener LLEventPump::getListener(const std::string& name)
 
 void LLEventPump::stopListening(const std::string& name)
 {
-    LLCoros::LockType lock(mConnectionListMutex);
+    std::unique_lock<std::mutex> lock(mConnectionListMutex);
     auto found = mConnections.find(name);
     if (found != mConnections.end())
     {

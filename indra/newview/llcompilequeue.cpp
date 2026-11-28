@@ -544,7 +544,7 @@ LL::Task<bool> LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQue
             LLExperienceCache::instance().fetchAssociatedExperience(inventory->getParentUUID(), inventory->getUUID(),
                 boost::bind(&LLFloaterCompileQueue::handleHTTPResponse, pump->getName(), _1));
 
-            result = co_await llcoro::co::suspendUntilEventOnWithTimeout(*pump, QUEUE_INVENTORY_FETCH_TIMEOUT,
+            result = co_await llcoro::suspendUntilEventOnWithTimeout(*pump, QUEUE_INVENTORY_FETCH_TIMEOUT,
             LLSDMap("timeout", LLSD::Boolean(true)));
         }
         else
@@ -616,7 +616,7 @@ LL::Task<bool> LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQue
             &LLFloaterCompileQueue::handleScriptRetrieval,
             userData);
 
-        result = co_await llcoro::co::suspendUntilEventOnWithTimeout(*pump, QUEUE_INVENTORY_FETCH_TIMEOUT,
+        result = co_await llcoro::suspendUntilEventOnWithTimeout(*pump, QUEUE_INVENTORY_FETCH_TIMEOUT,
             LLSDMap("timeout", LLSD::Boolean(true)));
     }
 
@@ -688,7 +688,7 @@ LL::Task<bool> LLFloaterCompileQueue::processScript(LLHandle<LLFloaterCompileQue
         LLViewerAssetUpload::EnqueueInventoryUpload(url, uploadInfo);
     }
 
-    result = co_await llcoro::co::suspendUntilEventOnWithTimeout(*pump, QUEUE_INVENTORY_FETCH_TIMEOUT, LLSDMap("timeout", LLSD::Boolean(true)));
+    result = co_await llcoro::suspendUntilEventOnWithTimeout(*pump, QUEUE_INVENTORY_FETCH_TIMEOUT, LLSDMap("timeout", LLSD::Boolean(true)));
 
     floater.check();
 
@@ -1038,7 +1038,7 @@ LL::Task<void> LLFloaterScriptQueue::objectScriptProcessingQueueCoro(std::string
                 args["[OBJECT_NAME]"] = (*itObj).mObjectName;
                 floater->addStringMessage(floater->getString("LoadingObjInv", args));
 
-                LLSD result = co_await llcoro::co::suspendUntilEventOnWithTimeout(maildrop, QUEUE_INVENTORY_FETCH_TIMEOUT,
+                LLSD result = co_await llcoro::suspendUntilEventOnWithTimeout(maildrop, QUEUE_INVENTORY_FETCH_TIMEOUT,
                     LLSDMap("timeout", LLSD::Boolean(true)));
 
                 if (result.has("timeout"))
@@ -1091,7 +1091,7 @@ LL::Task<void> LLFloaterScriptQueue::objectScriptProcessingQueueCoro(std::string
 
                 // no other explicit suspension point in this loop.  func(...) MIGHT suspend
                 // but offers no guarantee of doing so.
-                co_await llcoro::co::suspend();
+                co_await llcoro::suspend();
             }
             floater.check();
         }

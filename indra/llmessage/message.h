@@ -57,8 +57,10 @@
 
 #include "llstoredmessage.h"
 #include "llpounceable.h"
-#include "llcoros.h"
-#include LLCOROS_MUTEX_HEADER
+#include "lltask.h"
+#include <atomic>
+#include <mutex>
+#include <thread>
 
 const U32 MESSAGE_MAX_STRINGS_LENGTH = 64;
 const U32 MESSAGE_NUMBER_OF_HASH_BUCKETS = 8192;
@@ -283,7 +285,11 @@ private:
     // Only LockMessageReader can set mPtr.
     friend class LockMessageReader;
     LLMessageReader* mPtr;
-    LLCoros::Mutex mMutex;
+    std::mutex mMutex;
+#ifdef SHOW_ASSERT
+    // Debug only: the thread that holds mMutex, to catch a same-thread re-entry (see LockMessageReader).
+    std::atomic<std::thread::id> mHolder{};
+#endif
 };
 
 /**
@@ -303,8 +309,20 @@ class LockMessageReader
 public:
     LockMessageReader(LLMessageReaderPointer& var, LLMessageReader* instance):
         mVar(var.mPtr),
-        mLock(var.mMutex)
+        mLock(
+#ifdef SHOW_ASSERT
+            // A task's first segment runs on its launcher's stack, so a launch made under a lock whose first
+            // segment takes this lock again on the same thread would self-deadlock: never re-enter.
+            (assertNotHeldByThisThread(var), var.mMutex)
+#else
+            var.mMutex
+#endif
+            )
     {
+#ifdef SHOW_ASSERT
+        mHolder = &var.mHolder;
+        mHolder->store(std::this_thread::get_id());
+#endif
         mVar = instance;
     }
     // Some compilers reportedly fail to suppress generating implicit copy
@@ -314,12 +332,24 @@ public:
     ~LockMessageReader()
     {
         mVar = nullptr;
+#ifdef SHOW_ASSERT
+        mHolder->store(std::thread::id());
+#endif
     }
 private:
+#ifdef SHOW_ASSERT
+    static void assertNotHeldByThisThread(const LLMessageReaderPointer& var)
+    {
+        llassert(var.mHolder.load() != std::this_thread::get_id());
+    }
+#endif
     // capture a reference to LLMessageReaderPointer::mPtr
     decltype(LLMessageReaderPointer::mPtr)& mVar;
     // while holding a lock on LLMessageReaderPointer::mMutex
-    LLCoros::LockType mLock;
+    std::unique_lock<std::mutex> mLock;
+#ifdef SHOW_ASSERT
+    std::atomic<std::thread::id>* mHolder;
+#endif
 };
 
 /**

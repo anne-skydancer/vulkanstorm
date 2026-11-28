@@ -36,12 +36,7 @@
 
 #include <functional>
 
-#include <boost/fiber/fiber.hpp>
-#include <boost/fiber/buffered_channel.hpp>
-#include <boost/fiber/unbuffered_channel.hpp>
-
 #include "../test/lltut.h"
-#include "../test/sync.h"
 #include "../test/lltestapp.h"
 
 
@@ -79,14 +74,43 @@ LL::Task<void> finished()
     co_return;
 }
 
-// A coprocedure that waits (a fibre switch under the bridge) before it finishes: the pool must await it, so what
-// comes after the wait still runs, and still counts as the coprocedure.
-LL::Task<void> waitsThenFinishes(int& state, Sync& sync)
+// A coprocedure that waits before it finishes: the pool must await it, so what comes after the wait still runs, and
+// still counts as the coprocedure.
+LL::Task<void> waitsThenFinishes(int& state)
 {
     state = 1;
-    co_await llcoro::co::suspend(); // one fibre tick under the bridge
+    co_await llcoro::suspend(); // one tick: the task runs again at the next pump
     state = 2;
-    sync.bump();
+}
+
+// Counts the destructions of the locals a suspended coprocedure holds.
+struct DrainProbe
+{
+    int& mDestroyed;
+    explicit DrainProbe(int& destroyed): mDestroyed(destroyed) {}
+    DrainProbe(const DrainProbe&) = delete;
+    DrainProbe& operator=(const DrainProbe&) = delete;
+    ~DrainProbe() { ++mDestroyed; }
+};
+
+// A coprocedure that waits for an event nobody posts: it is still suspended when LLCoros::drain() runs.
+LL::Task<void> waitsForever(int& started, int& resumed, int& destroyed)
+{
+    DrainProbe probe(destroyed);
+    ++started;
+    co_await llcoro::suspendUntilEventOn(std::string("DrainTestNobodyPosts"));
+    ++resumed;
+}
+
+// The main loop's part: pump the coroutines, a bounded number of frames, until @a done holds.
+template<typename DONE>
+bool pumpUntil(DONE done)
+{
+    for (int frame = 0; frame < 100 && ! done(); ++frame)
+    {
+        LLCoros::instance().executor().pump();
+    }
+    return done();
 }
 } // namespace
 
@@ -94,8 +118,8 @@ namespace tut
 {
     struct coproceduremanager_test
     {
-        // The blocking llcoro:: calls of a coprocedure begin with LLCoros::checkStop(), which throws Stopping in a
-        // fibre unless an LLApp is running: test 5 waits, so it needs one.
+        // The awaiters of a coprocedure begin with LLCoros::checkStop(), which throws Stopping unless an LLApp is
+        // running: test 2 waits, so it needs one.
         LLTestApp mApp;
 
         coproceduremanager_test()
@@ -115,18 +139,15 @@ namespace tut
     template<> template<>
     void coproceduremanager_object_t::test<1>()
     {
-        Sync sync;
         int foo = 0;
         LLCoprocedureManager::instance().initializePool("PoolName");
         LLCoprocedureManager::instance().enqueueCoprocedure("PoolName", "ProcName",
-            [&foo, &sync] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ptr, LLUUID id) {
-                sync.bump();
+            [&foo] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t ptr, LLUUID id) {
                 foo = 1;
                 return finished();
             });
 
-        sync.yield();
-        ensure_equals("coprocedure failed to update foo", foo, 1);
+        ensure("coprocedure did not run", pumpUntil([&foo] { return foo == 1; }));
 
         LLCoprocedureManager::instance().close("PoolName");
     }
@@ -134,90 +155,56 @@ namespace tut
     template<> template<>
     void coproceduremanager_object_t::test<2>()
     {
-        const size_t capacity = 2;
-        boost::fibers::buffered_channel<std::function<void(void)>> chan(capacity);
-
-        boost::fibers::fiber worker([&chan]() {
-            chan.value_pop()();
-        });
-
-        chan.push([]() {
-            LL_INFOS("Test") << "test 1" << LL_ENDL;
-        });
-
-        worker.join();
-    }
-
-    template<> template<>
-    void coproceduremanager_object_t::test<3>()
-    {
-        boost::fibers::unbuffered_channel<std::function<void(void)>> chan;
-
-        boost::fibers::fiber worker([&chan]() {
-            chan.value_pop()();
-        });
-
-        chan.push([]() {
-            LL_INFOS("Test") << "test 1" << LL_ENDL;
-        });
-
-        worker.join();
-    }
-
-    template<> template<>
-    void coproceduremanager_object_t::test<4>()
-    {
-        boost::fibers::buffered_channel<std::function<void(void)>> chan(4);
-
-        boost::fibers::fiber worker([&chan]() {
-            std::function<void(void)> f;
-
-            // using namespace std::chrono_literals;
-            // const auto timeout = 5s;
-            // boost::fibers::channel_op_status status;
-            while (chan.pop(f) != boost::fibers::channel_op_status::closed)
-            {
-                LL_INFOS("CoWorker") << "got coproc" << LL_ENDL;
-                f();
-            }
-            LL_INFOS("CoWorker") << "got closed" << LL_ENDL;
-        });
-
-        int counter = 0;
-
-        for (int i = 0; i < 5; ++i)
-        {
-            LL_INFOS("CoMain") << "pushing coproc " << i << LL_ENDL;
-            chan.push([&counter]() {
-                LL_INFOS("CoProc") << "in coproc" << LL_ENDL;
-                ++counter;
-            });
-        }
-
-        LL_INFOS("CoMain") << "closing channel" << LL_ENDL;
-        chan.close();
-
-        LL_INFOS("CoMain") << "joining worker" << LL_ENDL;
-        worker.join();
-
-        LL_INFOS("CoMain") << "checking count" << LL_ENDL;
-        ensure_equals("coprocedure failed to update counter", counter, 5);
-    }
-
-    template<> template<>
-    void coproceduremanager_object_t::test<5>()
-    {
-        Sync sync;
         int state = 0;
         LLCoprocedureManager::instance().initializePool("PoolWait");
         LLCoprocedureManager::instance().enqueueCoprocedure("PoolWait", "WaitProc",
-            [&state, &sync] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID) {
-                return waitsThenFinishes(state, sync);
+            [&state] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID) {
+                return waitsThenFinishes(state);
             });
 
-        sync.yield();
-        ensure_equals("the coprocedure did not run to its end after waiting", state, 2);
+        ensure("the coprocedure did not run to its end after waiting", pumpUntil([&state] { return state == 2; }));
 
         LLCoprocedureManager::instance().close("PoolWait");
+    }
+
+    // LLCoros::drain() with a pool that has suspended coprocedures and queued work: the survivors are destroyed (their
+    // locals with them), nothing resumes and nothing queued starts, and closing the pool afterwards is clean.
+    template<> template<>
+    void coproceduremanager_object_t::test<3>()
+    {
+        int started = 0, resumed = 0, destroyed = 0;
+        LLCoprocedureManager& manager = LLCoprocedureManager::instance();
+        manager.initializePool("PoolDrain");
+        // more than any pool has invokers, so that some stay queued
+        const int total = 64;
+        for (int i = 0; i < total; ++i)
+        {
+            manager.enqueueCoprocedure("PoolDrain", "DrainProc",
+                [&started, &resumed, &destroyed] (LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t, LLUUID) {
+                    return waitsForever(started, resumed, destroyed);
+                });
+        }
+
+        // the default pool has 5 invokers (llcoproceduremanager.cpp): each takes one coprocedure and waits in it
+        const int running = 5;
+        ensure("the invokers did not all start a coprocedure", pumpUntil([&started] { return started == running; }));
+        pumpUntil([] { return false; }); // settle: the full bounded number of frames
+        ensure_equals("more coprocedures started than the pool has invokers", started, running);
+        ensure_equals("a suspended coprocedure ended early", destroyed, 0);
+        ensure("the test wants work still queued", running < total);
+
+        LLCoros::instance().drain("test");
+
+        ensure_equals("the survivors' locals were not all destroyed", destroyed, running);
+        ensure_equals("a coprocedure resumed after the wait", resumed, 0);
+        ensure_equals("queued work started during the drain", started, running);
+        ensure_equals("tasks remain after the drain", LLCoros::instance().executor().taskCount(), size_t(0));
+
+        // the invokers are gone: pumping resumes nothing and closing the pool is clean
+        pumpUntil([] { return false; });
+        manager.close("PoolDrain");
+        pumpUntil([] { return false; });
+        ensure_equals("a coprocedure resumed after the pool closed", resumed, 0);
+        ensure_equals("queued work started after the pool closed", started, running);
     }
 }  // namespace tut

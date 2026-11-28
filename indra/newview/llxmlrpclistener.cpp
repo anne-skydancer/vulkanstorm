@@ -351,8 +351,7 @@ public:
 
         // whether successful or not, send reply on requested LLEventPump
         replyPump.post(data);
-        // need to wake up the loginCoro now
-        llcoro::suspend();
+        // The loginCoro is now ready: it runs at the next pump, which is how every wake-up runs.
 
         // Because mTransaction is a std::unique_ptr, deleting this object
         // frees our LLXMLRPCTransaction object.

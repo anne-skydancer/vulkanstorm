@@ -839,7 +839,7 @@ LL::Task<void> LLMaterialMgr::processGetAllQueueCoro(LLUUID regionId)
             boost::bind(&LLMaterialMgr::CapsRecvForRegion,
             _1, regionId, capsRecv.getName()));
 
-        co_await llcoro::co::suspendUntilEventOn(capsRecv);
+        co_await llcoro::suspendUntilEventOn(capsRecv);
 
         // reget the region from the region ID since it may have gone away while waiting.
         regionp = LLWorld::instance().getRegionFromID(regionId);

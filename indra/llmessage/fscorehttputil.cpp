@@ -26,6 +26,7 @@
  */
 
 #include "fscorehttputil.h"
+#include "llcoros.h"
 
 namespace FSCoreHttpUtil
 {

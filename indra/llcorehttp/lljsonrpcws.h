@@ -265,7 +265,7 @@ public:
      * @brief Register an async method handler, executed in a coroutine
      *
      * Unlike registerMethod(), the handler is an LL::Task coroutine run by
-     * LLCoros on the main loop, and may co_await llcoro::co::suspendUntilEventOn*
+     * LLCoros on the main loop, and may co_await llcoro::suspendUntilEventOn*
      * to wait for async results. The handler co_returns its result; the
      * framework sends the JSON-RPC response automatically when the task ends.
      *

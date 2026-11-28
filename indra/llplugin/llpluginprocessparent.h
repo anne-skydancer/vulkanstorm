@@ -29,6 +29,7 @@
 #ifndef LL_LLPLUGINPROCESSPARENT_H
 #define LL_LLPLUGINPROCESSPARENT_H
 
+#include <mutex>
 #include <queue>
 
 #include "llapr.h"
@@ -199,7 +200,7 @@ private:
     apr_pollfd_t mPollFD;
     static apr_pollset_t *sPollSet;
     static bool sPollsetNeedsRebuild;
-    static LLCoros::Mutex *sInstancesMutex;
+    static std::mutex *sInstancesMutex;
     static mapInstances_t sInstances;
     static void dirtyPollSet();
     static void updatePollset();

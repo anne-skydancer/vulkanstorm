@@ -344,10 +344,11 @@ namespace tut
         const int count = 200;
         for (int i = 0; i < count; ++i)
         {
-            LLCoros::instance().launch("initializing_list", [&done]()
+            LLCoros::instance().launch("initializing_list", [&done]() -> LL::Task<void>
             {
                 CoroTouched::getInstance();
                 ++done;
+                co_return;
             });
         }
         ensure_equals("coroutines that ran", done, count);

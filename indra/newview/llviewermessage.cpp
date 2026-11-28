@@ -25,6 +25,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llcoros.h"
 #include "llviewermessage.h"
 
 // Linden libraries

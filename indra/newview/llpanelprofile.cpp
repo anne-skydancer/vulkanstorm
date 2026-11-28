@@ -25,6 +25,7 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#include "llcoros.h"
 #include "llpanelprofile.h"
 
 // Common
@@ -187,7 +188,7 @@ LL::Task<LLUUID> post_profile_image(std::string cap_url, LLSD first_data, std::s
                 LL_WARNS("AvatarProperties") << "Failed to upload image (attempt " << upload_retry_count
                                              << " of " << (MAX_UPLOAD_RETRIES + 1) << "): " << status.toString()
                                              << ", re-requesting uploader..." << LL_ENDL;
-                co_await llcoro::co::suspendUntilTimeout(1.0f);
+                co_await llcoro::suspendUntilTimeout(1.0f);
                 continue;
             }
             else
@@ -217,7 +218,7 @@ LL::Task<LLUUID> post_profile_image(std::string cap_url, LLSD first_data, std::s
                                                  << " of " << (MAX_UPLOAD_RETRIES + 1)
                                                  << "), re-requesting uploader..." << LL_ENDL;
                 }
-                co_await llcoro::co::suspendUntilTimeout(1.0f);
+                co_await llcoro::suspendUntilTimeout(1.0f);
                 continue;
             }
             else

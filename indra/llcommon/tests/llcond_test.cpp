@@ -18,7 +18,7 @@
 // external library headers
 // other Linden headers
 #include "../test/lltut.h"
-#include "llcoros.h"
+#include <thread>
 
 /*****************************************************************************
 *   TUT
@@ -47,21 +47,23 @@ namespace tut
     template<> template<>
     void object::test<2>()
     {
-        set_test_name("Simple two-coroutine test");
-        LLCoros::instance().launch(
-            "test<2>",
-            [this]()
+        set_test_name("Simple two-thread test");
+        int seenFirst = -1, seenSecond = -1;
+        // Don't use ensure() on the thread: a failure there would not reach the test driver.
+        std::thread worker(
+            [this, &seenFirst, &seenSecond]()
             {
-                // Lambda immediately entered -- control comes here first.
-                ensure_equals(cond.get(), 0);
+                seenFirst = cond.get();
                 cond.set_all(1);
                 cond.wait_equal(2);
-                ensure_equals(cond.get(), 2);
+                seenSecond = cond.get();
                 cond.set_all(3);
             });
-        // Main coroutine is resumed only when the lambda waits.
-        ensure_equals(cond.get(), 1);
+        cond.wait_equal(1);
         cond.set_all(2);
         cond.wait_equal(3);
+        worker.join();
+        ensure_equals(seenFirst, 0);
+        ensure_equals(seenSecond, 2);
     }
 } // namespace tut

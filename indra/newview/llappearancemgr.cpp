@@ -4197,7 +4197,7 @@ LL::Task<void> LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpC
         co_return;
     }
 
-    co_await llcoro::co::suspend();
+    co_await llcoro::suspend();
     if (LLApp::isExiting())
     {
         co_return;
@@ -4304,7 +4304,7 @@ LL::Task<void> LLAppearanceMgr::serverAppearanceUpdateCoro(LLCoreHttpUtil::HttpC
 
                 LL_WARNS("Avatar") << "Bake retry #" << retryCount << " in " << timeout << " seconds." << LL_ENDL;
 
-                co_await llcoro::co::suspendUntilTimeout(timeout);
+                co_await llcoro::suspendUntilTimeout(timeout);
                 if (LLApp::isExiting())
                 {
                     co_return;
@@ -4357,7 +4357,7 @@ LL::Task<void> LLAppearanceMgr::syncCofVersionAndRefreshCoro()
     LLCoreHttpUtil::HttpCoroutineAdapter::ptr_t httpAdapter(
         new LLCoreHttpUtil::HttpCoroutineAdapter("syncCofVersionAndRefreshCoro", LLCore::HttpRequest::DEFAULT_POLICY_ID));
 
-    co_await llcoro::co::suspend();
+    co_await llcoro::suspend();
     S32 retryCount(0);
     bool bRetry;
     do
@@ -4388,7 +4388,7 @@ LL::Task<void> LLAppearanceMgr::syncCofVersionAndRefreshCoro()
 
             LL_WARNS("Avatar") << "COF increment retry #" << retryCount << " in " << timeout << " seconds." << LL_ENDL;
 
-            co_await llcoro::co::suspendUntilTimeout(timeout);
+            co_await llcoro::suspendUntilTimeout(timeout);
             bRetry = true;
         }
         else

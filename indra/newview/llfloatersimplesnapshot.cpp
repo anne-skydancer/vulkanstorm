@@ -25,6 +25,7 @@
 */
 
 #include "llviewerprecompiledheaders.h"
+#include "llcoros.h"
 
 #include "llfloatersimplesnapshot.h"
 
@@ -148,7 +149,7 @@ LL::Task<void> post_thumbnail_image_coro(std::string cap_url, std::string path_t
                 LL_WARNS("Thumbnail") << "Failed to upload image (attempt " << upload_retry_count
                                      << " of " << (MAX_UPLOAD_RETRIES + 1) << "): " << status.toString()
                                      << ", re-requesting uploader..." << LL_ENDL;
-                co_await llcoro::co::suspendUntilTimeout(1.0f);
+                co_await llcoro::suspendUntilTimeout(1.0f);
                 continue;
             }
             else
@@ -182,7 +183,7 @@ LL::Task<void> post_thumbnail_image_coro(std::string cap_url, std::string path_t
                                          << " of " << (MAX_UPLOAD_RETRIES + 1)
                                          << "), re-requesting uploader..." << LL_ENDL;
                 }
-                co_await llcoro::co::suspendUntilTimeout(1.0f);
+                co_await llcoro::suspendUntilTimeout(1.0f);
                 continue;
             }
             else

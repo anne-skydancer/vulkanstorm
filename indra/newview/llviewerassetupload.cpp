@@ -909,7 +909,7 @@ LL::Task<void> LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::H
         co_return;
     }
 
-    co_await llcoro::co::suspend();
+    co_await llcoro::suspend();
 
     if (uploadInfo->showUploadDialog())
     {
@@ -968,7 +968,7 @@ LL::Task<void> LLViewerAssetUpload::AssetInventoryUploadCoproc(LLCoreHttpUtil::H
                 upload_retry_count++;
                 LL_WARNS() << "Upload to uploader failed (attempt " << upload_retry_count
                           << " of " << (MAX_UPLOAD_RETRIES + 1) << "), re-requesting uploader..." << LL_ENDL;
-                co_await llcoro::co::suspendUntilTimeout(1.0f);
+                co_await llcoro::suspendUntilTimeout(1.0f);
                 continue;
             }
             else

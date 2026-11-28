@@ -35,7 +35,6 @@
 #include <exception>
 // std headers
 // external library headers
-#include <boost/fiber/operations.hpp>
 // other Linden headers
 #include "llsdserialize.h"
 #include "llsdutil.h"
@@ -104,245 +103,12 @@ void storeToLLSDPath(LLSD& dest, const LLSD& path, const LLSD& value)
     llsd::drill_ref(dest, path) = value;
 }
 
-/// The blocking forms below block the hosting fibre. A task of the executor is not a fibre: it would block the main
-/// loop, so it must co_await the llcoro::co forms instead.
-void forbidInTask(const char* name)
-{
-    llassert_always_msg(! LL::Executor::currentRecord(),
-                        "llcoro::" << name << "() blocks: a task must co_await llcoro::co::" << name << "()");
-}
-
 } // anonymous
-
-void llcoro::suspend()
-{
-    forbidInTask("suspend");
-    LLCoros::checkStop();
-    LLCoros::TempStatus st("waiting one tick");
-    boost::this_fiber::yield();
-}
-
-void llcoro::suspendUntilTimeout(float seconds)
-{
-    LLCoros::checkStop();
-    // We used to call boost::this_fiber::sleep_for(). But some coroutines
-    // (e.g. LLExperienceCache::idleCoro()) sit in a suspendUntilTimeout()
-    // loop, in which case a sleep_for() call risks sleeping through shutdown.
-    // So instead, listen for "LLApp" state-changing events -- which
-    // fortunately is handled for us by suspendUntilEventOnWithTimeout().
-    // Wait for an event on a bogus LLEventPump on which nobody ever posts
-    // events. Don't make it static because that would force instantiation of
-    // the LLEventPumps LLSingleton registry at static initialization time.
-    // DO allow tweaking the name for uniqueness, this definitely gets
-    // re-entered on multiple coroutines!
-    // We could use an LLUUID if it were important to actively prohibit anyone
-    // from ever posting on this LLEventPump.
-    LLEventStream bogus("xyzzy", true);
-    // Timeout is the NORMAL case for this call!
-    static LLSD timedout;
-    // Deliver, but ignore, timedout when (as usual) we did not receive any
-    // "LLApp" event. The point is that suspendUntilEventOnWithTimeout() will
-    // itself throw Stopping when "LLApp" starts broadcasting shutdown events.
-    suspendUntilEventOnWithTimeout(bogus, seconds, timedout);
-}
-
-void llcoro::suspendUntilNextFrame()
-{
-    LLCoros::checkStop();
-    LLCoros::TempStatus st("waiting for next frame");
-
-    // Listen for the next event on the "mainloop" event pump.
-    // Once per frame we get mainloop.post(newFrame);
-    LLEventPumpOrPumpName mainloop_pump("mainloop");
-    // Wait for the next event (the event data is ignored).
-    suspendUntilEventOn(mainloop_pump);
-}
-
-namespace
-{
-
-// returns a listener on replyPumpP, also on "mainloop" -- both should be
-// stored in LLTempBoundListeners on the caller's stack frame
-std::pair<LLBoundListener, LLBoundListener>
-postAndSuspendSetup(const std::string& callerName,
-                    const std::string& listenerName,
-                    LLCoros::Promise<LLSD>& promise,
-                    const LLSD& event,
-                    const LLEventPumpOrPumpName& requestPumpP,
-                    const LLEventPumpOrPumpName& replyPumpP,
-                    const LLSD& replyPumpNamePath)
-{
-    // Before we get any farther -- should we be stopping instead of
-    // suspending?
-    LLCoros::checkStop();
-    // Get the consuming attribute for THIS coroutine, the one that's about to
-    // suspend. Don't call get_consuming() in the lambda body: that would
-    // return the consuming attribute for some other coroutine, most likely
-    // the main routine.
-    bool consuming(LLCoros::get_consuming());
-    // listen on the specified LLEventPump with a lambda that will assign a
-    // value to the promise, thus fulfilling its future
-    llassert_always_msg(replyPumpP, ("replyPump required for " + callerName));
-    LLEventPump& replyPump(replyPumpP.getPump());
-    // The relative order of the two listen() calls below would only matter if
-    // "LLApp" were an LLEventMailDrop. But if we ever go there, we'd want to
-    // notice the pending LLApp status first.
-    LLBoundListener stopper(
-        LLEventPumps::instance().obtain("LLApp").listen(
-            listenerName,
-            [&promise, listenerName](const LLSD& status)
-            {
-                // anything except "running" should wake up the waiting
-                // coroutine
-                auto& statsd = status["status"];
-                if (statsd.asString() != "running")
-                {
-                    LL_DEBUGS("lleventcoro") << listenerName
-                                             << " spotted status " << statsd
-                                             << ", throwing Stopping" << LL_ENDL;
-                    try
-                    {
-                        promise.set_exception(
-                            std::make_exception_ptr(
-                                LLCoros::Stopping("status " + statsd.asString())));
-                    }
-                    catch (const boost::fibers::promise_already_satisfied&)
-                    {
-                        LL_WARNS("lleventcoro") << listenerName
-                                                << " couldn't throw Stopping "
-                                                   "because promise already set" << LL_ENDL;
-                    }
-                }
-                // do not consume -- every listener must see status
-                return false;
-            }));
-    LLBoundListener connection(
-        replyPump.listen(
-            listenerName,
-            [&promise, consuming, listenerName](const LLSD& result)
-            {
-                try
-                {
-                    promise.set_value(result);
-                    // We did manage to propagate the result value to the
-                    // (real) listener. If we're supposed to indicate that
-                    // we've consumed it, do so.
-                    return consuming;
-                }
-                catch(boost::fibers::promise_already_satisfied & ex)
-                {
-                    LL_DEBUGS("lleventcoro") << "promise already satisfied in '"
-                        << listenerName << "': "  << ex.what() << LL_ENDL;
-                    // We could not propagate the result value to the
-                    // listener.
-                    return false;
-                }
-            }));
-
-    // skip the "post" part if requestPump is default-constructed
-    if (requestPumpP)
-    {
-        LLEventPump& requestPump(requestPumpP.getPump());
-        // If replyPumpNamePath is non-empty, store the replyPump name in the
-        // request event.
-        LLSD modevent(event);
-        storeToLLSDPath(modevent, replyPumpNamePath, replyPump.getName());
-        LL_DEBUGS("lleventcoro") << callerName << ": coroutine " << listenerName
-                                 << " posting to " << requestPump.getName()
-                                 << LL_ENDL;
-
-        // *NOTE:Mani - Removed because modevent could contain user's hashed passwd.
-        //                         << ": " << modevent << LL_ENDL;
-        requestPump.post(modevent);
-    }
-    LL_DEBUGS("lleventcoro") << callerName << ": coroutine " << listenerName
-                             << " about to wait on LLEventPump " << replyPump.getName()
-                             << LL_ENDL;
-    return { connection, stopper };
-}
-
-} // anonymous
-
-LLSD llcoro::postAndSuspend(const LLSD& event, const LLEventPumpOrPumpName& requestPump,
-                 const LLEventPumpOrPumpName& replyPump, const LLSD& replyPumpNamePath)
-{
-    forbidInTask("postAndSuspend");
-    LLCoros::Promise<LLSD> promise;
-    std::string listenerName(listenerNameForCoro());
-
-    // Store both connections into LLTempBoundListeners so we implicitly
-    // disconnect on return from this function.
-    auto connections =
-        postAndSuspendSetup("postAndSuspend()", listenerName, promise,
-                            event, requestPump, replyPump, replyPumpNamePath);
-    LLTempBoundListener connection(connections.first), stopper(connections.second);
-
-    // declare the future
-    LLCoros::Future<LLSD> future = LLCoros::getFuture(promise);
-    // calling get() on the future makes us wait for it
-    LLCoros::TempStatus st(STRINGIZE("waiting for " << replyPump.getPump().getName()));
-    LLSD value(future.get());
-    LL_DEBUGS("lleventcoro") << "postAndSuspend(): coroutine " << listenerName
-                             << " resuming with " << value << LL_ENDL;
-    // returning should disconnect the connection
-    return value;
-}
-
-LLSD llcoro::postAndSuspendWithTimeout(const LLSD& event,
-                                       const LLEventPumpOrPumpName& requestPump,
-                                       const LLEventPumpOrPumpName& replyPump,
-                                       const LLSD& replyPumpNamePath,
-                                       F32 timeout, const LLSD& timeoutResult)
-{
-    forbidInTask("postAndSuspendWithTimeout");
-    LLCoros::Promise<LLSD> promise;
-    std::string listenerName(listenerNameForCoro());
-
-    // Store both connections into LLTempBoundListeners so we implicitly
-    // disconnect on return from this function.
-    auto connections =
-        postAndSuspendSetup("postAndSuspendWithTimeout()", listenerName, promise,
-                            event, requestPump, replyPump, replyPumpNamePath);
-    LLTempBoundListener connection(connections.first), stopper(connections.second);
-
-    // declare the future
-    LLCoros::Future<LLSD> future = LLCoros::getFuture(promise);
-    // wait for specified timeout
-    boost::fibers::future_status status;
-    {
-        LLCoros::TempStatus st(STRINGIZE("waiting for " << replyPump.getPump().getName()
-                                         << " for " << timeout << "s"));
-        // The fact that we accept non-integer seconds means we should probably
-        // use granularity finer than one second. However, given the overhead of
-        // the rest of our processing, it seems silly to use granularity finer
-        // than a millisecond.
-        status = future.wait_for(std::chrono::milliseconds(long(timeout * 1000)));
-    }
-    // if the future is NOT yet ready, return timeoutResult instead
-    if (status == boost::fibers::future_status::timeout)
-    {
-        LL_DEBUGS("lleventcoro") << "postAndSuspendWithTimeout(): coroutine " << listenerName
-                                 << " timed out after " << timeout << " seconds,"
-                                 << " resuming with " << timeoutResult << LL_ENDL;
-        return timeoutResult;
-    }
-    else
-    {
-        llassert_always(status == boost::fibers::future_status::ready);
-
-        // future is now ready, no more waiting
-        LLSD value(future.get());
-        LL_DEBUGS("lleventcoro") << "postAndSuspendWithTimeout(): coroutine " << listenerName
-                                 << " resuming with " << value << LL_ENDL;
-        // returning should disconnect the connection
-        return value;
-    }
-}
 
 /*****************************************************************************
-*   native awaiters (the executor's back end of llcoro::co)
+*   awaiters
 *****************************************************************************/
-namespace llcoro::native
+namespace llcoro
 {
 
 EventAwaiter::EventAwaiter(std::string callerName, LLSD event, LLEventPumpOrPumpName requestPump,
@@ -404,7 +170,7 @@ bool EventAwaiter::await_ready()
         mListenerName,
         [this](const LLSD& status)
         {
-            llassert(mExecutor->onOwnerThread()); // listeners of the event awaiters run on the executor's thread
+            llassert_always(mExecutor->onOwnerThread()); // listeners of the event awaiters run on the executor's thread
             // anything except "running" should wake up the waiting coroutine
             const auto& statsd = status["status"];
             if (statsd.asString() != "running")
@@ -429,7 +195,7 @@ bool EventAwaiter::await_ready()
         mListenerName,
         [this, consuming](const LLSD& result)
         {
-            llassert(mExecutor->onOwnerThread()); // listeners of the event awaiters run on the executor's thread
+            llassert_always(mExecutor->onOwnerThread()); // listeners of the event awaiters run on the executor's thread
             if (! mClaim.claim())
             {
                 // the first event won; this one is neither delivered nor consumed
@@ -485,7 +251,7 @@ LLSD EventAwaiter::await_resume()
         mExecutor->cancelTimer(*mTimer);
         mTimer.reset();
     }
-    // disconnect now, as the blocking version does on return
+    // disconnect now rather than when the awaiter goes away
     mReplyConnection.disconnect();
     mStopConnection.disconnect();
     if (mError)
@@ -547,7 +313,7 @@ void SuspendAwaiter::await_resume()
 
 EventAwaiter suspendUntilTimeout(float seconds)
 {
-    // As the blocking version: wait on a pump on which nobody posts, so that the "LLApp" listener ends the wait with
+    // Wait on a pump on which nobody posts, so that the "LLApp" listener ends the wait with
     // Stopping at shutdown. Timeout is the NORMAL case for this call. Don't make the pump static: that would force
     // instantiation of the LLEventPumps registry at static initialization time. DO allow tweaking the name for
     // uniqueness, this definitely gets re-entered on multiple coroutines.
@@ -589,4 +355,4 @@ EventAwaiter suspendUntilEventOnWithTimeout(const LLEventPumpOrPumpName& pump, F
     return postAndSuspendWithTimeout(LLSD(), LLEventPumpOrPumpName(), pump, LLSD(), timeout, timeoutResult);
 }
 
-} // namespace llcoro::native
+} // namespace llcoro

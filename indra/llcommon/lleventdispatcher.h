@@ -596,8 +596,8 @@ protected:
 private:
     std::string mDesc, mKey, mArgskey;
     DispatchMap mDispatch;
-    // transient state: must be fiber_specific since multiple threads and/or
-    // multiple fibers may be calling concurrently. Make it mutable so we can
+    // transient state: must be coroutine-local since multiple threads and/or
+    // multiple coroutines may be calling concurrently. Make it mutable so we can
     // use SetState even within const methods.
     mutable LL::LocalPtr<std::string> mState;
 

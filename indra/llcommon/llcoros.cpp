@@ -26,40 +26,21 @@
  * $/LicenseInfo$
  */
 
-#include "llwin32headers.h"
-
 // Precompiled header
 #include "linden_common.h"
 // associated header
 #include "llcoros.h"
 // STL headers
 // std headers
-#include <atomic>
-#include <stdexcept>
 // external library headers
-#include <boost/bind.hpp>
-#include <boost/fiber/fiber.hpp>
-#ifndef BOOST_DISABLE_ASSERTS
-#define UNDO_BOOST_DISABLE_ASSERTS
-// with Boost 1.65.1, needed for Mac with this specific header
-#define BOOST_DISABLE_ASSERTS
-#endif
-#include <boost/fiber/protected_fixedsize_stack.hpp>
-#ifdef UNDO_BOOST_DISABLE_ASSERTS
-#undef UNDO_BOOST_DISABLE_ASSERTS
-#undef BOOST_DISABLE_ASSERTS
-#endif
 // other Linden headers
 #include "llapp.h"
+#include "llthread.h"
 #include "lltimer.h"
 #include "llevents.h"
 #include "llerror.h"
 #include "stringize.h"
 #include "llexception.h"
-
-#if LL_WINDOWS
-#include <excpt.h>
-#endif
 
 // static
 bool LLCoros::on_main_coro()
@@ -79,44 +60,17 @@ bool LLCoros::on_main_thread_main_coro()
 }
 
 // static
-LLCoros::CoroData& LLCoros::get_CoroData(const std::string& caller)
+LLCoros::CoroData& LLCoros::get_CoroData()
 {
-    // a task of the executor has its own record
-    if (CoroData* task = LL::Executor::currentRecord())
-    {
-        return *task;
-    }
-    CoroData* current{ nullptr };
-    // be careful about attempted accesses in the final throes of app shutdown
-    if (! wasDeleted())
-    {
-        current = instance().mCurrent.get();
-    }
-    // For the main() coroutine, the one NOT explicitly launched by launch(),
-    // we never explicitly set mCurrent. Use a static CoroData instance with
-    // canonical values.
-    if (! current)
-    {
-        static std::atomic<int> which_thread(0);
-        // Use alternate CoroData constructor.
-        static thread_local CoroData sMain(which_thread++);
-        // We need not reset() the local_ptr to this instance; we'll simply
-        // find it again every time we discover that current is null.
-        current = &sMain;
-    }
-    return *current;
-}
-
-//static
-LLCoros::coro::id LLCoros::get_self()
-{
-    return boost::this_fiber::get_id();
+    // a task of the executor has its own record; the default coroutine of a thread (the "main" one, which was never
+    // launched) has the thread's own, whose name is empty
+    return LL::currentOrThreadRecord();
 }
 
 //static
 void LLCoros::set_consuming(bool consuming)
 {
-    CoroData& data(get_CoroData("set_consuming()"));
+    CoroData& data(get_CoroData());
     // DO NOT call this on the main() coroutine.
     llassert_always(! data.mName.empty());
     data.mConsuming = consuming;
@@ -125,26 +79,27 @@ void LLCoros::set_consuming(bool consuming)
 //static
 bool LLCoros::get_consuming()
 {
-    return get_CoroData("get_consuming()").mConsuming;
+    return get_CoroData().mConsuming;
 }
 
 // static
 void LLCoros::setStatus(const std::string& status)
 {
-    get_CoroData("setStatus()").mStatus = status;
+    get_CoroData().mStatus = status;
 }
 
 // static
 std::string LLCoros::getStatus()
 {
-    return get_CoroData("getStatus()").mStatus;
+    return get_CoroData().mStatus;
 }
 
-LLCoros::LLCoros():
-    // mCurrent does NOT own the current CoroData instance -- it simply
-    // points to it. So initialize it with a no-op deleter.
-    mCurrent{ [](CoroData*){} }
+LLCoros::LLCoros()
 {
+    // The executor's owner is the constructing thread (LL::Executor::mOwner). LLSingleton constructs on the main
+    // thread, so this holds for the instance() path; assert it so that a different construction can never leave
+    // the executor owned by another thread.
+    llassert_always(on_main_thread());
 }
 
 LLCoros::~LLCoros() = default;
@@ -161,27 +116,11 @@ void LLCoros::cleanupSingleton()
 void LLCoros::drain(const std::string& when)
 {
     printActiveCoroutines(when);
-    // Tasks of the executor: let them run out and destroy what is left. (The coroutine switch moves this call to just
-    // before LLSingletonBase::deleteAll(); until then nothing but tests starts a task.)
+    // The "LLApp" status-change listeners close work queues and give every waiting coroutine the Stopping exception,
+    // which forces them to notice and terminate. But by the time LLApp sets "quitting" status, the main loop has
+    // stopped pumping the executor. So pump it a few times ourselves, as long as coroutines remain. Whatever still
+    // waits after that is logged and destroyed (never leaked): shutdown() does both.
     mExecutor.shutdown();
-    // Other LLApp status-change listeners do things like close
-    // work queues and inject the Stop exception into pending
-    // promises, to force coroutines waiting on those things to
-    // notice and terminate. The only problem is that by the time
-    // LLApp sets "quitting" status, the main loop has stopped
-    // pumping the fiber scheduler with yield() calls. A waiting
-    // coroutine still might not wake up until after resources on
-    // which it depends have been freed. Pump it a few times
-    // ourselves. Of course, stop pumping as soon as the last of
-    // the coroutines has terminated.
-    for (size_t count = 0; count < 10 && CoroData::instanceCount() > 0; ++count)
-    {
-        // don't use llcoro::suspend() because that module depends
-        // on this one
-        // This will yield current(main) thread and will let active
-        // corutines run once
-        boost::this_fiber::yield();
-    }
     printActiveCoroutines("after pumping");
 }
 
@@ -214,9 +153,8 @@ bool LLCoros::kill(const std::string& name)
     {
         return false;
     }
-    // Because this is a boost::ptr_map, erasing the map entry also destroys
-    // the referenced heap object, in this case the boost::coroutine object,
-    // which will terminate the coroutine.
+    // Erasing the map entry destroys the coroutine record, which
+    // terminates the coroutine.
     mCoros.erase(found);
     return true;
 }
@@ -225,37 +163,19 @@ bool LLCoros::kill(const std::string& name)
 //static
 std::string LLCoros::getName()
 {
-    return get_CoroData("getName()").mName;
+    return get_CoroData().mName;
 }
 
 //static
 std::string LLCoros::logname()
 {
-    LLCoros::CoroData& data(get_CoroData("logname()"));
+    LLCoros::CoroData& data(get_CoroData());
     return data.mName.empty()? data.getKey() : data.mName;
-}
-
-void LLCoros::saveException(const std::string& name, const std::exception_ptr& exc)
-{
-    mExceptionQueue.emplace(name, exc);
 }
 
 void LLCoros::rethrow()
 {
-    if (! mExceptionQueue.empty())
-    {
-        ExceptionData front = mExceptionQueue.front();
-        mExceptionQueue.pop();
-        LL_WARNS("LLCoros") << "Rethrowing exception from coroutine " << front.name << LL_ENDL;
-        std::rethrow_exception(front.exception);
-    }
     mExecutor.rethrow();
-}
-
-void LLCoros::setStackSize(S32 stacksize)
-{
-    LL_DEBUGS("LLCoros") << "Setting coroutine stack size to " << stacksize << LL_ENDL;
-    mStackSize = stacksize;
 }
 
 void LLCoros::printActiveCoroutines(const std::string& when)
@@ -275,165 +195,6 @@ void LLCoros::printActiveCoroutines(const std::string& when)
         LL_CONT << LL_ENDL;
         LL_INFOS("LLCoros") << "-----------------------------------------------------" << LL_ENDL;
     }
-}
-
-std::string LLCoros::launch(const std::string& prefix, const callable_t& callable)
-{
-    return launchFiber(generateDistinctName(prefix), callable);
-}
-
-// static
-void LLCoros::finishBridged(LL::Task<void>& task)
-{
-    // With the fibre bridge every co_await blocks the fibre, so the task has run to its end by now. A task that is
-    // not done awaited something native from a fibre, which cannot work: nothing would ever resume it.
-    llassert_always_msg(task.done(), "a Task launched in a fibre suspended: native awaiter used with the bridge");
-    task.get();
-}
-
-std::string LLCoros::launchFiber(const std::string& name, const callable_t& callable)
-{
-    // 'dispatch' means: enter the new fiber immediately, returning here only
-    // when the fiber yields for whatever reason.
-    // std::allocator_arg is a flag to indicate that the following argument is
-    // a StackAllocator.
-    // protected_fixedsize_stack sets a guard page past the end of the new
-    // stack so that stack underflow will result in an access violation
-    // instead of weird, subtle, possibly undiagnosed memory stomps.
-
-    try
-    {
-        boost::fibers::fiber newCoro(boost::fibers::launch::dispatch,
-            std::allocator_arg,
-            boost::fibers::protected_fixedsize_stack(mStackSize),
-            [this, &name, &callable]() { toplevel(name, callable); });
-
-        // You have two choices with a fiber instance: you can join() it or you
-        // can detach() it. If you try to destroy the instance before doing
-        // either, the program silently terminates. We don't need this handle.
-        newCoro.detach();
-    }
-    catch (std::bad_alloc&)
-    {
-        // Out of memory on stack allocation?
-        LLError::LLUserWarningMsg::showOutOfMemory();
-        printActiveCoroutines();
-        LL_ERRS("LLCoros") << "Bad memory allocation in LLCoros::launch(" << name << ")!" << LL_ENDL;
-    }
-
-    return name;
-}
-
-namespace
-{
-
-#if LL_WINDOWS
-
-static const U32 STATUS_MSC_EXCEPTION = 0xE06D7363; // compiler specific
-
-U32 exception_filter(U32 code, struct _EXCEPTION_POINTERS* exception_infop)
-{
-    if (LLApp::instance()->reportCrashToBugsplat((void*)exception_infop))
-    {
-        // Handled
-        return EXCEPTION_CONTINUE_SEARCH;
-    }
-    else if (code == STATUS_MSC_EXCEPTION)
-    {
-        // C++ exception, go on
-        return EXCEPTION_CONTINUE_SEARCH;
-    }
-    else
-    {
-        // handle it, convert to std::exception
-        return EXCEPTION_EXECUTE_HANDLER;
-    }
-
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
-void cpphandle(const LLCoros::callable_t& callable, const std::string& name)
-{
-    // SE and C++ can not coexists, thus two handlers
-    try
-    {
-        callable();
-    }
-    catch (const LLCoros::Stop& exc)
-    {
-        LL_INFOS("LLCoros") << "coroutine " << name << " terminating because "
-            << exc.what() << LL_ENDL;
-    }
-    catch (const LLContinueError&)
-    {
-        // Any uncaught exception derived from LLContinueError will be caught
-        // here and logged. This coroutine will terminate but the rest of the
-        // viewer will carry on.
-        LOG_UNHANDLED_EXCEPTION(STRINGIZE("coroutine " << name));
-    }
-}
-
-void sehandle(const LLCoros::callable_t& callable, const std::string& name)
-{
-    __try
-    {
-        // handle stop and continue exceptions first
-        cpphandle(callable, name);
-    }
-    __except (exception_filter(GetExceptionCode(), GetExceptionInformation()))
-    {
-        // convert to C++ styled exception
-        // Note: it might be better to use _se_set_translator
-        // if you want exception to inherit full callstack
-        char integer_string[512];
-        sprintf(integer_string, "SEH, code: %lu\n", GetExceptionCode());
-        throw std::exception(integer_string);
-    }
-}
-#endif // LL_WINDOWS
-} // anonymous namespace
-
-// Top-level wrapper around caller's coroutine callable.
-// Normally we like to pass strings and such by const reference -- but in this
-// case, we WANT to copy both the name and the callable to our local stack!
-// NOLINTNEXTLINE(performance-unnecessary-value-param): the copies are the point (see above); the coroutine outlives its launcher's stack
-void LLCoros::toplevel(std::string name, callable_t callable)
-{
-    // keep the CoroData on this top-level function's stack frame
-    CoroData corodata(name);
-    // set it as current
-    mCurrent.reset(&corodata);
-
-#ifdef LL_WINDOWS
-    // can not use __try directly, toplevel requires unwinding, thus use of a wrapper
-    sehandle(callable, name);
-#else // LL_WINDOWS
-    // run the code the caller actually wants in the coroutine
-    try
-    {
-        callable();
-    }
-    catch (const Stop& exc)
-    {
-        LL_INFOS("LLCoros") << "coroutine " << name << " terminating because "
-                            << exc.what() << LL_ENDL;
-    }
-    catch (const LLContinueError&)
-    {
-        // Any uncaught exception derived from LLContinueError will be caught
-        // here and logged. This coroutine will terminate but the rest of the
-        // viewer will carry on.
-        LOG_UNHANDLED_EXCEPTION(STRINGIZE("coroutine " << name));
-    }
-    catch (...)
-    {
-        // Stash any OTHER kind of uncaught exception in the rethrow() queue
-        // to be rethrown by the main fiber.
-        LL_WARNS("LLCoros") << "Capturing uncaught exception in coroutine "
-                            << name << LL_ENDL;
-        LLCoros::instance().saveException(name, std::current_exception());
-    }
-#endif // else LL_WINDOWS
 }
 
 //static

@@ -29,11 +29,11 @@
 
 #include "timer.h"
 #include <deque>
+#include <mutex>
 #include <string>
 #include "llstring.h"
 #include "llthread.h"
 #include "llerrorcontrol.h"
-#include "llcoros.h"
 
 //  fixed buffer implementation
 class LL_COMMON_API LLFixedBuffer : public LLLineBuffer
@@ -62,7 +62,7 @@ protected:
     void addWLine(const LLWString& line);
 
 protected:
-    LLCoros::Mutex mMutex ;
+    std::mutex mMutex ;
 };
 
 #endif //LL_FIXED_BUFFER_H

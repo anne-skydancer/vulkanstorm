@@ -26,6 +26,7 @@
  */
 
 #include "llviewerprecompiledheaders.h"
+#include "llcoros.h"
 #include "llaisapi.h"
 
 #include "llagent.h"
@@ -1115,7 +1116,7 @@ LL::Task<void> AISUpdate::checkTimeout()
         // If we use normal suspend(), there will be a chance of
         // waking up from other suspends, before main coro had
         // a chance, so wait for a frame tick instead.
-        co_await llcoro::co::suspendUntilNextFrame();
+        co_await llcoro::suspendUntilNextFrame();
         LLCoros::checkStop();
         mTaskTimer.setTimerExpirySec(AIS_TASK_EXPIRY_SECONDS);
 
