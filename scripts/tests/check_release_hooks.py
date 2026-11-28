@@ -20,7 +20,7 @@ FORBIDDEN = re.compile(
     r"sCompletionPending|sampleSourceMemory|accumulateSourceMemory|"
     r"getOwnedRawBytes|getPeakOwnedRawBytes|getOwnedOtherImageBytes|getDetachedRawBytes|"
     r"getCPUVertexBytes|getCPUIndexBytes|USE_TRACY_MEMORY|"
-    r"VKS_GL_STATS|VKS_GL(?:STAT|CMP)\w*|LLGLSubmit\w+|RenderGLSubmit\w+|llglsubmitstats\w*|ProjectorShadowStats\w*|TexturePixelArea(?:Stats|Compare)|VKS_FRAMEJOBS_COMPARE|RenderSunCascadeJobs(?:Stats|Compare)|SunCascadeJobsStats|AvatarAnimationJobs(?:Stats|Compare)|PixelAreaPassStats|reportPixelAreaPass|llprojectorshadowstatsapi\w*|DirectionalShadowReadout\w*|lldirectionalshadowreadout\w*|LodestarGridTest\w*|LLMeshGridDumpHandler|lodestarGridTestMaybeDump|sLodestarGridTestVariant)\b"
+    r"VKS_GL_STATS|VKS_GL(?:STAT|CMP)\w*|LLGLSubmit\w+|RenderGLSubmit\w+|llglsubmitstats\w*|ProjectorShadowStats\w*|TexturePixelArea(?:Stats|Compare)|VKS_FRAMEJOBS_COMPARE|RenderSunCascadeJobs(?:Stats|Compare)|SunCascadeJobsStats|AvatarAnimationJobs(?:Stats|Compare)|PixelAreaPassStats|reportPixelAreaPass|llprojectorshadowstatsapi\w*|DirectionalShadowReadout\w*|lldirectionalshadowreadout\w*|LodestarGridTest\w*|LLMeshGridDumpHandler|lodestarGridTestMaybeDump|sLodestarGridTestVariant|lodestar_grid_bytes|mGridDumpDone|LodestarGridVariantGuard)\b"
 )
 
 
@@ -40,6 +40,8 @@ def main():
             match = FORBIDDEN.search(line)
             if match:
                 failures.append(f"{relative}:{number}: development hook {match.group()}")
+    if (ROOT / "scripts" / "lodestar_grid").exists():
+        failures.append("scripts/lodestar_grid: the devel-only Lodestar grid test folder must not be on release")
     if failures:
         print("\n".join(failures), file=sys.stderr)
         return 1
