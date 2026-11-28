@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
   <asset>
     <contributor><authoring_tool>lodestar_grid/make_assets.py</authoring_tool></contributor>

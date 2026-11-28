@@ -3,9 +3,9 @@
 """Writes the five hand-made test files of the Lodestar grid test (stdlib only).
 
     lodestar-grid-cube.dae        High      1 m cube, 2 x 2 quads per face (48 triangles)
-    lodestar-grid-cube_LOD2.dae   Medium    plain cube (12 triangles)
-    lodestar-grid-cube_LOD1.dae   Low       plain cube (12 triangles)
-    lodestar-grid-cube_LOD0.dae   Lowest    plain cube (12 triangles)
+    lodestar-grid-cube_LOD2.dae   Medium    cube (12 triangles), UVs tweaked by 5 %
+    lodestar-grid-cube_LOD1.dae   Low       cube (12 triangles), UVs tweaked by 10 %
+    lodestar-grid-cube_LOD0.dae   Lowest    cube (12 triangles), UVs tweaked by 15 %
     lodestar-grid-cube_PHYS.dae   Physics   plain box (12 triangles)
 
 The suffixes are the viewer's defaults (FSMeshLowestLodSuffix LOD0, FSMeshLowLodSuffix LOD1,
@@ -29,8 +29,11 @@ FACES = (
 )
 
 
-def cube(n):
-    """Return (positions, normals, uvs, triangle vertex indices) of a unit cube, n x n quads a face."""
+def cube(n, tweak=0):
+    """Return (positions, normals, uvs, triangle vertex indices) of a unit cube, n x n quads a face.
+
+    tweak > 0 shrinks the U coordinate by 5 % per step, so the Medium, Low and Lowest blocks differ
+    from each other (a swapped or merged block then shows in the byte comparison)."""
     pos, nor, uv, idx = [], [], [], []
     for normal, u, v in FACES:
         base = len(pos)
@@ -39,7 +42,7 @@ def cube(n):
                 s, t = i / n, j / n
                 pos.append(tuple(0.5 * normal[k] + (s - 0.5) * u[k] + (t - 0.5) * v[k] for k in range(3)))
                 nor.append(normal)
-                uv.append((s, t))
+                uv.append((s * (1 - 0.05 * tweak), t))
         for j in range(n):
             for i in range(n):
                 a = base + j * (n + 1) + i
@@ -52,11 +55,12 @@ def floats(rows):
     return " ".join(f"{x:g}" for row in rows for x in row)
 
 
-def dae(name, n):
-    pos, nor, uv, idx = cube(n)
+def dae(name, n, tweak=0):
+    pos, nor, uv, idx = cube(n, tweak)
     count = len(idx) // 3
     tri = " ".join(f"{i} {i} {i}" for i in idx)
     return f'''<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
   <asset>
     <contributor><authoring_tool>lodestar_grid/make_assets.py</authoring_tool></contributor>
@@ -115,19 +119,19 @@ def dae(name, n):
 
 
 FILES = (
-    ("lodestar-grid-cube.dae", "cube", 2),
-    ("lodestar-grid-cube_LOD2.dae", "cube_LOD2", 1),
-    ("lodestar-grid-cube_LOD1.dae", "cube_LOD1", 1),
-    ("lodestar-grid-cube_LOD0.dae", "cube_LOD0", 1),
-    ("lodestar-grid-cube_PHYS.dae", "cube_PHYS", 1),
+    ("lodestar-grid-cube.dae", "cube", 2, 0),
+    ("lodestar-grid-cube_LOD2.dae", "cube_LOD2", 1, 1),
+    ("lodestar-grid-cube_LOD1.dae", "cube_LOD1", 1, 2),
+    ("lodestar-grid-cube_LOD0.dae", "cube_LOD0", 1, 3),
+    ("lodestar-grid-cube_PHYS.dae", "cube_PHYS", 1, 0),
 )
 
 
 def main(argv):
     out = Path(argv[1]) if len(argv) > 1 else Path(__file__).resolve().parent
     out.mkdir(parents=True, exist_ok=True)
-    for filename, name, n in FILES:
-        (out / filename).write_text(dae(name, n), encoding="utf-8", newline="\n")
+    for filename, name, n, tweak in FILES:
+        (out / filename).write_text(dae(name, n, tweak), encoding="utf-8", newline="\n")
         print("wrote", out / filename)
     return 0
 
