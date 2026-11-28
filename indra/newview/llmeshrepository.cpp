@@ -255,7 +255,7 @@
 //
 //     sActiveHeaderRequests    mMutex        rw.any.mMutex, ro.repo.none [1]
 //     sActiveLODRequests       mMutex        rw.any.mMutex, ro.repo.none [1]
-//     sMaxConcurrentRequests   mMutex        wo.main.none, ro.repo.none, ro.main.mMutex
+//     sMaxConcurrentRequests   atomic        wo.main, ro.any (relaxed; also sRequestHighWater, sRequestLowWater)
 //     mMeshHeader              mHeaderMutex  rw.repo.mHeaderMutex, ro.main.mHeaderMutex, ro.main.none [0]
 //     mSkinRequests            mMutex        rw.repo.mMutex, ro.repo.none [5]
 //     mSkinInfoQ               mMutex        rw.repo.mMutex, rw.main.mMutex [5] (was:  [0])
@@ -648,9 +648,9 @@ LLViewerFetchedTexture* LLMeshUploadThread::FindViewerTexture(const LLImportMate
 std::atomic<S32> LLMeshRepoThread::sActiveHeaderRequests = 0;
 std::atomic<S32> LLMeshRepoThread::sActiveLODRequests = 0;
 std::atomic<S32> LLMeshRepoThread::sActiveSkinRequests = 0;
-U32 LLMeshRepoThread::sMaxConcurrentRequests = 1;
-S32 LLMeshRepoThread::sRequestLowWater = REQUEST2_LOW_WATER_MIN;
-S32 LLMeshRepoThread::sRequestHighWater = REQUEST2_HIGH_WATER_MIN;
+std::atomic<U32> LLMeshRepoThread::sMaxConcurrentRequests{1};
+std::atomic<S32> LLMeshRepoThread::sRequestLowWater{REQUEST2_LOW_WATER_MIN};
+std::atomic<S32> LLMeshRepoThread::sRequestHighWater{REQUEST2_HIGH_WATER_MIN};
 S32 LLMeshRepoThread::sRequestWaterLevel = 0;
 
 // Base handler class for all mesh users of llcorehttp.
@@ -1139,13 +1139,13 @@ void LLMeshRepoThread::run()
         // like processRequests(&requestQ, fetchFunction); which does same thing for each element
 
         if (have_caps
-            && mHttpRequestSet.size() < sRequestHighWater
+            && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed))
             && !mSkinRequests.empty())
         {
             if (!mSkinRequests.empty())
             {
                 std::list<UUIDBasedRequest> incomplete;
-                while (!mSkinRequests.empty() && mHttpRequestSet.size() < sRequestHighWater)
+                while (!mSkinRequests.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
                 {
 
                     mMutex->lock();
@@ -1190,10 +1190,10 @@ void LLMeshRepoThread::run()
             }
         }
 
-        if (have_caps && !mLODReqQ.empty() && mHttpRequestSet.size() < sRequestHighWater)
+        if (have_caps && !mLODReqQ.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
         {
             std::list<LODRequest> incomplete;
-            while (!mLODReqQ.empty() && mHttpRequestSet.size() < sRequestHighWater)
+            while (!mLODReqQ.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
             {
                 if (!mMutex)
                 {
@@ -1239,10 +1239,10 @@ void LLMeshRepoThread::run()
             }
         }
 
-        if (have_caps && !mHeaderReqQ.empty() && mHttpRequestSet.size() < sRequestHighWater)
+        if (have_caps && !mHeaderReqQ.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
         {
             std::list<HeaderRequest> incomplete;
-            while (!mHeaderReqQ.empty() && mHttpRequestSet.size() < sRequestHighWater)
+            while (!mHeaderReqQ.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
             {
                 if (!mMutex)
                 {
@@ -1289,7 +1289,7 @@ void LLMeshRepoThread::run()
         // slightly different queue structures.  Stay off the mutex when
         // performing long-duration actions.
 
-        if (mHttpRequestSet.size() < sRequestHighWater
+        if (mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed))
             && (!mDecompositionRequests.empty()
             || !mPhysicsShapeRequests.empty()))
         {
@@ -1304,7 +1304,7 @@ void LLMeshRepoThread::run()
             if (!mDecompositionRequests.empty())
             {
                 std::set<UUIDBasedRequest> incomplete;
-                while (!mDecompositionRequests.empty() && mHttpRequestSet.size() < sRequestHighWater)
+                while (!mDecompositionRequests.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
                 {
                     mMutex->lock();
                     std::set<UUIDBasedRequest>::iterator iter = mDecompositionRequests.begin();
@@ -1347,7 +1347,7 @@ void LLMeshRepoThread::run()
             if (!mPhysicsShapeRequests.empty())
             {
                 std::set<UUIDBasedRequest> incomplete;
-                while (!mPhysicsShapeRequests.empty() && mHttpRequestSet.size() < sRequestHighWater)
+                while (!mPhysicsShapeRequests.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
                 {
                     mMutex->lock();
                     std::set<UUIDBasedRequest>::iterator iter = mPhysicsShapeRequests.begin();
@@ -4831,13 +4831,15 @@ void LLMeshRepository::notifyLoadedMeshes()
             LLNotificationsUtil::add("MeshMaxConcurrentReqTooHigh", args);
             gSavedSettings.setU32("MeshMaxConcurrentRequests", mesh_max_concurrent_requests_default);
         }
-        LLMeshRepoThread::sMaxConcurrentRequests = meshMaxConcurrentRequests();
-        LLMeshRepoThread::sRequestHighWater = llclamp(2 * S32(LLMeshRepoThread::sMaxConcurrentRequests),
-                                                      REQUEST_HIGH_WATER_MIN,
-                                                      REQUEST_HIGH_WATER_MAX);
-        LLMeshRepoThread::sRequestLowWater = llclamp(LLMeshRepoThread::sRequestHighWater / 2,
-                                                     REQUEST_LOW_WATER_MIN,
-                                                     REQUEST_LOW_WATER_MAX);
+        const U32 max_requests = meshMaxConcurrentRequests();
+        const S32 high_water = llclamp(2 * S32(max_requests),
+                                       REQUEST_HIGH_WATER_MIN,
+                                       REQUEST_HIGH_WATER_MAX);
+        LLMeshRepoThread::sMaxConcurrentRequests.store(max_requests, std::memory_order_relaxed);
+        LLMeshRepoThread::sRequestHighWater.store(high_water, std::memory_order_relaxed);
+        LLMeshRepoThread::sRequestLowWater.store(llclamp(high_water / 2,
+                                                         REQUEST_LOW_WATER_MIN,
+                                                         REQUEST_LOW_WATER_MAX), std::memory_order_relaxed);
     }
     else
     {
@@ -4861,13 +4863,15 @@ void LLMeshRepository::notifyLoadedMeshes()
             LLNotificationsUtil::add("MeshMaxConcurrentReqTooHigh", args);
             gSavedSettings.setU32("Mesh2MaxConcurrentRequests", mesh2_max_concurrent_requests_default);
         }
-        LLMeshRepoThread::sMaxConcurrentRequests = mesh2MaxConcurrentRequests();
-        LLMeshRepoThread::sRequestHighWater = llclamp(scale * S32(LLMeshRepoThread::sMaxConcurrentRequests),
-                                                      REQUEST2_HIGH_WATER_MIN,
-                                                      REQUEST2_HIGH_WATER_MAX);
-        LLMeshRepoThread::sRequestLowWater = llclamp(LLMeshRepoThread::sRequestHighWater / 2,
-                                                     REQUEST2_LOW_WATER_MIN,
-                                                     REQUEST2_LOW_WATER_MAX);
+        const U32 max_requests = mesh2MaxConcurrentRequests();
+        const S32 high_water = llclamp(scale * S32(max_requests),
+                                       REQUEST2_HIGH_WATER_MIN,
+                                       REQUEST2_HIGH_WATER_MAX);
+        LLMeshRepoThread::sMaxConcurrentRequests.store(max_requests, std::memory_order_relaxed);
+        LLMeshRepoThread::sRequestHighWater.store(high_water, std::memory_order_relaxed);
+        LLMeshRepoThread::sRequestLowWater.store(llclamp(high_water / 2,
+                                                         REQUEST2_LOW_WATER_MIN,
+                                                         REQUEST2_LOW_WATER_MAX), std::memory_order_relaxed);
     }
     // </FS:Ansariel> [UDP Assets]
 
@@ -5053,9 +5057,10 @@ void LLMeshRepository::notifyLoadedMeshes()
         S32 active_count = LLMeshRepoThread::sActiveHeaderRequests + LLMeshRepoThread::sActiveLODRequests + LLMeshRepoThread::sActiveSkinRequests;
         // the queues of requests the repo thread has not started yet (mMutex is held here)
         active_count += (S32)(mThread->mLODReqQ.size() + mThread->mHeaderReqQ.size() + mThread->mSkinRequests.size());
-        if (active_count < LLMeshRepoThread::sRequestHighWater)
+        const S32 request_high_water = LLMeshRepoThread::sRequestHighWater.load(std::memory_order_relaxed);
+        if (active_count < request_high_water)
         {
-            S32 push_count = LLMeshRepoThread::sRequestHighWater - active_count;
+            S32 push_count = request_high_water - active_count;
 
             if (mPendingRequests.size() > push_count)
             {
