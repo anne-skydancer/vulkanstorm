@@ -1443,10 +1443,8 @@ void LLMeshRepoThread::run()
         // llassert_always(mHttpRequestSet.size() <= sRequestHighWater);
     }
 
-    if (mSignal->isLocked())
-    { //make sure to let go of the mutex associated with the given signal before shutting down
-        mSignal->unlock();
-    }
+    // No unlock of mSignal here: wait(), waitFor() and changeAndBroadcast() lock it with scoped locks, so this thread
+    // never holds it outside them, and an unlock now could release a hold of the main thread (wake(), cleanup()).
 
     res = LLConvexDecomposition::quitThread();
     if (res != LLCD_OK && LLConvexDecomposition::isFunctional())
