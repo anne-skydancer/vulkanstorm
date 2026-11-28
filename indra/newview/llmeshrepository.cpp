@@ -4966,14 +4966,14 @@ void LLMeshRepository::notifyLoadedMeshes()
             if (copy_iter->second->getNumRefs() == 1)
             {
                 mSkinMap.erase(copy_iter);
-            }
 
-            // erase from background thread
-            mThread->mWorkQueue.post([=, this]()
-                {
-                    LLMutexLock skin_lock(mThread->mSkinMapMutex);
-                    mThread->mSkinMap.erase(id);
-                });
+                // erase from background thread, only what was removed here
+                mThread->mWorkQueue.post([=, this]()
+                    {
+                        LLMutexLock skin_lock(mThread->mSkinMapMutex);
+                        mThread->mSkinMap.erase(id);
+                    });
+            }
         }
         //LL_INFOS() << "Skin info cache elements:" << mSkinMap.size() << " Memory: " << U64Kilobytes(skinbytes) << LL_ENDL;
     }
