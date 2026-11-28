@@ -708,12 +708,27 @@ public:
     // see retryStats().
     RequestStats mStats;
 
+public:
+    // The simulator has no mesh data to give: 404 (not found) and 410 (gone) are the only HTTP answers that are
+    // final.  Any other HTTP failure (429, 403, 408, 503...) may pass, and must not be remembered as "no data".
+    static bool isFinalHttpFailure(const LLCore::HttpStatus& status)
+    {
+        return status.isHttpStatus() && (status.getType() == 404 || status.getType() == 410);
+    }
+
+    // a failure that may pass on another try: a transport problem, or any HTTP answer other than a final one
+    static bool isTransientFailure(const LLCore::HttpStatus& status)
+    {
+        return status.isRetryable()
+            || (status.isHttpStatus() && status.getType() >= 400 && !isFinalHttpFailure(status));
+    }
+
 protected:
     // true, with the stats for the new request filled in, if a request that failed with this status should be
     // tried again (thread: repo)
     bool retryStats(const LLCore::HttpStatus& status, RequestStats& stats) const
     {
-        if (!status.isRetryable() || !mStats.canRetryAfterHttpFailure())
+        if (!isTransientFailure(status) || !mStats.canRetryAfterHttpFailure())
         {
             return false;
         }
@@ -3947,9 +3962,9 @@ void LLMeshHeaderHandler::processFailure(LLCore::HttpStatus status)
                        << " (" << status.toTerseString() << ").  Not retrying."
                        << LL_ENDL;
 
-    // Can't get the header so none of the LODs or the skin will be available.  An HTTP answer that is not
-    // retryable (404...) is final; a transport failure that used up its rounds is tried again later.
-    gMeshRepo.mThread->headerFailed(mMeshParams, status.isHttpStatus() && !status.isRetryable());
+    // Can't get the header so none of the LODs or the skin will be available.  Only 404 and 410
+    // are final; any other failure that used up its rounds is tried again later.
+    gMeshRepo.mThread->headerFailed(mMeshParams, isFinalHttpFailure(status));
 }
 
 void LLMeshHeaderHandler::processData(LLCore::BufferArray * /* body */, S32 /* body_offset */,
