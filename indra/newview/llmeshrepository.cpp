@@ -5117,9 +5117,11 @@ void LLMeshRepository::notifyLoadedMeshes()
                 std::partial_sort(mPendingRequests.begin(), mPendingRequests.begin() + push_count,
                                   mPendingRequests.end(), PendingRequestBase::CompareScoreGreater());
             }
-            while (!mPendingRequests.empty() && push_count > 0)
+            // the requests dealt with here are the first 'done' of the vector: they are removed in one step below
+            size_t done = 0;
+            while (done < mPendingRequests.size() && push_count > 0)
             {
-                std::shared_ptr<PendingRequestBase>& req_p = mPendingRequests.front();
+                std::shared_ptr<PendingRequestBase>& req_p = mPendingRequests[done];
                 if (!req_p->hasTrackedData())
                 {
                     // Nothing waits for it any more (its waiting volumes were all unregistered): do not forward it
@@ -5128,7 +5130,7 @@ void LLMeshRepository::notifyLoadedMeshes()
                     {
                         LLMeshRepository::sLODPending--;
                     }
-                    mPendingRequests.erase(mPendingRequests.begin());
+                    ++done;
                     continue;
                 }
                 switch (req_p->getRequestType())
@@ -5151,9 +5153,10 @@ void LLMeshRepository::notifyLoadedMeshes()
                     LL_ERRS() << "Unknown request type in LLMeshRepository::notifyLoadedMeshes" << LL_ENDL;
                     break;
                 }
-                mPendingRequests.erase(mPendingRequests.begin());
+                ++done;
                 push_count--;
             }
+            mPendingRequests.erase(mPendingRequests.begin(), mPendingRequests.begin() + done);
         }
 
         //send decomposition requests
