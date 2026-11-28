@@ -749,7 +749,7 @@ void LLGLTexMemBar::draw()
                     LLMeshRepository::sMeshRequestCount, LLMeshRepository::sHTTPRequestCount, LLMeshRepository::sHTTPLargeRequestCount,
                     LLMeshRepository::sHTTPRetryCount, LLMeshRepository::sHTTPErrorCount,
                     (U32)LLMeshRepository::sCacheReads, (U32)LLMeshRepository::sCacheWrites,
-                    LLMeshRepoThread::sRequestLowWater.load(std::memory_order_relaxed), LLMeshRepoThread::sRequestWaterLevel,
+                    LLMeshRepoThread::sRequestLowWater.load(std::memory_order_relaxed), LLMeshRepoThread::sRequestWaterLevel.load(std::memory_order_relaxed),
                     LLMeshRepoThread::sRequestHighWater.load(std::memory_order_relaxed));
     LLFontGL::getFontMonospace()->renderUTF8(text, 0, 0, v_offset + line_height*2,
                                              text_color, LLFontGL::LEFT, LLFontGL::TOP);
