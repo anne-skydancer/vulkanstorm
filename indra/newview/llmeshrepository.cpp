@@ -6883,7 +6883,8 @@ void LLMeshRepository::countHttpError(const LLCore::HttpStatus& status)
 
 namespace
 {
-// Threading:  main thread only.  Mesh volumes that still wait for the mesh asset or the skin, and how many of
+// Threading:  main thread only.  Mesh volumes that still wait for the mesh asset, or have it but not the skin (the
+// renderer's own test, LLVOVolume::updateRiggedVolume: loaded, no skin info, skin not marked unavailable), and how many of
 // them belong to the agent's own avatar.  A scan of the object list, run only when the quiescent line is logged.
 void countUnmetMeshWants(U32& all, U32& own)
 {
@@ -6905,7 +6906,7 @@ void countUnmetMeshWants(U32& all, U32& own)
         const LLVolume* volume = vobj->getVolume();
         const bool unmet = !volume
             || (!volume->isMeshAssetLoaded() && !volume->isMeshAssetUnavaliable())
-            || (vobj->isRiggedMesh() && !vobj->getSkinInfo() && !vobj->isSkinInfoUnavaliable());
+            || (volume->isMeshAssetLoaded() && !vobj->getSkinInfo() && !vobj->isSkinInfoUnavaliable());
         if (unmet)
         {
             ++all;

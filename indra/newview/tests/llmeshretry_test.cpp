@@ -63,6 +63,18 @@ int main()
     check(LLMeshRetry::isTransientHttpCode(500) && LLMeshRetry::isTransientHttpCode(503)
           && LLMeshRetry::isTransientHttpCode(499), "500, 503 and 499 are transient");
 
+    // the class of an answer for the baseline counters (boundaries); transport errors are not HTTP statuses and are
+    // classed by the repository from HttpStatus, which this test does not link
+    using C = LLMeshRetry::HttpClass;
+    const struct { int code; C cls; } classes[] = {
+        {399, C::Other}, {400, C::Final}, {403, C::Transient}, {404, C::Final}, {408, C::Transient},
+        {410, C::Final}, {425, C::Transient}, {429, C::Http429}, {499, C::Transient}, {500, C::Transient},
+        {599, C::Transient}, {600, C::Other}, {999, C::Other}, {200, C::Other}, {498, C::Final}};
+    for (const auto& c : classes)
+    {
+        check(LLMeshRetry::classifyHttpCode(c.code) == c.cls, "classifyHttpCode boundary");
+    }
+
     // 3 asks after the first one: failures 1, 2, 3 are asked again, the 4th is given up
     check(!LLMeshRetry::mayReask(0), "no failure, no ask");
     check(LLMeshRetry::mayReask(1) && LLMeshRetry::mayReask(2) && LLMeshRetry::mayReask(3), "failures 1 to 3 ask again");

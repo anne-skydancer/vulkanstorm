@@ -32,6 +32,22 @@ namespace LLMeshRetry
         return code == 403 || code == 408 || code == 425 || code == 429 || (code >= 499 && code <= 599);
     }
 
+    // The class of an HTTP answer for the baseline counters of the quiescent log line; one scheme, no overlap:
+    //   Http429   429 (too many requests), counted apart because it is the rate-limit signal
+    //   Transient the other transient answers (403, 408, 425, 499 and 500..599, so 5xx is in here)
+    //   Final     the final 4xx (400..498 without 403, 408, 425, 429)
+    //   Other     every other number (below 400, 600 and above)
+    // Failures that are not an HTTP status (curl, llcorehttp) are classed Transport by the caller.
+    enum class HttpClass { Http429, Transient, Final, Other };
+
+    constexpr HttpClass classifyHttpCode(int code)
+    {
+        return code == 429 ? HttpClass::Http429
+             : isTransientHttpCode(code) ? HttpClass::Transient
+             : isFinalHttpCode(code) ? HttpClass::Final
+             : HttpClass::Other;
+    }
+
     // failures: the consecutive failures of the ask so far, this one included (the first failure is 1)
     constexpr bool mayReask(unsigned failures)
     {
