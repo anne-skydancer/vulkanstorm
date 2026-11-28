@@ -34,6 +34,8 @@
 #include "llmeshrepository.h"
 #include "llmeshretry.h"
 
+#include <algorithm>
+
 #include "llagent.h"
 #include "llappviewer.h"
 #include "llbufferstream.h"
@@ -1125,8 +1127,11 @@ void LLMeshRepoThread::run()
     {
         // Sleep until the main thread asks for a pass (wake(), once per frame) or the thread is shut down.  The
         // predicate is checked under the condition's mutex, and wake() and cleanup() set their flags under it,
-        // so no wake-up can be lost.  While requests are in flight the thread also wakes by itself, so the
-        // HTTP answers and the queues are served whatever the frame rate (and while the window is minimised).
+        // so a wake() or cleanup() cannot be lost.  Items that the pool threads push to the queues wait for the
+        // next frame's wake() when nothing is runnable, and LLApp::isExiting() has no notify of its own: the
+        // quit is taken up by cleanup()'s broadcast.  While work can run now the thread also wakes by itself,
+        // so the HTTP answers and the queues are served whatever the frame rate (and while the window is
+        // minimised).  Delayed back-off requests and requests waiting for capabilities wait for the next wake().
         static constexpr std::chrono::milliseconds IN_FLIGHT_WAKE{5};
         const auto ready = [this]
         {
@@ -1141,7 +1146,7 @@ void LLMeshRepoThread::run()
             }
             return false;
         };
-        if (hasRequestsInFlight())
+        if (hasRunnableWork())
         {
             mSignal->waitFor(IN_FLIGHT_WAKE, ready);
         }
@@ -1251,7 +1256,7 @@ void LLMeshRepoThread::run()
                 if (req.isDelayed())
                 {
                     // failed to load before, wait a bit
-                    incomplete.push_front(req);
+                    incomplete.push_back(req);
                 }
                 else if (!fetchMeshLOD(req.mMeshParams, req.mLOD, req))
                 {
@@ -1259,7 +1264,7 @@ void LLMeshRepoThread::run()
                     {
                         // failed, resubmit
                         req.updateTime();
-                        incomplete.push_front(req);
+                        incomplete.push_back(req);
                     }
                     else
                     {
@@ -1299,7 +1304,7 @@ void LLMeshRepoThread::run()
                 if (req.isDelayed())
                 {
                     // failed to load before, wait a bit
-                    incomplete.push_front(req);
+                    incomplete.push_back(req);
                 }
                 else if (!fetchMeshHeader(req.mMeshParams, req, req.mPhysicsOnly))
                 {
@@ -1307,7 +1312,7 @@ void LLMeshRepoThread::run()
                     {
                         //failed, resubmit
                         req.updateTime();
-                        incomplete.push_front(req);
+                        incomplete.push_back(req);
                     }
                     else
                     {
@@ -1452,20 +1457,33 @@ void LLMeshRepoThread::run()
         LL_WARNS(LOG_MESH) << "Convex decomposition unable to be quit." << LL_ENDL;
     }
 }
+
 void LLMeshRepoThread::wake()
 {
     mSignal->changeAndBroadcast([this] { mWakePending = true; });
 }
 
-bool LLMeshRepoThread::hasRequestsInFlight()
+bool LLMeshRepoThread::hasRunnableWork()
 {
     if (!mHttpRequestSet.empty())
     {
         return true;
     }
+    // Every queue is only served once a capability address is known, and a delayed (back-off) request is not
+    // served before its time: neither is work that can run now.  A queue is judged by its first request (the
+    // pass rotates the delayed ones to the back); a request that waits for its header counts, which is an
+    // over-count for a short while.
+    if (!hasCapabilities())
+    {
+        return false;
+    }
+    const auto ready = [](const RequestStats& req) { return !req.isDelayed(); };
     LLMutexLock lock(mMutex);
-    return !mLODReqQ.empty() || !mHeaderReqQ.empty() || !mSkinRequests.empty()
-        || !mDecompositionRequests.empty() || !mPhysicsShapeRequests.empty();
+    return (!mLODReqQ.empty() && ready(mLODReqQ.front()))
+        || (!mHeaderReqQ.empty() && ready(mHeaderReqQ.front()))
+        || std::any_of(mSkinRequests.begin(), mSkinRequests.end(), ready)
+        || std::any_of(mDecompositionRequests.begin(), mDecompositionRequests.end(), ready)
+        || std::any_of(mPhysicsShapeRequests.begin(), mPhysicsShapeRequests.end(), ready);
 }
 
 void LLMeshRepoThread::cleanup()

@@ -758,9 +758,10 @@ private:
     // A wake-up has been asked for and the repo thread has not run a pass since.  Guarded by mSignal's mutex.
     bool mWakePending = false;
 
-    // Repo thread only.  True while a request is on the wire or queued for the wire: the thread then wakes
-    // by itself every few milliseconds to serve the HTTP answers and the queues.
-    bool hasRequestsInFlight();
+    // Repo thread only.  True while a request is on the wire or a queued one can be sent now (capabilities known,
+    // not in back-off): the thread then wakes by itself every few milliseconds to serve the HTTP answers and the
+    // queues.
+    bool hasRunnableWork();
 };
 
 
