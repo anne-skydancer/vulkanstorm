@@ -9,11 +9,16 @@ Stdlib only (Python 3.13). Reads, from the viewer's logs folder:
   lodestar-grid-<uuid>.bin                                 the stored asset (LodestarGridTestDump)
 
 N is the viewer's per-session counter, one per "Calculate weights & fee". Each N is classified by
-what its uploaded asset contains: variant 0 (control), 1, 2 or 3. A stored asset is paired with
-its upload by the new asset id in the upload response, else by order (header date against N).
+what its uploaded asset contains: variant 0 (control), 1, 2 or 3. When a variant has several N, the
+highest N with an upload response is used. Stored assets are paired with uploads by the order of
+the header date (stored assets sorted by date against the uploads sorted by N); the new asset id in
+the upload response is only a cross-check, because the viewer reports the inventory object's asset,
+which probably is not the mesh asset's UUID.
 
 Usage:
-  python diff_grid.py LOGS_DIR            report, exit 0 when every check passes, 1 otherwise
+  python diff_grid.py LOGS_DIR            report, one verdict per variant (kept / dropped / altered);
+                                          exit 0 unless the script cannot do its job (no control
+                                          upload found), then 1
   python diff_grid.py --self-test         run the checks on synthetic data
 """
 import argparse
@@ -254,26 +259,37 @@ def detect_variant(asset):
 
 
 def value_check(variant, stored):
-    """(ok, text): is the variant's value present in the stored asset?"""
+    """(verdict, text): is the variant's value present in the stored asset? Verdict is kept, dropped or altered."""
     if variant == 1:
-        top = isinstance(stored.header.get("lodestar"), dict)
-        inner = isinstance(stored.header.get("high_lod"), dict) and "lodestar" in stored.header["high_lod"]
-        ok = top and inner
-        return ok, "top-level map %s, high_lod key %s" % ("kept" if top else "dropped", "kept" if inner else "dropped")
+        top = stored.header.get("lodestar")
+        hi = stored.header.get("high_lod")
+        inner = hi.get("lodestar") if isinstance(hi, dict) else None
+        top_state = "dropped" if top is None else ("kept" if top == {"version": 1, "values": V1_VALUES} else "altered")
+        inner_state = "dropped" if inner is None else ("kept" if inner == {"version": 1} else "altered")
+        states = {top_state, inner_state}
+        verdict = "kept" if states == {"kept"} else ("dropped" if states == {"dropped"} else "altered")
+        return verdict, "top-level map (version and 64 values) %s, high_lod key (version) %s" % (top_state, inner_state)
     if variant == 2:
         low = stored.decoded("lowest_lod")
         got = low[0].get("lodestar") if isinstance(low, list) and low and isinstance(low[0], dict) else None
         if got == V2_VALUE:
-            return True, "64 bytes in Lowest first face map kept, identical"
-        return False, "Lowest first face map: " + ("value differs" if got is not None else "key dropped")
+            return "kept", "64 bytes in Lowest first face map kept, identical"
+        if got is None:
+            return "dropped", "Lowest first face map: key dropped"
+        return "altered", "Lowest first face map: value differs"
     if variant == 3:
         entry = stored.header.get("lodestar_block")
         blk = stored.block("lodestar_block")
-        key = "kept" if entry is not None else "dropped"
-        data = "identical" if blk == V3_BLOCK else ("differs" if blk is not None else "missing")
         trailer = "kept" if V3_TRAILER in stored.data else "dropped"
-        return (entry is not None and blk == V3_BLOCK), "header key %s, block %s, trailing 64 bytes %s" % (key, data, trailer)
-    return True, "control"
+        if entry is None:
+            verdict, key = "dropped", "dropped"
+        elif blk == V3_BLOCK:
+            verdict, key = "kept", "kept"
+        else:
+            verdict, key = "altered", "kept"
+        data = "identical" if blk == V3_BLOCK else ("differs" if blk is not None else "missing")
+        return verdict, "header key %s, block %s, trailing 64 bytes %s" % (key, data, trailer)
+    return "kept", "control"
 
 
 # ---------------------------------------------------------------- fees
@@ -311,7 +327,7 @@ def short(b, n=12):
 
 class Report:
     def __init__(self):
-        self.lines, self.failed = [], 0
+        self.lines, self.failed, self.error = [], 0, False
 
     def say(self, text=""):
         self.lines.append(text)
@@ -323,6 +339,9 @@ class Report:
 
     def info(self, text):
         self.lines.append("  info  " + text)
+
+    def warn(self, text):
+        self.lines.append("  WARN  " + text)
 
 
 def compare_header_keys(rep, label, a, b):
@@ -403,68 +422,94 @@ def analyse(logs):
     for v in (1, 2, 3):
         rep.check(v in by_variant, "variant %d upload is logged" % v)
     if 0 not in by_variant:
+        rep.error = True
         return rep
 
-    # pair stored assets with uploads: new asset id first, then order of the header date
-    pairing, method = {}, "new asset id"
-    for n, files in runs.items():
-        if "upload_response" in files and n in ups:
-            nid = find_key(read_xml_llsd(files["upload_response"]), "new_asset")
-            if isinstance(nid, str):
-                key = nid.replace("uuid:", "").replace("-", "").lower()
-                if key in stored:
-                    pairing[n] = key
-    uploaded_ns = sorted(n for n in ups if "upload_response" in runs[n])
-    if len(pairing) < len(uploaded_ns) and len(stored) == len(uploaded_ns):
-        method = "order of the header date"
-        dated = sorted(stored, key=lambda k: float(Asset(stored[k].read_bytes()).header.get("date") or 0))
-        pairing = dict(zip(uploaded_ns, dated))
-    rep.say("Stored assets paired with uploads by %s: %s" % (method, {n: k[:8] for n, k in sorted(pairing.items())}))
+    # per variant: the highest N that has an upload response
+    chosen = {}
+    for v, ns in sorted(by_variant.items()):
+        answered = [n for n in ns if "upload_response" in runs[n]]
+        pick = max(answered) if answered else max(ns)
+        if len(ns) > 1:
+            rep.warn("variant %d has several uploads, N=%s; using N=%d (%s). Delete the old logs before a new session."
+                     % (v, sorted(ns), pick, "highest with an upload response" if answered else "highest, none has an upload response"))
+        chosen[v] = pick
 
-    control_n = by_variant[0][0]
+    # pair stored assets with uploads: date order; the new asset id is only a cross-check
+    uploaded_ns = sorted(n for n in chosen.values() if "upload_response" in runs[n])
+    dated = sorted(stored, key=lambda k: float(Asset(stored[k].read_bytes()).header.get("date") or 0))
+    if len(dated) > len(uploaded_ns):
+        ignored = dated[:len(dated) - len(uploaded_ns)]
+        rep.warn("%d stored asset(s) but %d upload(s): the newest %d are used; ignored (older): %s"
+                 % (len(dated), len(uploaded_ns), len(uploaded_ns), ", ".join(ignored)))
+        dated = dated[len(ignored):]
+    elif len(dated) < len(uploaded_ns):
+        rep.warn("only %d stored asset(s) for %d upload(s): the newest uploads are paired, the older ones have no stored asset"
+                 % (len(dated), len(uploaded_ns)))
+    pairing = dict(zip(uploaded_ns[len(uploaded_ns) - len(dated):], dated))
+    rep.say("Stored assets paired with uploads by the order of the header date: %s" % {n: k[:8] for n, k in sorted(pairing.items())})
+    for n, key in sorted(pairing.items()):
+        nid = find_key(read_xml_llsd(runs[n]["upload_response"]), "new_asset")
+        if isinstance(nid, str):
+            same = nid.replace("uuid:", "").replace("-", "").lower() == key
+            rep.info("N=%d: new_asset in the upload response %s the stored asset's UUID%s" % (
+                n, "equals" if same else "differs from", "" if same else " (expected: the viewer reports the inventory object's asset)"))
+
+    control_n = chosen[0]
     control_up = ups[control_n]
     control_st = Asset(stored[pairing[control_n]].read_bytes()) if control_n in pairing else None
     control_fee = fee_fields(read_xml_llsd(runs[control_n]["fee_response"])) if "fee_response" in runs[control_n] else None
     rep.check(control_st is not None, "control: stored asset dumped and paired")
 
+    verdicts = {}
     for v in (0, 1, 2, 3):
-        for n in by_variant.get(v, [])[:1]:
-            up = ups[n]
-            rep.say()
-            rep.say("== variant %d (N=%d)%s ==" % (v, n, "  [control]" if v == 0 else ""))
-            if v:
-                compare_header_keys(rep, "uploaded vs control uploaded:", control_up, up)
-                compare_blocks(rep, "uploaded vs control uploaded:", control_up, up)
-            rep.info("uploaded asset length %d bytes, block order %s" % (len(up.data), up.layout()))
-            if n not in pairing:
-                rep.check(False, "stored asset available")
-                continue
-            st = Asset(stored[pairing[n]].read_bytes())
-            rep.info("stored asset length %d bytes, block order %s" % (len(st.data), st.layout()))
-            compare_header_keys(rep, "stored vs uploaded:", up, st)
-            compare_blocks(rep, "stored vs uploaded:", up, st)
-            rep.info("bytes after the last referenced block: uploaded %d, stored %d" % (len(up.tail), len(st.tail)))
-            ok, text = value_check(v, st)
-            rep.check(ok, "value present in the stored asset: " + text)
-            if control_st is not None and v:
-                other = [x for x in BLOCK_NAMES if (x in st.blocks or x in control_st.blocks) and x not in ("lodestar_block",) and not (v == 2 and x == "lowest_lod")]
-                differ = compare_blocks(rep, "stored vs control stored:", st, control_st, set(other))
-                rep.check(not differ, "every other stored block equals the control's" + ("" if not differ else " (differs: %s)" % differ))
-            fee = fee_fields(read_xml_llsd(runs[n]["fee_response"])) if "fee_response" in runs[n] else None
-            if fee is None or control_fee is None:
-                rep.check(False, "fee response logged")
-                continue
-            for k, val in fee.items():
-                ref = control_fee[k]
-                if v == 0:
-                    rep.info("fee %s = %s" % (k, val))
-                elif val == ref:
-                    rep.check(True, "fee %s = %s equals the control's" % (k, val))
-                elif v == 2:
-                    rep.info("fee %s = %s, control %s (variant 2 may differ by its added bytes: reported, not a failure)" % (k, val, ref))
-                else:
-                    rep.check(False, "fee %s = %s, control %s" % (k, val, ref))
+        if v not in chosen:
+            continue
+        n = chosen[v]
+        up = ups[n]
+        rep.say()
+        rep.say("== variant %d (N=%d)%s ==" % (v, n, "  [control]" if v == 0 else ""))
+        if v:
+            compare_header_keys(rep, "uploaded vs control uploaded:", control_up, up)
+            compare_blocks(rep, "uploaded vs control uploaded:", control_up, up)
+        rep.info("uploaded asset length %d bytes, block order %s" % (len(up.data), up.layout()))
+        if n not in pairing:
+            rep.check(False, "stored asset available")
+            continue
+        st = Asset(stored[pairing[n]].read_bytes())
+        rep.info("stored asset length %d bytes, block order %s" % (len(st.data), st.layout()))
+        compare_header_keys(rep, "stored vs uploaded:", up, st)
+        compare_blocks(rep, "stored vs uploaded:", up, st)
+        rep.info("bytes after the last referenced block: uploaded %d, stored %d" % (len(up.tail), len(st.tail)))
+        verdict, text = value_check(v, st)
+        verdicts[v] = verdict
+        rep.check(verdict == "kept", "variant %d verdict %s: %s" % (v, verdict.upper(), text))
+        if control_st is not None and v:
+            phys = ("physics_mesh", "physics_convex")
+            other = [x for x in BLOCK_NAMES if (x in st.blocks or x in control_st.blocks) and x not in phys and x != "lodestar_block" and not (v == 2 and x == "lowest_lod")]
+            differ = compare_blocks(rep, "stored vs control stored:", st, control_st, set(other))
+            rep.check(not differ, "every other stored block equals the control's" + ("" if not differ else " (differs: %s)" % differ))
+            pdiffer = compare_blocks(rep, "stored vs control stored:", st, control_st, set(phys))
+            if pdiffer:
+                rep.warn("physics block(s) %s differ from the control's: possibly non-deterministic hull generation, not a block failure" % pdiffer)
+        fee = fee_fields(read_xml_llsd(runs[n]["fee_response"])) if "fee_response" in runs[n] else None
+        if fee is None or control_fee is None:
+            rep.check(False, "fee response logged")
+            continue
+        for k, val in fee.items():
+            ref = control_fee[k]
+            if v == 0:
+                rep.info("fee %s = %s" % (k, "field missing" if val is None else val))
+            elif val is None or ref is None:
+                rep.check(False, "fee %s: field missing (variant %s, control %s)" % (k, val, ref))
+            elif val == ref:
+                rep.check(True, "fee %s = %s equals the control's" % (k, val))
+            elif v == 2:
+                rep.info("fee %s = %s, control %s (variant 2 may differ by its added bytes: reported, not a failure)" % (k, val, ref))
+            else:
+                rep.check(False, "fee %s = %s, control %s" % (k, val, ref))
     rep.say()
+    rep.say("Verdicts: " + ", ".join("variant %d %s" % (v, verdicts.get(v, "no data").upper()) for v in (1, 2, 3)))
     rep.say("Result: %s (%d check(s) failed)" % ("PASS" if not rep.failed else "FAIL", rep.failed))
     return rep
 
@@ -494,7 +539,7 @@ def synth_asset(variant, with_fee_tail=False):
     return write_binary(header) + body
 
 
-def synth_store(up, survive):
+def synth_store(up, survive, date=1.0e9):
     """What a server could do: re-serialise with LODs first, add its keys, drop what it does not know."""
     a = Asset(up)
     header, body, off = {}, b"", 0
@@ -513,7 +558,7 @@ def synth_store(up, survive):
         header["lodestar_block"] = {"offset": off, "size": 64}
         body += a.block("lodestar_block")
     header["creator"] = "uuid:" + "ab" * 16
-    header["date"] = Date(1.0e9 + len(up))
+    header["date"] = Date(date)
     return write_binary(header) + body
 
 
@@ -537,47 +582,96 @@ def self_test():
     expect(Asset(DEPRECATED_HEADER + synth_asset(0)).header.keys() == Asset(synth_asset(0)).header.keys(), "deprecated header prefix skipped")
 
     # a server that drops unknown keys and trailing bytes but copies LOD blocks (the survey's prediction)
-    with tempfile.TemporaryDirectory() as td:
-        d = Path(td)
+    def uuid_path(d, uuid):
+        return d / ("lodestar-grid-%s.bin" % "-".join((uuid[:8], uuid[8:12], uuid[12:16], uuid[16:20], uuid[20:])))
+
+    def fee_doc(price, with_streaming=True):
+        data = {"resource_cost": 1.5, "model_streaming_cost": 0.5, "simulation_cost": 0.25, "physics_cost": 0.1}
+        if with_streaming:
+            data["streaming_params"] = {lod: 100 + i for i, lod in enumerate(LODS)}
+        return {"state": "upload", "upload_price": price, "data": data}
+
+    def write_session(d, survive, n0=1, date0=1.0e9, new_asset_is_stored=True, tag=0x10):
+        """Four uploads N=n0.., stored assets dated date0 + 60 s each. new_asset is the stored UUID or another one."""
         fees = {0: 10, 1: 10, 2: 11, 3: 10}
         for v in range(4):
             up = synth_asset(v)
-            n = v + 1
+            n = n0 + v
             write_xml_llsd(d / ("whole_model_body_%d.xml" % n), {"mesh_list": [up]})
-            fee = {"state": "upload", "upload_price": fees[v], "data": {"resource_cost": 1.5, "model_streaming_cost": 0.5, "simulation_cost": 0.25, "physics_cost": 0.1,
-                                                                        "streaming_params": {lod: 100 + i for i, lod in enumerate(LODS)}}}
-            write_xml_llsd(d / ("whole_model_fee_response_%d.xml" % n), fee)
-            uuid = "%02x" % (v + 1) * 16
-            write_xml_llsd(d / ("whole_model_upload_response_%d.xml" % n), {"state": "complete", "new_asset": "uuid:" + uuid})
-            survive = set()   # the server copies the LOD blocks as is, so variant 2's value survives inside Lowest
-            (d / ("lodestar-grid-%s.bin" % "-".join((uuid[:8], uuid[8:12], uuid[12:16], uuid[16:20], uuid[20:])))).write_bytes(synth_store(up, survive))
+            write_xml_llsd(d / ("whole_model_fee_response_%d.xml" % n), fee_doc(fees[v]))
+            uuid = "%02x" % (tag + v) * 16
+            other = "%02x" % (0xe0 + v) * 16
+            write_xml_llsd(d / ("whole_model_upload_response_%d.xml" % n), {"state": "complete", "new_asset": "uuid:" + (uuid if new_asset_is_stored else other)})
+            uuid_path(d, uuid).write_bytes(synth_store(up, survive, date0 + 60 * v))
+
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        write_session(d, set())   # the server copies the LOD blocks as is, so variant 2's value survives inside Lowest
         rep = analyse(d)
         text = "\n".join(rep.lines)
         expect("variant 0: N=[1], variant 1: N=[2], variant 2: N=[3], variant 3: N=[4]" in text, "classifies the four uploads")
-        expect("by new asset id" in text, "pairs stored assets by new asset id")
+        expect("by the order of the header date" in text and "equals the stored asset's UUID" in text, "pairs by date, new_asset agrees as a cross-check")
         expect(rep.failed == 2, "synthetic server: %d failing checks (expected 2: the variant 1 and variant 3 values are dropped)" % rep.failed)
-        expect("  FAIL  value present in the stored asset: top-level map dropped, high_lod key dropped" in text, "variant 1 dropped is reported")
-        expect("  PASS  value present in the stored asset: 64 bytes in Lowest first face map kept, identical" in text, "variant 2 kept is reported")
+        expect("variant 1 verdict DROPPED: top-level map (version and 64 values) dropped, high_lod key (version) dropped" in text, "variant 1 dropped is reported")
+        expect("variant 2 verdict KEPT: 64 bytes in Lowest first face map kept, identical" in text, "variant 2 kept is reported")
         expect("header key dropped, block missing, trailing 64 bytes dropped" in text, "variant 3 dropped is reported")
+        expect("Verdicts: variant 1 DROPPED, variant 2 KEPT, variant 3 DROPPED" in text, "one verdict per variant")
         expect("variant 2 may differ by its added bytes" in text, "variant 2 fee delta reported, not failed")
         expect("block order ['physics_convex', 'lowest_lod'" in text and "block order ['lowest_lod'" in text, "block order uploaded versus stored shown")
+        expect(not rep.error, "no script error")
 
-        # by-date fallback: no new_asset in the responses
-        for n in range(1, 5):
-            write_xml_llsd(d / ("whole_model_upload_response_%d.xml" % n), {"state": "complete"})
-        text2 = "\n".join(analyse(d).lines)
-        expect("by order of the header date" in text2, "falls back to header date order")
+    # new_asset differs from the stored UUIDs (the viewer reports the inventory asset), an older stray stored asset
+    # and an older stray control upload with a response: date order still pairs, the strays are reported
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        write_session(d, set(), n0=2, date0=1.0e9 + 10000, new_asset_is_stored=False)
+        stray = synth_asset(0)
+        write_xml_llsd(d / "whole_model_body_1.xml", {"mesh_list": [stray]})
+        write_xml_llsd(d / "whole_model_fee_response_1.xml", fee_doc(10))
+        write_xml_llsd(d / "whole_model_upload_response_1.xml", {"state": "complete", "new_asset": "uuid:" + "ee" * 16})
+        uuid_path(d, "99" * 16).write_bytes(synth_store(stray, set(), 1.0e9))
+        rep2 = analyse(d)
+        text2 = "\n".join(rep2.lines)
+        expect("differs from the stored asset's UUID" in text2, "new_asset differing is information, not a failure")
+        expect("variant 0 has several uploads, N=[1, 2]; using N=2" in text2, "several uploads of a variant: the highest N with a response is used, with a warning")
+        expect("ignored (older): " + "99" * 16 in text2, "the extra older stored asset is ignored and listed")
+        expect(rep2.failed == 2, "same verdicts with the strays present: %d failing checks (expected 2)" % rep2.failed)
 
-        # a server that keeps everything passes every check
-        for p in d.glob("lodestar-grid-*.bin"):
-            p.unlink()
-        for v in range(4):
-            uuid = "%02x" % (v + 1) * 16
-            write_xml_llsd(d / ("whole_model_upload_response_%d.xml" % (v + 1)), {"state": "complete", "new_asset": "uuid:" + uuid})
-            (d / ("lodestar-grid-%s.bin" % "-".join((uuid[:8], uuid[8:12], uuid[12:16], uuid[16:20], uuid[20:])))).write_bytes(
-                synth_store(synth_asset(v), {"lodestar", "lodestar_block", "lowest_lod"}))
+    # a server that keeps everything passes every check; a response without streaming_params is "field missing"
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        write_session(d, {"lodestar", "lodestar_block", "lowest_lod"})
         rep3 = analyse(d)
         expect(rep3.failed == 0, "a server that keeps everything: 0 failing checks (%d)" % rep3.failed)
+        expect("Verdicts: variant 1 KEPT, variant 2 KEPT, variant 3 KEPT" in "\n".join(rep3.lines), "all three verdicts kept")
+        write_xml_llsd(d / "whole_model_fee_response_2.xml", fee_doc(10, with_streaming=False))
+        rep4 = analyse(d)
+        text4 = "\n".join(rep4.lines)
+        expect("  FAIL  fee streaming_params.high_lod: field missing" in text4 and rep4.failed == 4, "a missing fee field is a FAIL, not a PASS (%d failing)" % rep4.failed)
+
+    # a tampered value is "altered"
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        write_session(d, {"lodestar", "lodestar_block", "lowest_lod"})
+        p = uuid_path(d, "%02x" % 0x11 * 16)
+        raw = p.read_bytes()
+        i = raw.index(V1_VALUES)
+        p.write_bytes(raw[:i] + b"\x00" + raw[i + 1:])
+        text5 = "\n".join(analyse(d).lines)
+        expect("variant 1 verdict ALTERED" in text5, "variant 1 with changed values is altered, not kept")
+
+    # a different physics hull is reported as possibly non-deterministic, not as a block failure
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        write_session(d, {"lodestar", "lodestar_block", "lowest_lod"})
+        p = uuid_path(d, "%02x" % 0x11 * 16)
+        a = Asset(p.read_bytes())
+        raw = bytearray(p.read_bytes())
+        off = a.base + a.blocks["physics_convex"][0]
+        raw[off + a.blocks["physics_convex"][1] - 1] ^= 0xFF
+        p.write_bytes(bytes(raw))
+        rep6 = analyse(d)
+        expect(any("possibly non-deterministic" in x for x in rep6.lines) and rep6.failed == 0, "physics difference is a warning, not a failure")
     print("self-test " + ("passed" if ok else "FAILED"))
     return 0 if ok else 1
 
@@ -602,7 +696,7 @@ def main(argv):
         ap.error("give the logs folder or --self-test")
     rep = analyse(args.logs)
     print("\n".join(rep.lines))
-    return 1 if rep.failed else 0
+    return 1 if rep.error else 0
 
 
 if __name__ == "__main__":
