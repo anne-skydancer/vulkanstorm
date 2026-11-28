@@ -445,10 +445,9 @@ public:
     static std::atomic<S32> sActiveHeaderRequests;
     static std::atomic<S32> sActiveLODRequests;
     static std::atomic<S32> sActiveSkinRequests;
-    static std::atomic<U32> sMaxConcurrentRequests;
     static std::atomic<S32> sRequestLowWater;
     static std::atomic<S32> sRequestHighWater;
-    static S32 sRequestWaterLevel;          // Stats-use only, may read outside of thread
+    static std::atomic<S32> sRequestWaterLevel; // Stats-use only: written by the repo thread, read by the stats view
 
     LLMutex*    mMutex;
     LLMutex*    mHeaderMutex;

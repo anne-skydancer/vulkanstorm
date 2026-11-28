@@ -255,7 +255,8 @@
 //
 //     sActiveHeaderRequests    mMutex        rw.any.mMutex, ro.repo.none [1]
 //     sActiveLODRequests       mMutex        rw.any.mMutex, ro.repo.none [1]
-//     sMaxConcurrentRequests   atomic        wo.main, ro.any (relaxed; also sRequestHighWater, sRequestLowWater)
+//     sRequestHighWater        atomic        wo.main, ro.repo (relaxed; also sRequestLowWater, ro.any)
+//     sRequestWaterLevel       atomic        wo.repo, ro.any (relaxed; statistics only)
 //     mMeshHeader              mHeaderMutex  rw.repo.mHeaderMutex, ro.main.mHeaderMutex, ro.main.none [0]
 //     mSkinRequests            mMutex        rw.repo.mMutex, ro.repo.none [5]
 //     mSkinInfoQ               mMutex        rw.repo.mMutex, rw.main.mMutex [5] (was:  [0])
@@ -648,10 +649,9 @@ LLViewerFetchedTexture* LLMeshUploadThread::FindViewerTexture(const LLImportMate
 std::atomic<S32> LLMeshRepoThread::sActiveHeaderRequests = 0;
 std::atomic<S32> LLMeshRepoThread::sActiveLODRequests = 0;
 std::atomic<S32> LLMeshRepoThread::sActiveSkinRequests = 0;
-std::atomic<U32> LLMeshRepoThread::sMaxConcurrentRequests{1};
 std::atomic<S32> LLMeshRepoThread::sRequestLowWater{REQUEST2_LOW_WATER_MIN};
 std::atomic<S32> LLMeshRepoThread::sRequestHighWater{REQUEST2_HIGH_WATER_MIN};
-S32 LLMeshRepoThread::sRequestWaterLevel = 0;
+std::atomic<S32> LLMeshRepoThread::sRequestWaterLevel{0};
 
 // Base handler class for all mesh users of llcorehttp.
 // This is roughly equivalent to a Responder class in
@@ -1125,7 +1125,10 @@ void LLMeshRepoThread::run()
             // Dispatch all HttpHandler notifications
             mHttpRequest->update(0L);
         }
-        sRequestWaterLevel = static_cast<S32>(mHttpRequestSet.size());            // Stats data update
+        sRequestWaterLevel.store(static_cast<S32>(mHttpRequestSet.size()), std::memory_order_relaxed);            // Stats data update
+
+        // one reading of the water mark for the whole pass: the main thread may change it at any time
+        const size_t high_water = static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed));
 
         // Until the main thread has stored a capability address nothing can be asked from a simulator.  Header, LOD
         // and skin requests then stay queued, and use up no retries: a request that is only waiting for the region
@@ -1139,13 +1142,13 @@ void LLMeshRepoThread::run()
         // like processRequests(&requestQ, fetchFunction); which does same thing for each element
 
         if (have_caps
-            && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed))
+            && mHttpRequestSet.size() < high_water
             && !mSkinRequests.empty())
         {
             if (!mSkinRequests.empty())
             {
                 std::list<UUIDBasedRequest> incomplete;
-                while (!mSkinRequests.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
+                while (!mSkinRequests.empty() && mHttpRequestSet.size() < high_water)
                 {
 
                     mMutex->lock();
@@ -1190,10 +1193,10 @@ void LLMeshRepoThread::run()
             }
         }
 
-        if (have_caps && !mLODReqQ.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
+        if (have_caps && !mLODReqQ.empty() && mHttpRequestSet.size() < high_water)
         {
             std::list<LODRequest> incomplete;
-            while (!mLODReqQ.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
+            while (!mLODReqQ.empty() && mHttpRequestSet.size() < high_water)
             {
                 if (!mMutex)
                 {
@@ -1239,10 +1242,10 @@ void LLMeshRepoThread::run()
             }
         }
 
-        if (have_caps && !mHeaderReqQ.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
+        if (have_caps && !mHeaderReqQ.empty() && mHttpRequestSet.size() < high_water)
         {
             std::list<HeaderRequest> incomplete;
-            while (!mHeaderReqQ.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
+            while (!mHeaderReqQ.empty() && mHttpRequestSet.size() < high_water)
             {
                 if (!mMutex)
                 {
@@ -1289,7 +1292,7 @@ void LLMeshRepoThread::run()
         // slightly different queue structures.  Stay off the mutex when
         // performing long-duration actions.
 
-        if (mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed))
+        if (mHttpRequestSet.size() < high_water
             && (!mDecompositionRequests.empty()
             || !mPhysicsShapeRequests.empty()))
         {
@@ -1304,7 +1307,7 @@ void LLMeshRepoThread::run()
             if (!mDecompositionRequests.empty())
             {
                 std::set<UUIDBasedRequest> incomplete;
-                while (!mDecompositionRequests.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
+                while (!mDecompositionRequests.empty() && mHttpRequestSet.size() < high_water)
                 {
                     mMutex->lock();
                     std::set<UUIDBasedRequest>::iterator iter = mDecompositionRequests.begin();
@@ -1347,7 +1350,7 @@ void LLMeshRepoThread::run()
             if (!mPhysicsShapeRequests.empty())
             {
                 std::set<UUIDBasedRequest> incomplete;
-                while (!mPhysicsShapeRequests.empty() && mHttpRequestSet.size() < static_cast<size_t>(sRequestHighWater.load(std::memory_order_relaxed)))
+                while (!mPhysicsShapeRequests.empty() && mHttpRequestSet.size() < high_water)
                 {
                     mMutex->lock();
                     std::set<UUIDBasedRequest>::iterator iter = mPhysicsShapeRequests.begin();
@@ -4835,7 +4838,6 @@ void LLMeshRepository::notifyLoadedMeshes()
         const S32 high_water = llclamp(2 * S32(max_requests),
                                        REQUEST_HIGH_WATER_MIN,
                                        REQUEST_HIGH_WATER_MAX);
-        LLMeshRepoThread::sMaxConcurrentRequests.store(max_requests, std::memory_order_relaxed);
         LLMeshRepoThread::sRequestHighWater.store(high_water, std::memory_order_relaxed);
         LLMeshRepoThread::sRequestLowWater.store(llclamp(high_water / 2,
                                                          REQUEST_LOW_WATER_MIN,
@@ -4867,7 +4869,6 @@ void LLMeshRepository::notifyLoadedMeshes()
         const S32 high_water = llclamp(scale * S32(max_requests),
                                        REQUEST2_HIGH_WATER_MIN,
                                        REQUEST2_HIGH_WATER_MAX);
-        LLMeshRepoThread::sMaxConcurrentRequests.store(max_requests, std::memory_order_relaxed);
         LLMeshRepoThread::sRequestHighWater.store(high_water, std::memory_order_relaxed);
         LLMeshRepoThread::sRequestLowWater.store(llclamp(high_water / 2,
                                                          REQUEST2_LOW_WATER_MIN,
