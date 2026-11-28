@@ -578,6 +578,16 @@ public:
     // before which loadMeshLOD does not queue the header request again.  Guarded by mPendingMutex.
     std::unordered_map<LLUUID, F64> mHeaderCooldown;
 
+    // Physics shape and decomposition requests that ended without their data, oldest first, with the time
+    // (LLTimer::getTotalSeconds) from which they may be asked again.  Guarded by mLoadedMutex.
+    struct FailedAsk
+    {
+        LLUUID mId;
+        bool mPhysics;
+        F64 mAskAgainAt;
+    };
+    std::deque<FailedAsk> mFailedAskQ;
+
     // map of mesh ID to skin info (mirrors LLMeshRepository::mSkinMap)
     /// NOTE: LLMeshRepository::mSkinMap is accessed very frequently, so maintain a copy here to avoid mutex overhead
     typedef std::unordered_map<LLUUID, LLPointer<LLMeshSkinInfo>> skin_map;
@@ -637,6 +647,12 @@ public:
     // permanent: the sim said there is no (usable) header; it is remembered as a 404 header so nothing asks again.
     // Otherwise no header request is queued for the mesh again before HEADER_RETRY_COOLDOWN has passed.
     void headerFailed(const LLVolumeParams& mesh_params, bool permanent);
+    // Thread: repo.  Make sure the header of the mesh is on its way, without any LOD wish.  true when it is
+    // pending or was queued now, false while the mesh is cooling down after a failed header.
+    bool requestHeader(const LLUUID& mesh_id);
+    // Thread: any.  A physics shape (physics = true) or decomposition request ended without its data: the loading
+    // mark is cleared by the main thread (notifyLoadedMeshes) after ASK_RETRY_COOLDOWN, so a later ask starts over.
+    void askFailed(const LLUUID& mesh_id, bool physics);
 
     void notifyLoadedMeshes();
     S32 getActualMeshLOD(const LLVolumeParams& mesh_params, S32 lod);

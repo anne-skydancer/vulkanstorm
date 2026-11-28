@@ -380,6 +380,9 @@ constexpr U32 HTTP_FAILURE_RETRY_LIMIT = 2;
 // After the header of a mesh failed for good (all retries), loadMeshLOD waits this long before it asks again, so
 // that polling callers (the object panel, the scene view) do not start a new request chain on every call.
 constexpr F64 HEADER_RETRY_COOLDOWN = 60.0; // seconds
+// After a physics shape or decomposition request ended without its data, the "loading" mark stays this long, so
+// that the polling callers (the physics view, the edit tools) do not start a new request on every frame.
+constexpr F64 ASK_RETRY_COOLDOWN = 10.0; // seconds
 
 // Would normally like to retry on uploads as some
 // retryable failures would be recoverable.  Unfortunately,
@@ -1312,6 +1315,12 @@ void LLMeshRepoThread::run()
                     {
                         incomplete.insert(req);
                     }
+                    else if (!hasHeader(req.mId) && (!have_caps || requestHeader(req.mId)))
+                    {
+                        // The header is on its way: wait for it without using up the retries.  When it fails, the
+                        // request ends with the normal retries.
+                        incomplete.insert(req);
+                    }
                     else if (!fetchMeshDecomposition(req.mId))
                     {
                         if (req.canRetry())
@@ -1322,6 +1331,7 @@ void LLMeshRepoThread::run()
                         else
                         {
                             LL_DEBUGS(LOG_MESH) << "mDecompositionRequests failed: " << req.mId << LL_ENDL;
+                            askFailed(req.mId, false);
                         }
                     }
                 }
@@ -1348,6 +1358,12 @@ void LLMeshRepoThread::run()
                     {
                         incomplete.insert(req);
                     }
+                    else if (!hasHeader(req.mId) && (!have_caps || requestHeader(req.mId)))
+                    {
+                        // The header is on its way: wait for it without using up the retries.  When it fails, the
+                        // request ends with the normal retries.
+                        incomplete.insert(req);
+                    }
                     else if (!fetchMeshPhysicsShape(req.mId))
                     {
                         if (req.canRetry())
@@ -1358,6 +1374,7 @@ void LLMeshRepoThread::run()
                         else
                         {
                             LL_DEBUGS(LOG_MESH) << "mPhysicsShapeRequests failed: " << req.mId << LL_ENDL;
+                            askFailed(req.mId, true);
                         }
                     }
                 }
@@ -3725,6 +3742,35 @@ void LLMeshRepoThread::notifyLoadedMeshes()
         }
     }
 
+    // Thread: main, with LLMeshRepository::mMeshMutex held by the caller.  The asks that ended without data and
+    // whose cooldown is over are forgotten, so that the next ask for them starts a new request.
+    {
+        std::vector<FailedAsk> due;
+        {
+            LLMutexLock lock(mLoadedMutex);
+            if (!mFailedAskQ.empty())
+            {
+                const F64 now = LLTimer::getTotalSeconds();
+                while (!mFailedAskQ.empty() && mFailedAskQ.front().mAskAgainAt <= now)
+                {
+                    due.push_back(mFailedAskQ.front());
+                    mFailedAskQ.pop_front();
+                }
+            }
+        }
+        for (const FailedAsk& ask : due)
+        {
+            if (ask.mPhysics)
+            {
+                gMeshRepo.mLoadingPhysicsShapes.erase(ask.mId);
+            }
+            else
+            {
+                gMeshRepo.mLoadingDecompositions.erase(ask.mId);
+            }
+        }
+    }
+
     if (update_metrics)
     {
         // Ping time-to-load metrics for mesh download operations.
@@ -4356,8 +4402,8 @@ void LLMeshDecompositionHandler::processFailure(LLCore::HttpStatus status)
                        << ", Reason:  " << status.toString()
                        << " (" << status.toTerseString() << ").  Not retrying."
                        << LL_ENDL;
-    // *TODO:  Mark mesh unavailable on error.  For now, simply leave
-    // request unfulfilled rather than retry forever.
+    // the request is over: a later ask starts again
+    gMeshRepo.mThread->askFailed(mMeshID, false);
 }
 
 void LLMeshDecompositionHandler::processData(LLCore::BufferArray * /* body */, S32 /* body_offset */,
@@ -4412,7 +4458,7 @@ void LLMeshDecompositionHandler::processData(LLCore::BufferArray * /* body */, S
         LL_WARNS(LOG_MESH) << "Error during mesh decomposition processing.  ID:  " << mMeshID
                            << ", Unknown reason.  Not retrying."
                            << LL_ENDL;
-        // *TODO:  Mark mesh unavailable on error
+        gMeshRepo.mThread->askFailed(mMeshID, false);
     }
 }
 
@@ -4430,7 +4476,8 @@ void LLMeshPhysicsShapeHandler::processFailure(LLCore::HttpStatus status)
                        << ", Reason:  " << status.toString()
                        << " (" << status.toTerseString() << ").  Not retrying."
                        << LL_ENDL;
-    // *TODO:  Mark mesh unavailable on error
+    // the request is over: a later ask starts again
+    gMeshRepo.mThread->askFailed(mMeshID, true);
 }
 
 void LLMeshPhysicsShapeHandler::processData(LLCore::BufferArray * /* body */, S32 /* body_offset */,
@@ -4485,7 +4532,7 @@ void LLMeshPhysicsShapeHandler::processData(LLCore::BufferArray * /* body */, S3
         LL_WARNS(LOG_MESH) << "Error during mesh physics shape processing.  ID:  " << mMeshID
                            << ", Unknown reason.  Not retrying."
                            << LL_ENDL;
-        // *TODO:  Mark mesh unavailable on error
+        gMeshRepo.mThread->askFailed(mMeshID, true);
     }
 }
 
@@ -5487,6 +5534,42 @@ void LLMeshRepoThread::headerFailed(const LLVolumeParams& mesh_params, bool perm
         mUnavailableQ.push_back(LODRequest(mesh_params, i));
     }
     mSkinUnavailableQ.emplace_back(mesh_id);
+}
+
+bool LLMeshRepoThread::requestHeader(const LLUUID& mesh_id)
+{
+    LLMutexLock lock(mPendingMutex);
+    if (mPendingLOD.find(mesh_id) != mPendingLOD.end())
+    {
+        return true;
+    }
+
+    auto cooldown = mHeaderCooldown.find(mesh_id);
+    if (cooldown != mHeaderCooldown.end())
+    {
+        if (LLTimer::getTotalSeconds() < cooldown->second)
+        {
+            return false;
+        }
+        mHeaderCooldown.erase(cooldown);
+    }
+
+    LLVolumeParams params;
+    params.setSculptID(mesh_id, LL_SCULPT_TYPE_MESH);
+
+    // no LOD is wished: the entry only records that the header is on its way
+    auto& array = mPendingLOD[mesh_id];
+    std::fill(array.begin(), array.end(), 0);
+
+    LLMutexLock queue_lock(mMutex);
+    mHeaderReqQ.push(HeaderRequest(params));
+    return true;
+}
+
+void LLMeshRepoThread::askFailed(const LLUUID& mesh_id, bool physics)
+{
+    LLMutexLock lock(mLoadedMutex);
+    mFailedAskQ.push_back({ mesh_id, physics, LLTimer::getTotalSeconds() + ASK_RETRY_COOLDOWN });
 }
 
 // <FS:Ansariel> DAE export
